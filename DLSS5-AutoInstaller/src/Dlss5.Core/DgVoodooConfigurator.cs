@@ -99,8 +99,15 @@ public static class DgVoodooConfigurator
     /// Sobrescreve a placa que o wrapper finge ser. É o ajuste que resolve o jogo antigo
     /// que recusa o adaptador, e não dá para saber de antemão qual valor cada jogo aceita.
     /// </param>
+    /// <param name="hardwareTnL">
+    /// Se o dgVoodoo deve enumerar um device com Transform &amp; Light por hardware. Importa
+    /// porque jogo de DirectX 8 escolhe entre "D3D Software T&amp;L" e "D3D Hardware T&amp;L" e
+    /// grava a escolha: pedindo hardware num adaptador que não oferece, ele recusa antes
+    /// de abrir. A chave do dgVoodoo é escrita ao contrário do nome (DisableD3DTnLDevice).
+    /// </param>
     public static string Patch(
-        string confText, DgVoodooProfile perfil = DgVoodooProfile.Padrao, string? videoCard = null)
+        string confText, DgVoodooProfile perfil = DgVoodooProfile.Padrao,
+        string? videoCard = null, bool? hardwareTnL = null)
     {
         var Targets = TargetsFor(perfil).ToList();
         if (!string.IsNullOrWhiteSpace(videoCard))
@@ -108,6 +115,8 @@ public static class DgVoodooConfigurator
             int i = Targets.FindIndex(t => t.Section == "DirectX" && t.Key == "VideoCard");
             if (i >= 0) Targets[i] = ("DirectX", "VideoCard", videoCard);
         }
+        if (hardwareTnL is bool tnl)
+            Targets.Add(("DirectX", "DisableD3DTnLDevice", tnl ? "false" : "true"));
         var lines = confText.Replace("\r\n", "\n").Split('\n');
         string currentSection = "";
         var applied = new HashSet<(string, string)>();

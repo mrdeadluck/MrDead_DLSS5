@@ -1432,3 +1432,67 @@ public class IsolamentoTests
         finally { Directory.Delete(raiz, true); }
     }
 }
+
+public class VereditoTests
+{
+    [Fact]
+    public void JogoQueNemSemODgVoodooAbreNaoEhProblemaDaInstalacao()
+    {
+        var v = Isolamento.Veredito(abriuSemDgVoodoo: false, abriuSemReShade: null);
+        Assert.Contains("NÃO é a instalação", v);
+    }
+
+    [Fact]
+    public void OsDoisSozinhosFuncionandoApontaConflitoDeCarregamento()
+    {
+        // dgVoodoo fala com o D3D11 pelo dxgi.dll, que é justamente onde o ReShade entra.
+        var v = Isolamento.Veredito(abriuSemDgVoodoo: true, abriuSemReShade: true);
+        Assert.Contains("conflito de carregamento", v);
+        Assert.Contains("dxgi.dll", v);
+    }
+
+    [Fact]
+    public void SoOdgVoodooDerrubandoApontaOAdaptador()
+    {
+        var v = Isolamento.Veredito(abriuSemDgVoodoo: true, abriuSemReShade: false);
+        Assert.Contains("dgVoodoo é rejeitado", v);
+        Assert.Contains("D3D Software T&L", v);
+    }
+
+    [Fact]
+    public void SemAsDuasRespostasNaoInventaConclusao()
+    {
+        Assert.Contains("Faltou responder", Isolamento.Veredito(null, null));
+        Assert.Contains("Faltou responder", Isolamento.Veredito(true, null));
+    }
+}
+
+public class TnLTests
+{
+    private const string Conf = """
+        [DirectX]
+        DisableAndPassThru                  = true
+        VideoCard                           = internal3D
+        VRAM                                = 256
+        DisableD3DTnLDevice                 = false
+        dgVoodooWatermark                   = false
+        """;
+
+    [Theory]
+    [InlineData(true, "false")]
+    [InlineData(false, "true")]
+    public void AChaveEhEscritaAoContrarioDoNome(bool hardwareTnL, string esperado)
+    {
+        // O jogo escolhe entre "D3D Software T&L" e "D3D Hardware T&L" e grava a escolha;
+        // pedindo hardware num adaptador que não oferece, recusa antes de abrir.
+        var r = DgVoodooConfigurator.Patch(Conf, DgVoodooProfile.Legado, null, hardwareTnL);
+        Assert.Contains("DisableD3DTnLDevice                 = " + esperado, r);
+    }
+
+    [Fact]
+    public void SemPedirNadaAChaveNaoEhTocada()
+    {
+        var r = DgVoodooConfigurator.Patch(Conf, DgVoodooProfile.Legado);
+        Assert.Contains("DisableD3DTnLDevice                 = false", r);
+    }
+}

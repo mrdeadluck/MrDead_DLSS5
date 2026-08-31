@@ -60,15 +60,25 @@ public sealed class MainForm : Form
     private readonly ComboBox _cboPlaca = new();
     private readonly Label _lblDgVoodoo = new()
     {
-        Text = "Placa que o dgVoodoo finge ser:",
+        Text = "dgVoodoo finge ser:",
         AutoSize = false,
-        Width = 190,
+        Width = 130,
         Height = 26,
         TextAlign = ContentAlignment.MiddleLeft,
     };
     private Button _btnPlaca = new();
     private Button _btnPainelDg = new();
+    private readonly CheckBox _chkTnL = new()
+    {
+        Text = "T&&L por hardware",
+        Checked = true,
+        AutoSize = false,
+        Width = 130,
+        Height = 26,
+    };
     private EstadoIsolamento _isolamento = EstadoIsolamento.Tudo;
+    private bool? _abriuSemDgVoodoo;
+    private bool? _abriuSemReShade;
     private readonly DataGridView _grid = new();
     private readonly TextBox _txtGuide = new();
 
@@ -882,17 +892,19 @@ public sealed class MainForm : Form
         barraDg.Controls.Add(_lblDgVoodoo);
         _lblDgVoodoo.Visible = false;
         _cboPlaca.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cboPlaca.Width = 300;
+        _cboPlaca.Width = 250;
         foreach (var (rotulo, _) in DgVoodooConfigurator.Placas) _cboPlaca.Items.Add(rotulo);
         _cboPlaca.SelectedIndex = 0;
         barraDg.Controls.Add(_cboPlaca);
+        barraDg.Controls.Add(_chkTnL);
         _btnPlaca = MakeButton("Aplicar e testar", 4, 0, 140, (_, _) => TrocarPlacaDgVoodoo());
         _btnPainelDg = MakeButton("Painel do dgVoodoo", 4, 0, 150, (_, _) => AbrirPainelDgVoodoo());
         barraDg.Controls.Add(_btnPlaca);
         barraDg.Controls.Add(_btnPainelDg);
 
+        barraDg.Dock = DockStyle.Fill;
         _barraDgVoodoo.Dock = DockStyle.Bottom;
-        _barraDgVoodoo.Height = 40;
+        _barraDgVoodoo.Height = 80;   // duas linhas: em janela estreita a barra quebra
         _barraDgVoodoo.Controls.Add(barraDg);
 
         _p4.Controls.Add(split);
@@ -916,6 +928,27 @@ public sealed class MainForm : Form
             return;
         }
 
+        // Antes de avançar, colhe o resultado do teste que estava em andamento. Sem isso o
+        // usuário atravessa as etapas e chega ao fim sem conclusão nenhuma — foi o que
+        // aconteceu no primeiro uso: o teste 2 passou batido.
+        if (_isolamento != EstadoIsolamento.Tudo)
+        {
+            var pergunta = _isolamento == EstadoIsolamento.SemDgVoodoo
+                ? "Com o dgVoodoo DESLIGADO, o jogo abriu?"
+                : "Com o ReShade DESLIGADO (e o dgVoodoo ligado), o jogo abriu?";
+            var abriu = MessageBox.Show(this, pergunta, "Resultado do teste",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
+
+            if (_isolamento == EstadoIsolamento.SemDgVoodoo) _abriuSemDgVoodoo = abriu;
+            else _abriuSemReShade = abriu;
+        }
+        else
+        {
+            // Começando uma rodada nova: as respostas antigas não valem mais.
+            _abriuSemDgVoodoo = null;
+            _abriuSemReShade = null;
+        }
+
         var proximo = _isolamento switch
         {
             EstadoIsolamento.Tudo => EstadoIsolamento.SemDgVoodoo,
@@ -926,6 +959,11 @@ public sealed class MainForm : Form
         // Sem dgVoodoo na jogada, o teste dele não existe: pula direto para o ReShade.
         if (proximo == EstadoIsolamento.SemDgVoodoo && !_profile.NeedsDgVoodoo)
             proximo = EstadoIsolamento.SemReShade;
+
+        // Se o jogo já não abre sem o dgVoodoo, a instalação está fora de suspeita e o
+        // teste seguinte não acrescenta nada.
+        if (proximo == EstadoIsolamento.SemReShade && _abriuSemDgVoodoo is false)
+            proximo = EstadoIsolamento.Tudo;
 
         ShowStep(3);
         _txtLog.Clear();
@@ -942,10 +980,15 @@ public sealed class MainForm : Form
                 _ => "Instalação religada por inteiro.",
             };
 
-            MessageBox.Show(this, Isolamento.Leitura(proximo) +
-                "\r\n\r\nClique em \"Isolar a causa\" de novo para passar ao próximo teste " +
-                "(a última etapa religa tudo).",
-                "Isolar a causa", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            var texto = proximo == EstadoIsolamento.Tudo
+                ? Isolamento.Veredito(_abriuSemDgVoodoo, _abriuSemReShade) +
+                  "\r\n\r\n" + Isolamento.Leitura(proximo)
+                : Isolamento.Leitura(proximo) +
+                  "\r\n\r\nDepois de abrir o jogo, clique em \"Isolar a causa\" de novo: " +
+                  "ele pergunta o que aconteceu e passa ao próximo teste.";
+
+            MessageBox.Show(this, texto, "Isolar a causa",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex) { Warn(ex.Message); }
     }
@@ -975,11 +1018,12 @@ public sealed class MainForm : Form
         try
         {
             var perfil = DgVoodooConfigurator.ProfileFor(_profile!.Api);
-            var texto = DgVoodooConfigurator.Patch(File.ReadAllText(conf), perfil, valor);
+            var texto = DgVoodooConfigurator.Patch(File.ReadAllText(conf), perfil, valor, _chkTnL.Checked);
             File.WriteAllText(conf, texto);
             _status.Text = $"dgVoodoo agora se apresenta como {rotulo}. Abra o jogo e veja se muda.";
             MessageBox.Show(this,
-                $"Gravado: VideoCard = {valor}\r\n{conf}\r\n\r\n" +
+                $"Gravado: VideoCard = {valor}\r\n" +
+                $"T&L por hardware: {(_chkTnL.Checked ? "sim" : "não")}\r\n{conf}\r\n\r\n" +
                 "Abra o jogo. Se continuar recusando o adaptador, volte aqui e tente a próxima " +
                 "da lista — nada precisa ser reinstalado entre uma tentativa e outra.",
                 "Placa trocada", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -1429,6 +1473,7 @@ public sealed class MainForm : Form
         _cboPlaca.Visible = _profile.NeedsDgVoodoo;
         _btnPlaca.Visible = _profile.NeedsDgVoodoo;
         _btnPainelDg.Visible = _profile.NeedsDgVoodoo;
+        _chkTnL.Visible = _profile.NeedsDgVoodoo;
 
         _grid.Rows.Clear();
         foreach (var c in CheckpointVerifier.Verify(_profile, _manifest))

@@ -103,6 +103,39 @@ public sealed class Isolamento
         return religados;
     }
 
+    /// <summary>
+    /// Conclusão a partir das duas respostas. Separada porque a combinação é o que importa:
+    /// cada teste sozinho não distingue "o dgVoodoo é rejeitado" de "o ReShade atrapalha o
+    /// dgVoodoo", e essas duas causas pedem correções completamente diferentes.
+    /// </summary>
+    public static string Veredito(bool? abriuSemDgVoodoo, bool? abriuSemReShade)
+    {
+        if (abriuSemDgVoodoo is false)
+            return "CONCLUSÃO: o problema NÃO é a instalação.\r\n\r\n" +
+                   "O jogo recusou abrir mesmo com o dgVoodoo desligado, quando a pasta estava " +
+                   "igual a antes de qualquer coisa ser instalada. A causa é do jogo nesta " +
+                   "máquina — configuração de vídeo que ele gravou, monitor, ou resolução do " +
+                   "desktop. Resolva isso primeiro; enquanto o jogo não abrir sozinho, não há o " +
+                   "que o DLSS 5 possa fazer.";
+
+        if (abriuSemDgVoodoo is true && abriuSemReShade is true)
+            return "CONCLUSÃO: sozinhos os dois funcionam; juntos, não.\r\n\r\n" +
+                   "O jogo abre sem o dgVoodoo e abre sem o ReShade, mas recusa com os dois. " +
+                   "É conflito de carregamento: o ReShade entra no dxgi.dll que o próprio " +
+                   "dgVoodoo usa para falar com o D3D11, e nessa ordem a criação do device " +
+                   "falha. Não é configuração de placa — trocar VideoCard não vai resolver.";
+
+        if (abriuSemDgVoodoo is true && abriuSemReShade is false)
+            return "CONCLUSÃO: o dgVoodoo é rejeitado por este jogo.\r\n\r\n" +
+                   "Sem ele o jogo abre; com ele o jogo recusa, mesmo sem o ReShade na jogada. " +
+                   "Aí é o adaptador que o dgVoodoo apresenta que não serve para este jogo. " +
+                   "Vale tentar: a opção de aceleração do jogo em \"D3D Software T&L\" (é a que " +
+                   "dispensa T&L por hardware — o nome engana), e a caixa \"T&L por hardware\" " +
+                   "aqui do lado nas duas posições, combinada com cada placa da lista.";
+
+        return "Faltou responder um dos testes. Rode os dois para chegar a uma conclusão.";
+    }
+
     /// <summary>O que o resultado de cada teste significa, para não sobrar interpretação.</summary>
     public static string Leitura(EstadoIsolamento estado) => estado switch
     {
