@@ -473,8 +473,8 @@ public sealed class MainForm : Form
         _cboApi.DropDownStyle = ComboBoxStyle.DropDownList;
         _cboApi.Items.AddRange(new object[]
         {
-            GraphicsApi.D3D9, GraphicsApi.D3D11, GraphicsApi.D3D12,
-            GraphicsApi.Vulkan, GraphicsApi.D3D10, GraphicsApi.OpenGL,
+            GraphicsApi.D3D8, GraphicsApi.D3D9, GraphicsApi.D3D11, GraphicsApi.D3D12,
+            GraphicsApi.Vulkan, GraphicsApi.OpenGL, GraphicsApi.D3D10,
         });
         _cboApi.SelectedIndexChanged += (_, _) => SyncProfileFromUi();
         _p1.Controls.Add(_cboApi);
@@ -735,12 +735,13 @@ public sealed class MainForm : Form
         _lblRoute.ForeColor = route == InstallRoute.Unsupported ? Color.Firebrick : Color.DarkGreen;
         _lblRoute.Text = route switch
         {
-            InstallRoute.A => "Caminho A — 64-bit: ReShade + addons direto na pasta do executável.",
+            InstallRoute.A => $"Caminho A — 64-bit: ReShade ({_profile.ReShadeHookName}) + addons direto na pasta do executável.",
             InstallRoute.B => "Caminho B — 32-bit D3D11: addon32 na raiz e o resto do Feeder dentro de host64\\.",
-            InstallRoute.C => "Caminho C — 32-bit D3D9: dgVoodoo2 traduz para D3D11, mais o layout do caminho B.",
+            InstallRoute.C => $"Caminho C — 32-bit {_profile.Api}: dgVoodoo2 ({_profile.DgVoodooWrapperName}) traduz para D3D11, mais o layout do caminho B.",
             _ => "Sem caminho suportado para esta combinação. " +
-                 (_profile.Architecture == PeArchitecture.X86 && _profile.Api == GraphicsApi.Vulkan
-                     ? "Jogo 32-bit em Vulkan não funciona: troque para D3D9 se o jogo permitir."
+                 (_profile.Architecture == PeArchitecture.X86 &&
+                  _profile.Api is GraphicsApi.Vulkan or GraphicsApi.OpenGL
+                     ? $"Jogo 32-bit em {_profile.Api} não funciona (o addon32 só aceita D3D11): troque para D3D9 ou D3D11 se o jogo permitir."
                      : "Confira arquitetura e API."),
         };
     }
@@ -1168,7 +1169,8 @@ public sealed class MainForm : Form
         if (kit.ShadersDir is not null) have.Add("shaders");
         if (kit.HasLaunchpad) have.Add("Launchpad");
         if (kit.HasDrme) have.Add("DRME");
-        if (kit.DgVoodooD3D9X86 is not null) have.Add("dgVoodoo");
+        if (kit.DgVoodooD3D9X86 is not null) have.Add("dgVoodoo-d3d9");
+        if (kit.DgVoodooD3D8X86 is not null) have.Add("dgVoodoo-d3d8");
         return string.Join(", ", have);
     }
 

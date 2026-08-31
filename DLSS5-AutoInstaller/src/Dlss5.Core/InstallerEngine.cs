@@ -193,11 +193,11 @@ public sealed partial class InstallerEngine
     /// <summary>Tudo que a instalação pode ter deixado na pasta do exe.</summary>
     private static readonly string[] NossosArquivos =
     {
-        "dxgi.dll", "ReShade.ini", "ReShade.log", "ReShadePreset.ini",
+        "dxgi.dll", "opengl32.dll", "ReShade.ini", "ReShade.log", "ReShadePreset.ini",
         "ReShade64.json", "ReShade32.json", "ReShade64_XR.json", "ReShade32_XR.json",
         "renodx-dlss5.addon64", "nvngx_dlssnr.dll",
         "dlss5-feed.addon64", "dlss5-feed.addon32", "dlss5-feed.cfg", "dlss5-feed.log",
-        "D3D9.dll", "dgVoodoo.conf", "dgVoodooCpl.exe",
+        "D3D9.dll", "D3D8.dll", "dgVoodoo.conf", "dgVoodooCpl.exe",
     };
 
     /// <summary>

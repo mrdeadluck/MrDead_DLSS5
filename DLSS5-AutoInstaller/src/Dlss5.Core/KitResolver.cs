@@ -25,6 +25,7 @@ public sealed class KitInventory
 
     // dgVoodoo2 (spec 3.5)
     public string? DgVoodooD3D9X86 { get; set; }
+    public string? DgVoodooD3D8X86 { get; set; }
     public string? DgVoodooConf { get; set; }
     public string? DgVoodooCpl { get; set; }
 
@@ -35,7 +36,8 @@ public sealed class KitInventory
     public List<string> Problems { get; } = new();
 
     /// <summary>Valida o inventário para uma rota específica; devolve o que falta.</summary>
-    public IReadOnlyList<string> MissingFor(InstallRoute route, bool nativeDlss)
+    public IReadOnlyList<string> MissingFor(
+        InstallRoute route, bool nativeDlss, GraphicsApi api = GraphicsApi.Unknown)
     {
         var missing = new List<string>();
         void Need(string? path, string what)
@@ -68,7 +70,11 @@ public sealed class KitInventory
 
         if (route == InstallRoute.C)
         {
-            Need(DgVoodooD3D9X86, "dgVoodoo2: MS\\x86\\D3D9.dll");
+            // Cada API tem o seu wrapper: o jogo D3D8 nunca carrega um D3D9.dll.
+            if (api == GraphicsApi.D3D8)
+                Need(DgVoodooD3D8X86, "dgVoodoo2: MS\\x86\\D3D8.dll");
+            else
+                Need(DgVoodooD3D9X86, "dgVoodoo2: MS\\x86\\D3D9.dll");
             Need(DgVoodooConf, "dgVoodoo2: dgVoodoo.conf");
         }
 
@@ -198,8 +204,10 @@ public static class KitResolver
             inv.HasDisplayDepth = File.Exists(Path.Combine(shaders, "DisplayDepth.fx"));
         }
 
-        // dgVoodoo2: D3D9.dll dentro de MS\x86 (nunca 3Dfx, nunca arm) e com arch x86 real.
-        inv.DgVoodooD3D9X86 = Named("D3D9.dll")
+        // dgVoodoo2: o wrapper da API dentro de MS\x86 (nunca 3Dfx, nunca arm) e com
+        // arch x86 real. O pacote traz um arquivo por API — D3D8.dll atende os jogos de
+        // DirectX 8, que são maioria entre 2001 e 2003.
+        string? WrapperDgVoodoo(string nome) => Named(nome)
             .Where(Ok)
             .Where(p => !LooksArm(p))
             .Where(p =>
@@ -211,10 +219,14 @@ public static class KitResolver
             })
             .FirstOrDefault(p => PeFile.GetArchitecture(p) == PeArchitecture.X86);
 
-        if (inv.DgVoodooD3D9X86 is not null)
+        inv.DgVoodooD3D9X86 = WrapperDgVoodoo("D3D9.dll");
+        inv.DgVoodooD3D8X86 = WrapperDgVoodoo("D3D8.dll");
+
+        var wrapperParaRaiz = inv.DgVoodooD3D9X86 ?? inv.DgVoodooD3D8X86;
+        if (wrapperParaRaiz is not null)
         {
             // conf e Cpl ficam na raiz do pacote dgVoodoo (dois níveis acima de MS\x86).
-            var dgRoot = Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(inv.DgVoodooD3D9X86)));
+            var dgRoot = Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(wrapperParaRaiz)));
             if (dgRoot is not null)
             {
                 var conf = Path.Combine(dgRoot, "dgVoodoo.conf");

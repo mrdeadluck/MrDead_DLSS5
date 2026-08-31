@@ -198,6 +198,14 @@ public class ApiDetectorTests
     }
 
     [Fact]
+    public void Detect_FindsDirectX8()
+    {
+        var exe = WriteFakeBinary(Bury(("Direct3DCreate8", false)));
+        var result = ApiDetector.Detect(exe, Path.GetDirectoryName(exe)!);
+        Assert.Equal(GraphicsApi.D3D8, result.Api);
+    }
+
+    [Fact]
     public void Detect_ReportsUnknownWhenNothingFound()
     {
         var exe = WriteFakeBinary(new byte[32 * 1024]);
@@ -227,10 +235,15 @@ public class RouteTests
     [InlineData(PeArchitecture.X64, GraphicsApi.Vulkan, InstallRoute.A)]
     [InlineData(PeArchitecture.X86, GraphicsApi.D3D11, InstallRoute.B)]
     [InlineData(PeArchitecture.X86, GraphicsApi.D3D9, InstallRoute.C)]
-    // Regra derivada da spec: 32-bit em Vulkan não tem caminho.
+    // DirectX 8 é o mesmo caminho do D3D9: quem traduz é o dgVoodoo2.
+    [InlineData(PeArchitecture.X86, GraphicsApi.D3D8, InstallRoute.C)]
+    // OpenGL em 64-bit segue a rota A; muda só o nome com que o ReShade é instalado.
+    [InlineData(PeArchitecture.X64, GraphicsApi.OpenGL, InstallRoute.A)]
+    // Regra derivada da spec: 32-bit fora do D3D11 depende do dgVoodoo, e o addon32 só
+    // aceita Direct3D 11 — então Vulkan e OpenGL não têm caminho em x86.
     [InlineData(PeArchitecture.X86, GraphicsApi.Vulkan, InstallRoute.Unsupported)]
+    [InlineData(PeArchitecture.X86, GraphicsApi.OpenGL, InstallRoute.Unsupported)]
     [InlineData(PeArchitecture.X64, GraphicsApi.D3D10, InstallRoute.Unsupported)]
-    [InlineData(PeArchitecture.X64, GraphicsApi.OpenGL, InstallRoute.Unsupported)]
     [InlineData(PeArchitecture.X86, GraphicsApi.D3D10, InstallRoute.Unsupported)]
     [InlineData(PeArchitecture.Unknown, GraphicsApi.D3D11, InstallRoute.Unsupported)]
     public void Route_FollowsDecisionTree(PeArchitecture arch, GraphicsApi api, InstallRoute expected)
@@ -239,8 +252,21 @@ public class RouteTests
     }
 
     [Fact]
+    public void NomeDoHookSegueAApi()
+    {
+        // Um jogo OpenGL nunca procura por dxgi.dll: instalado com esse nome, o ReShade
+        // simplesmente nunca é carregado e nem chega a existir um ReShade.log.
+        Assert.Equal("opengl32.dll", Profile(PeArchitecture.X64, GraphicsApi.OpenGL).ReShadeHookName);
+        Assert.Equal("dxgi.dll", Profile(PeArchitecture.X64, GraphicsApi.D3D12).ReShadeHookName);
+
+        Assert.Equal("D3D8.dll", Profile(PeArchitecture.X86, GraphicsApi.D3D8).DgVoodooWrapperName);
+        Assert.Equal("D3D9.dll", Profile(PeArchitecture.X86, GraphicsApi.D3D9).DgVoodooWrapperName);
+    }
+
+    [Fact]
     public void NeedsDgVoodoo_OnlyOnRouteC()
     {
+        Assert.True(Profile(PeArchitecture.X86, GraphicsApi.D3D8).NeedsDgVoodoo);
         Assert.True(Profile(PeArchitecture.X86, GraphicsApi.D3D9).NeedsDgVoodoo);
         Assert.False(Profile(PeArchitecture.X86, GraphicsApi.D3D11).NeedsDgVoodoo);
         Assert.False(Profile(PeArchitecture.X64, GraphicsApi.D3D12).NeedsDgVoodoo);
@@ -273,6 +299,7 @@ public class PlanBuilderTests
         DxgiX86 = @"C:\kit\dxgi32.dll",
         ShadersDir = @"C:\kit\reshade-shaders",
         DgVoodooD3D9X86 = @"C:\kit\MS\x86\D3D9.dll",
+        DgVoodooD3D8X86 = @"C:\kit\MS\x86\D3D8.dll",
         DgVoodooConf = @"C:\kit\dgVoodoo.conf",
         DgVoodooCpl = @"C:\kit\dgVoodooCpl.exe",
         HasLaunchpad = true,
@@ -377,6 +404,47 @@ public class PlanBuilderTests
                                         && a.TargetPath!.EndsWith(@"bin\dgVoodoo.conf", StringComparison.OrdinalIgnoreCase));
         // ReShade continua na pasta do EXE, nunca em bin\.
         Assert.True(Targets(plan, @"game\dxgi.dll"));
+    }
+
+    [Fact]
+    public void RotaC_EmDirectX8_CopiaOWrapperD3D8()
+    {
+        // Max Payne 1 e a leva de jogos de 2001-2003 são DirectX 8. O dgVoodoo traz um
+        // wrapper por API, e o jogo só carrega o que tem o nome certo: copiar D3D9.dll
+        // num jogo D3D8 não intercepta nada, e o resultado é "instalou e não aconteceu".
+        var plan = InstallPlanBuilder.Build(
+            Profile(PeArchitecture.X86, GraphicsApi.D3D8), FullKit(), new InstallOptions());
+
+        Assert.Empty(plan.Blockers);
+        Assert.True(Targets(plan, @"\D3D8.dll"));
+        Assert.False(Targets(plan, @"\D3D9.dll"));
+        Assert.Contains(plan.Actions, a => a.SourcePath == @"C:\kit\MS\x86\D3D8.dll");
+    }
+
+    [Fact]
+    public void DirectX8SemOWrapperNoKitViraBloqueio()
+    {
+        var kit = FullKit();
+        kit.DgVoodooD3D8X86 = null;
+
+        var plan = InstallPlanBuilder.Build(
+            Profile(PeArchitecture.X86, GraphicsApi.D3D8), kit, new InstallOptions());
+
+        Assert.Contains(plan.Blockers, b => b.Contains("D3D8.dll"));
+    }
+
+    [Fact]
+    public void OpenGL_InstalaOReShadeComoOpengl32()
+    {
+        var plan = InstallPlanBuilder.Build(
+            Profile(PeArchitecture.X64, GraphicsApi.OpenGL), FullKit(), new InstallOptions());
+
+        Assert.Empty(plan.Blockers);
+        Assert.True(Targets(plan, @"\opengl32.dll"));
+        Assert.False(Targets(plan, @"\dxgi.dll"));
+
+        // Está fora da matriz validada da spec: instala, mas dizendo isso na cara.
+        Assert.Contains(plan.Warnings, w => w.Contains("OpenGL"));
     }
 
     [Fact]
@@ -1048,6 +1116,25 @@ public class FaxinaTests
             Assert.True(File.Exists(Path.Combine(dir, "sl.dlss.dll")));
             Assert.True(File.Exists(Path.Combine(dir, "nvngx_dlssg.dll")));
             Assert.True(File.Exists(Path.Combine(dir, "jogo.exe")));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void RemoveOpengl32DoReShadeMasNaoODoWindows()
+    {
+        // Em jogo OpenGL o ReShade é instalado como opengl32.dll — o mesmo nome de uma
+        // DLL do sistema, então o critério continua sendo o texto dentro do arquivo.
+        var dir = NovaPasta();
+        try
+        {
+            Escrever(dir, "opengl32.dll", "...ReShade 6.8.0...");
+            new InstallerEngine(_ => { }).LimpezaTotal(dir);
+            Assert.False(File.Exists(Path.Combine(dir, "opengl32.dll")));
+
+            Escrever(dir, "opengl32.dll", "driver de verdade");
+            new InstallerEngine(_ => { }).LimpezaTotal(dir);
+            Assert.True(File.Exists(Path.Combine(dir, "opengl32.dll")));
         }
         finally { Directory.Delete(dir, true); }
     }

@@ -95,6 +95,31 @@ dos casos. Dá para contrariar a detecção no botão **Ajustar**, que explica i
 
 ---
 
+### APIs cobertas
+
+| Arquitetura | API | Como entra |
+|---|---|---|
+| x64 | D3D12 / D3D11 / Vulkan | rota A — ReShade como `dxgi.dll` |
+| x64 | **OpenGL** | rota A, ReShade como `opengl32.dll` — **experimental** (ver abaixo) |
+| x86 | D3D11 | rota B — addon32 na raiz, resto do Feeder em `host64\` |
+| x86 | **D3D8** / D3D9 | rota C — dgVoodoo2 (`D3D8.dll` ou `D3D9.dll`) traduz para D3D11 |
+| x86 | Vulkan / OpenGL | sem caminho: o addon32 só aceita Direct3D 11 |
+| qualquer | D3D10 | sem caminho |
+
+**DirectX 8** (Max Payne, Mafia, Hitman 2, Splinter Cell, GTA III/Vice City e a leva
+de 2001–2003) usa exatamente o mesmo mecanismo do D3D9: o dgVoodoo2 traduz para D3D11 e
+o ReShade se pendura no resultado. Muda só qual wrapper é copiado — e isso importa,
+porque um jogo D3D8 nunca carrega um `D3D9.dll`. Confirme a marca d'água do dgVoodoo na
+tela: é o único teste confiável de que ele está interceptando.
+
+**OpenGL** está fora da matriz validada da especificação. O ReShade é instalado com o
+nome certo (`opengl32.dll`) e deve carregar e abrir o overlay, mas o addon do Feeder
+anuncia D3D11/D3D12/Vulkan — o DLSS 5 pode não engatar. Se o jogo tiver um seletor de
+renderizador nas configurações, **prefira DirectX**. O programa avisa isso no plano em
+vez de recusar em silêncio.
+
+---
+
 ## O que é automatizado
 
 | Etapa | Como |

@@ -40,8 +40,8 @@ public sealed partial class InstallerEngine
     };
 
     /// <summary>
-    /// Nomes genéricos demais para sair só pelo nome: dxgi.dll e D3D9.dll também são
-    /// nomes de DLL da Microsoft, e jogo antigo às vezes traz o próprio wrapper de D3D9.
+    /// Nomes genéricos demais para sair só pelo nome: dxgi.dll, opengl32.dll e D3D8/9.dll
+    /// também são nomes de DLL da Microsoft, e jogo antigo às vezes traz o próprio wrapper.
     /// Só sai se o texto dentro do arquivo provar de onde ele veio.
     /// </summary>
     private static readonly (string Nome, string Prova)[] PrecisamDeProva =
@@ -50,11 +50,13 @@ public sealed partial class InstallerEngine
         // reversão que falhou e deixou SÓ ele para trás — o overlay continua aparecendo
         // no jogo e não há mais nada na pasta que sirva de escolta.
         ("dxgi.dll", "ReShade"),
+        ("opengl32.dll", "ReShade"),
     };
 
     private static readonly (string Nome, string Prova)[] PrecisamDeProvaEEscolta =
     {
         ("D3D9.dll", "dgVoodoo"),
+        ("D3D8.dll", "dgVoodoo"),
     };
 
     /// <summary>

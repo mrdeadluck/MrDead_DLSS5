@@ -58,11 +58,15 @@ public static class ApiDetector
         new(GraphicsApi.D3D9, "Direct3DCreate9", 28),
         new(GraphicsApi.D3D9, "d3d9.dll", 24),
 
+        new(GraphicsApi.D3D8, "Direct3DCreate8", 34),
+        new(GraphicsApi.D3D8, "d3d8.dll", 24),
+
         new(GraphicsApi.Vulkan, "vkCreateSwapchainKHR", 34),
         new(GraphicsApi.Vulkan, "vkCreateInstance", 28),
         new(GraphicsApi.Vulkan, "vulkan-1.dll", 24),
 
         new(GraphicsApi.OpenGL, "wglCreateContext", 30),
+        new(GraphicsApi.OpenGL, "wglMakeCurrent", 26),
         new(GraphicsApi.OpenGL, "opengl32.dll", 20),
     };
 
@@ -78,6 +82,9 @@ public static class ApiDetector
             ["tombraider"] = GraphicsApi.D3D11,
             ["hl2"] = GraphicsApi.D3D9,
             ["gtaiv"] = GraphicsApi.D3D9,
+            // Max Payne 1 é DirectX 8 puro; o 2 já é D3D9.
+            ["maxpayne"] = GraphicsApi.D3D8,
+            ["maxpayne2"] = GraphicsApi.D3D9,
         };
 
     private static readonly (string Fragment, GraphicsApi Api)[] FolderHints =
@@ -87,6 +94,8 @@ public static class ApiDetector
         ("dx11", GraphicsApi.D3D11),
         ("d3d11", GraphicsApi.D3D11),
         ("vulkan", GraphicsApi.Vulkan),
+        ("dx8", GraphicsApi.D3D8),
+        ("d3d8", GraphicsApi.D3D8),
     };
 
     private const int ChunkSize = 4 * 1024 * 1024;
@@ -173,6 +182,7 @@ public static class ApiDetector
         if (dll.StartsWith("d3d11", StringComparison.OrdinalIgnoreCase)) return GraphicsApi.D3D11;
         if (dll.StartsWith("d3d10", StringComparison.OrdinalIgnoreCase)) return GraphicsApi.D3D10;
         if (dll.StartsWith("d3d9", StringComparison.OrdinalIgnoreCase)) return GraphicsApi.D3D9;
+        if (dll.StartsWith("d3d8", StringComparison.OrdinalIgnoreCase)) return GraphicsApi.D3D8;
         if (dll.StartsWith("vulkan-1", StringComparison.OrdinalIgnoreCase)) return GraphicsApi.Vulkan;
         if (dll.StartsWith("opengl32", StringComparison.OrdinalIgnoreCase)) return GraphicsApi.OpenGL;
         return GraphicsApi.Unknown;

@@ -30,7 +30,7 @@ public static class InstallPlanBuilder
             return plan;
         }
 
-        var missing = kit.MissingFor(route, profile.UsesRenodxDirectPath);
+        var missing = kit.MissingFor(route, profile.UsesRenodxDirectPath, profile.Api);
         if (missing.Count > 0)
         {
             foreach (var m in missing)
@@ -59,18 +59,20 @@ public static class InstallPlanBuilder
                     $"Remover arquivo proibido {Path.GetFileName(f)}", null, f));
         }
 
-        // ReShade (dxgi.dll) na pasta do exe, arquitetura = exe.
+        // ReShade na pasta do exe, arquitetura = exe. O NOME depende da API: o jogo só
+        // carrega a DLL que ele mesmo procura (dxgi.dll no Direct3D, opengl32.dll no OpenGL).
         var dxgiArch = profile.Architecture;
+        var hook = profile.ReShadeHookName;
         var dxgiSrc = dxgiArch == PeArchitecture.X64 ? kit.DxgiX64 : kit.DxgiX86;
         if (dxgiSrc is not null)
         {
-            Copy(dxgiSrc, exe, "dxgi.dll");
+            Copy(dxgiSrc, exe, hook);
         }
         else if (kit.ReShadeSetup is not null)
         {
             plan.Actions.Add(new PlanAction(PlanActionKind.ExtractReShadeDll,
-                $"Extrair ReShade ({dxgiArch}) do instalador → {Rel(profile, Path.Combine(exe, "dxgi.dll"))}",
-                kit.ReShadeSetup, Path.Combine(exe, "dxgi.dll")));
+                $"Extrair ReShade ({dxgiArch}) do instalador → {Rel(profile, Path.Combine(exe, hook))}",
+                kit.ReShadeSetup, Path.Combine(exe, hook)));
         }
 
         // ReShade.ini + preset gerados.
@@ -112,7 +114,8 @@ public static class InstallPlanBuilder
         if (route == InstallRoute.C)
         {
             var renderer = profile.RendererFolder ?? exe;
-            Copy(kit.DgVoodooD3D9X86, renderer, "D3D9.dll");
+            var wrapperSrc = profile.Api == GraphicsApi.D3D8 ? kit.DgVoodooD3D8X86 : kit.DgVoodooD3D9X86;
+            Copy(wrapperSrc, renderer, profile.DgVoodooWrapperName);
             Copy(kit.DgVoodooCpl, renderer, "dgVoodooCpl.exe");
             if (kit.DgVoodooConf is not null)
                 plan.Actions.Add(new PlanAction(PlanActionKind.PatchDgVoodooConf,
@@ -141,6 +144,26 @@ public static class InstallPlanBuilder
                 "render = saída), então os dois juntos só atrapalham.");
         }
 
+        if (profile.Api == GraphicsApi.OpenGL)
+        {
+            plan.Warnings.Add(
+                "OpenGL está FORA da matriz validada da especificação (seção 2), e o addon do Feeder " +
+                "anuncia suporte a D3D11/D3D12/Vulkan. O ReShade é instalado com o nome certo " +
+                "(opengl32.dll) e deve carregar e abrir o overlay, mas o DLSS 5 pode não engatar. " +
+                "Se o jogo tiver opção de renderizador DirectX nas configurações, PREFIRA ela — " +
+                "aí o caminho é o validado. Depois de abrir o jogo uma vez, volte e clique em " +
+                "Verificar: o log dirá se o addon foi aceito.");
+        }
+
+        if (profile.Api == GraphicsApi.D3D8)
+        {
+            plan.Warnings.Add(
+                "DirectX 8: quem traduz é o dgVoodoo2 (D3D8.dll → D3D11), exatamente como no D3D9. " +
+                "Confirme a marca d'água do dgVoodoo na tela do jogo — é o único teste confiável de " +
+                "que ele está interceptando. Se o jogo tiver um seletor de resolução/renderizador no " +
+                "primeiro início, rode-o uma vez depois de instalar.");
+        }
+
         if (profile.Api == GraphicsApi.Vulkan && profile.Architecture == PeArchitecture.X64)
         {
             plan.Warnings.Add(
@@ -164,8 +187,12 @@ public static class InstallPlanBuilder
                    "Se o jogo também oferecer D3D9, troque a API para D3D9 (rota C).";
         if (p.Api == GraphicsApi.D3D10)
             return "Direct3D 10 não é suportado por este fluxo.";
-        if (p.Api == GraphicsApi.OpenGL)
-            return "OpenGL não é suportado: o Feeder precisa de D3D11/D3D12 (ou Vulkan em 64-bit).";
+        if (p.Api == GraphicsApi.OpenGL && p.Architecture == PeArchitecture.X86)
+            return "Jogo 32-bit em OpenGL não é suportado: o addon32 do Feeder só aceita Direct3D 11. " +
+                   "Se o jogo oferecer um renderizador DirectX nas configurações, troque para ele.";
+        if (p.Api == GraphicsApi.D3D8 && p.Architecture == PeArchitecture.X64)
+            return "DirectX 8 em executável 64-bit não existe na prática, e o dgVoodoo2 só traz o " +
+                   "wrapper x86. Confira a arquitetura e a API detectadas.";
         if (p.Architecture == PeArchitecture.Unknown)
             return "Arquitetura do executável não identificada. Selecione o exe real do jogo.";
         return "Combinação de arquitetura/API sem caminho suportado.";

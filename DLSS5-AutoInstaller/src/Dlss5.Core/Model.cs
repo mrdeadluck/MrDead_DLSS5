@@ -12,6 +12,7 @@ public enum PeArchitecture
 public enum GraphicsApi
 {
     Unknown,
+    D3D8,
     D3D9,
     D3D10,
     D3D11,
@@ -29,7 +30,7 @@ public enum InstallRoute
     A,
     /// <summary>B — 32-bit D3D11 nativo.</summary>
     B,
-    /// <summary>C — 32-bit D3D9 traduzido para D3D11 pelo dgVoodoo2.</summary>
+    /// <summary>C — 32-bit D3D8/D3D9 traduzido para D3D11 pelo dgVoodoo2.</summary>
     C,
 }
 
@@ -91,19 +92,23 @@ public sealed class GameProfile
         {
             if (Architecture == PeArchitecture.X64)
             {
-                // 64-bit cobre D3D11/D3D12/Vulkan. D3D10 e OpenGL ficam de fora.
+                // 64-bit cobre D3D11/D3D12/Vulkan. OpenGL entra pelo mesmo caminho, só
+                // trocando o nome com que o ReShade é instalado. D3D10 fica de fora.
                 return Api switch
                 {
                     GraphicsApi.D3D11 or GraphicsApi.D3D12 or GraphicsApi.Vulkan => InstallRoute.A,
+                    GraphicsApi.OpenGL => InstallRoute.A,
                     _ => InstallRoute.Unsupported,
                 };
             }
             if (Architecture == PeArchitecture.X86)
             {
+                // D3D8 e D3D9 caem os dois no dgVoodoo2, que traduz para D3D11: muda só
+                // qual wrapper é copiado (D3D8.dll ou D3D9.dll).
                 return Api switch
                 {
                     GraphicsApi.D3D11 => InstallRoute.B,
-                    GraphicsApi.D3D9 => InstallRoute.C,
+                    GraphicsApi.D3D9 or GraphicsApi.D3D8 => InstallRoute.C,
                     _ => InstallRoute.Unsupported,
                 };
             }
@@ -128,6 +133,25 @@ public sealed class GameProfile
 
     /// <summary>Precisa do dgVoodoo2 (rota C).</summary>
     public bool NeedsDgVoodoo => Route == InstallRoute.C;
+
+    /// <summary>
+    /// Nome com que o ReShade é instalado. O jogo carrega a DLL pelo nome da API que ele
+    /// usa: um jogo OpenGL nunca vai procurar por dxgi.dll, então instalar com esse nome
+    /// resulta em ReShade que jamais é carregado e num ReShade.log que nem chega a existir.
+    /// </summary>
+    public string ReShadeHookName => Api == GraphicsApi.OpenGL ? "opengl32.dll" : "dxgi.dll";
+
+    /// <summary>
+    /// Wrapper do dgVoodoo2 correspondente à API do jogo (rota C). O dgVoodoo traz um
+    /// arquivo por API, e o jogo só carrega o que tem o nome certo.
+    /// </summary>
+    public string DgVoodooWrapperName => Api == GraphicsApi.D3D8 ? "D3D8.dll" : "D3D9.dll";
+
+    /// <summary>
+    /// API fora da matriz validada da especificação (seção 2). Instala, mas avisando:
+    /// o addon do Feeder anuncia D3D11/D3D12/Vulkan, então OpenGL é tentativa.
+    /// </summary>
+    public bool IsExperimentalApi => Api == GraphicsApi.OpenGL;
 
     /// <summary>Opções de inicialização sugeridas (Source: -dxlevel 95).</summary>
     public string? SuggestedLaunchOptions =>

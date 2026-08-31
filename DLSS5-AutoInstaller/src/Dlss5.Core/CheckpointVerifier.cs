@@ -72,21 +72,23 @@ public static class CheckpointVerifier
                 "\"HOOKS ARMED / NO DLSS CREATE SEEN\"."));
         }
 
-        // 6 — arquitetura dos dxgi.dll instalados
-        var dxgi = Path.Combine(exe, "dxgi.dll");
+        // 6 — arquitetura do ReShade instalado. O nome muda com a API: num jogo OpenGL
+        // procurar por dxgi.dll acusaria falha mesmo com a instalação correta.
+        var hook = profile.ReShadeHookName;
+        var dxgi = Path.Combine(exe, hook);
         if (File.Exists(dxgi))
         {
             var arch = PeFile.GetArchitecture(dxgi);
             bool ok = arch == profile.Architecture;
-            r.Add(new CheckResult(6, "dxgi.dll do jogo com a arquitetura do exe",
+            r.Add(new CheckResult(6, $"{hook} do jogo com a arquitetura do exe",
                 ok ? CheckStatus.Pass : CheckStatus.Fail,
-                $"dxgi.dll é {arch}, exe é {profile.Architecture}.",
+                $"{hook} é {arch}, exe é {profile.Architecture}.",
                 ok ? null : "Arquitetura trocada: reinstale para extrair a versão certa do ReShade."));
         }
         else
         {
-            r.Add(new CheckResult(6, "dxgi.dll do jogo", CheckStatus.Fail,
-                "dxgi.dll não está na pasta do exe.", "Rode a instalação."));
+            r.Add(new CheckResult(6, $"{hook} do jogo", CheckStatus.Fail,
+                $"{hook} não está na pasta do exe.", "Rode a instalação."));
         }
 
         if (route is InstallRoute.B or InstallRoute.C)
@@ -169,13 +171,14 @@ public static class CheckpointVerifier
         if (route == InstallRoute.C)
         {
             var renderer = profile.RendererFolder ?? exe;
-            var d3d9 = Path.Combine(renderer, "D3D9.dll");
+            var wrapper = profile.DgVoodooWrapperName;
+            var d3d9 = Path.Combine(renderer, wrapper);
             var conf = Path.Combine(renderer, "dgVoodoo.conf");
             bool d3d9Ok = File.Exists(d3d9) && PeFile.GetArchitecture(d3d9) == PeArchitecture.X86;
             r.Add(new CheckResult(5, "dgVoodoo2 na pasta do renderizador",
                 d3d9Ok ? CheckStatus.Pass : CheckStatus.Fail,
-                d3d9Ok ? $"D3D9.dll (x86) em {renderer}" : $"D3D9.dll x86 ausente em {renderer}",
-                d3d9Ok ? null : "No Source o D3D9.dll vai em bin\\, não na raiz."));
+                d3d9Ok ? $"{wrapper} (x86) em {renderer}" : $"{wrapper} x86 ausente em {renderer}",
+                d3d9Ok ? null : $"No Source o {wrapper} vai em bin\\, não na raiz."));
 
             if (File.Exists(conf))
             {
