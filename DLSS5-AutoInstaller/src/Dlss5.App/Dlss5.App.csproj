@@ -27,4 +27,10 @@
     <ProjectReference Include="..\Dlss5.Core\Dlss5.Core.csproj" />
   </ItemGroup>
 
+  <!-- Imagens de assets/ entram embutidas no executável. Se a pasta estiver vazia,
+       o glob simplesmente não casa e o build segue normal. -->
+  <ItemGroup>
+    <EmbeddedResource Include="assets\*.png" />
+  </ItemGroup>
+
 </Project>

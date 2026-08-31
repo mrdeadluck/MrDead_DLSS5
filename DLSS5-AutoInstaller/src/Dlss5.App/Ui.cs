@@ -85,6 +85,32 @@ internal static class Ui
         box.Font = mono ? MonoFont : BodyFont;
     }
 
+    /// <summary>
+    /// Foto do autor, embutida no executável (assets/mrdead.png). Devolve null quando
+    /// o arquivo não foi adicionado ao projeto — aí a interface desenha um monograma.
+    /// </summary>
+    public static Image? LoadAvatar()
+    {
+        try
+        {
+            var asm = System.Reflection.Assembly.GetExecutingAssembly();
+            var nome = asm.GetManifestResourceNames()
+                .FirstOrDefault(n => n.EndsWith("mrdead.png", StringComparison.OrdinalIgnoreCase));
+            if (nome is null) return null;
+
+            using var stream = asm.GetManifestResourceStream(nome);
+            if (stream is null) return null;
+
+            // Cópia independente: o Image guardaria o stream aberto.
+            using var original = Image.FromStream(stream);
+            return new Bitmap(original);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public static Color ForState(CheckStatusKind kind) => kind switch
     {
         CheckStatusKind.Ok => Ok,

@@ -208,6 +208,8 @@ public sealed class MainForm : Form
             Bounds = new Rectangle(23, 50, 170, 20),
         });
 
+        BuildSidebarFooter();
+
         int y = 96;
         for (int i = 0; i < StepNames.Length; i++)
         {
@@ -225,6 +227,73 @@ public sealed class MainForm : Form
             _stepLabels[i] = lbl;
             y += 40;
         }
+    }
+
+    /// <summary>Crédito do autor, preso ao pé da barra lateral.</summary>
+    private void BuildSidebarFooter()
+    {
+        var rodape = new Panel
+        {
+            Dock = DockStyle.Bottom,
+            Height = 92,
+            BackColor = Ui.Sidebar,
+        };
+
+        const int lado = 56;
+        var foto = new PictureBox
+        {
+            SizeMode = PictureBoxSizeMode.Zoom,
+            BackColor = Ui.Sidebar,
+            Bounds = new Rectangle(20, 16, lado, lado),
+        };
+
+        var imagem = Ui.LoadAvatar();
+        if (imagem is not null)
+        {
+            foto.Image = imagem;
+            // Recorte circular: fica com cara de avatar em vez de foto quadrada.
+            var recorte = new System.Drawing.Drawing2D.GraphicsPath();
+            recorte.AddEllipse(0, 0, lado, lado);
+            foto.Region = new Region(recorte);
+        }
+        else
+        {
+            // Sem a imagem embutida, desenha um monograma no lugar.
+            foto.Paint += (_, e) =>
+            {
+                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                using var fundo = new SolidBrush(Ui.Accent);
+                e.Graphics.FillEllipse(fundo, 0, 0, lado - 1, lado - 1);
+                using var fonte = new Font("Segoe UI", 15F, FontStyle.Bold);
+                using var centro = new StringFormat
+                {
+                    Alignment = StringAlignment.Center,
+                    LineAlignment = StringAlignment.Center,
+                };
+                e.Graphics.DrawString("MD", fonte, Brushes.White,
+                    new RectangleF(0, 0, lado, lado), centro);
+            };
+        }
+        rodape.Controls.Add(foto);
+
+        rodape.Controls.Add(new Label
+        {
+            Text = "Desenvolvido por",
+            Font = Ui.SmallFont,
+            ForeColor = Ui.SidebarIdle,
+            AutoSize = false,
+            Bounds = new Rectangle(88, 26, 116, 16),
+        });
+        rodape.Controls.Add(new Label
+        {
+            Text = "MrDead_",
+            Font = new Font("Segoe UI", 11F, FontStyle.Bold),
+            ForeColor = Color.White,
+            AutoSize = false,
+            Bounds = new Rectangle(88, 42, 116, 24),
+        });
+
+        _sidebar.Controls.Add(rodape);
     }
 
     /// <summary>Marca o passo atual na barra lateral e apaga os que ainda não chegaram.</summary>
