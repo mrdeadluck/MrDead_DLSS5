@@ -1,0 +1,69 @@
+namespace Dlss5.Core;
+
+public sealed record ManualStep(int Order, string Title, string Detail, bool CriticalBeforeLaunch);
+
+/// <summary>
+/// O que o programa não consegue fazer com segurança (spec 11.3) vira roteiro guiado:
+/// overlays, opções de inicialização, confirmação visual e ajustes de depth.
+/// </summary>
+public static class ManualSteps
+{
+    public static IReadOnlyList<ManualStep> For(GameProfile profile, InstallOptions options)
+    {
+        var steps = new List<ManualStep>();
+        int n = 1;
+
+        if (options.ApplyRegistryOverride)
+            steps.Add(new ManualStep(n++, "Reiniciar o Windows",
+                "O override de assinatura do NGX foi gravado no registro, mas o driver da NVIDIA só lê essa " +
+                "chave na inicialização. Sem reiniciar, o DLSS 5 falha com STANDBY / 0xBAD00007.", true));
+
+        steps.Add(new ManualStep(n++, "Desligar as sobreposições (overlays)",
+            "Steam → clique direito no jogo → Propriedades → desmarque a sobreposição. " +
+            "NVIDIA App → Configurações → Sobreposição no jogo → desligar. " +
+            "Isso não dá para automatizar de forma confiável: a Steam restaura o arquivo do overlay ao reabrir. " +
+            "Overlays podem carregar o DXGI antes do ReShade e roubar a interceptação.", false));
+
+        steps.Add(new ManualStep(n++, "Desligar MSAA/SSAA nas opções gráficas do jogo",
+            "O Generic Depth não enxerga um depth buffer multisampled, e SSAA conflita com o DLAA. " +
+            "FXAA e SMAA são pós-processo e podem continuar ligados.", true));
+
+        if (profile.SuggestedLaunchOptions is { } launchOpts)
+            steps.Add(new ManualStep(n++, $"Adicionar a opção de inicialização {launchOpts}",
+                $"Steam → Propriedades do jogo → Opções de inicialização → digite {launchOpts}. " +
+                "Isso força o D3D9, que é obrigatório porque Vulkan 32-bit não é suportado. " +
+                "REMOVA essa opção depois da primeira execução, senão o jogo reseta as configurações toda vez.", true));
+
+        if (profile.NeedsDgVoodoo)
+            steps.Add(new ManualStep(n++, "Conferir a marca d'água do dgVoodoo",
+                "Abra o jogo: a marca d'água do dgVoodoo tem que aparecer na tela. " +
+                "É o único teste confiável de que ele está interceptando o Direct3D. " +
+                "Sem ela, o D3D9.dll está na pasta errada (no Source vai em bin\\) ou o passthru continua ligado.", false));
+
+        steps.Add(new ManualStep(n++, "Abrir o jogo e conferir o painel do ReShade",
+            $"No jogo, aperte {(options.OverlayKey == ReShadeConfigWriter.KeyInsert ? "Insert" : "Home")} para abrir o ReShade. " +
+            "Na aba Início, o provedor de motion vectors e o DLSS 5 Feed já vêm marcados na ordem certa " +
+            "(o programa gerou o preset). Confirme na aba Complementos que o DLSS 5 Feed aparece listado" +
+            (profile.Route == InstallRoute.A ? " junto com o DLSS 5 Neural Rendering." : ". Em jogo 32-bit, as opções neurais ficam DENTRO do painel do DLSS 5 Feed, no grupo 'on the host', com botão Apply."), false));
+
+        steps.Add(new ManualStep(n++, "Conferir o depth buffer",
+            "Na aba Complementos → Generic Depth, confirme que o buffer da cena está selecionado e não está " +
+            "marcado como Multisampled. Se a imagem ficar estranha, ative o DisplayDepth.fx para ver o depth: " +
+            "se estiver invertido ou de cabeça para baixo, marque RESHADE_DEPTH_INPUT_IS_REVERSED / IS_UPSIDE_DOWN.", false));
+
+        steps.Add(new ManualStep(n++, "Voltar aqui e clicar em Verificar",
+            "Com o jogo já aberto uma vez, o programa consegue ler os logs e dizer exatamente o que falta.", false));
+
+        return steps;
+    }
+
+    /// <summary>Limitações que o usuário precisa saber antes de esperar ganho de FPS (spec 1).</summary>
+    public static string Limitations =>
+        "Limitações estruturais (não são erros de configuração):\r\n" +
+        "• É DLAA only: a resolução de render é igual à de saída — NÃO existe ganho de performance.\r\n" +
+        "• A HUD é processada junto com a cena.\r\n" +
+        "• Motion vectors estimados geram ghosting em movimento rápido.\r\n" +
+        "• O override de assinatura é global no sistema; anti-cheat (EAC, BattlEye) pode tratar como violação " +
+        "de integridade. Não use em jogos online com anti-cheat.\r\n" +
+        "• Em placas Ada (RTX 40) o consumo de VRAM é o pior caso: teste primeiro em 1080p, em janela.";
+}

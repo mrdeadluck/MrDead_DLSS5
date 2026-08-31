@@ -1,0 +1,81 @@
+name: Build DLSS5-AutoInstaller
+
+on:
+  push:
+    paths:
+      - 'DLSS5-AutoInstaller/**'
+      - '.github/workflows/build-installer.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout (sem baixar os arquivos grandes do LFS)
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - name: Instalar .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restaurar
+        working-directory: DLSS5-AutoInstaller
+        run: dotnet restore DLSS5-AutoInstaller.sln
+
+      - name: Compilar
+        working-directory: DLSS5-AutoInstaller
+        run: dotnet build DLSS5-AutoInstaller.sln -c Release --no-restore
+
+      - name: Rodar os testes
+        working-directory: DLSS5-AutoInstaller
+        run: dotnet test tests/Dlss5.Core.Tests/Dlss5.Core.Tests.csproj -c Release --no-build --verbosity normal
+
+      - name: Publicar executável único (self-contained)
+        working-directory: DLSS5-AutoInstaller
+        run: >
+          dotnet publish src/Dlss5.App/Dlss5.App.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:EnableCompressionInSingleFile=true
+          -p:DebugType=None
+          -o ${{ github.workspace }}\publish
+
+      - name: Conferir o resultado
+        shell: pwsh
+        run: |
+          $exe = "${{ github.workspace }}\publish\DLSS5-AutoInstaller.exe"
+          if (-not (Test-Path $exe)) { throw "Executável não foi gerado" }
+          $size = [math]::Round((Get-Item $exe).Length / 1MB, 1)
+          Write-Host "OK: DLSS5-AutoInstaller.exe ($size MB)"
+
+      - name: Publicar como artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: DLSS5-AutoInstaller
+          path: publish/DLSS5-AutoInstaller.exe
+          retention-days: 90
+
+      - name: Publicar/atualizar a Release "latest"
+        if: github.ref_name == 'claude/upload-large-files-02562q' || github.ref_name == 'main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: installer-latest
+          name: DLSS 5 AutoInstaller (build mais recente)
+          body: |
+            Executável do DLSS 5 AutoInstaller compilado automaticamente a partir de
+            `DLSS5-AutoInstaller/` no commit ${{ github.sha }}.
+
+            **Como usar:** baixe `DLSS5-AutoInstaller.exe` abaixo e execute (ele pede
+            permissão de administrador, necessária para gravar no registro e em
+            pastas dentro de Program Files). Não precisa instalar o .NET.
+          prerelease: true
+          files: publish/DLSS5-AutoInstaller.exe
