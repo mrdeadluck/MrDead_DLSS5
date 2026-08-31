@@ -56,6 +56,26 @@ inteira o clone é bem mais prático.
 
 ---
 
+## Compartilhar com alguém
+
+O repositório é público, mas **não peça para a pessoa clonar**: o kit tem 1 GB e
+o download de LFS sai da cota mensal de quem é dono do repositório (1 GB/mês).
+Um clone já esgota o mês inteiro.
+
+Monte um pacote enxuto e mande por WhatsApp, Drive ou pendrive:
+
+```powershell
+.\scripts\Montar-Pacote.ps1 -Zip
+```
+
+Ele separa só o que o instalador usa (~225 MB em vez de 1 GB), baixa o
+executável mais recente, escreve um `LEIA-ME.txt` explicando tudo para quem vai
+receber e, com `-Zip`, fecha o pacote. As três maiores coisas do kit ficam de
+fora de propósito: os dois `.zip` repetem o que já está extraído, e o zip do
+Streamline contém justamente as DLLs que **não** podem ir para a pasta do jogo.
+
+---
+
 ## Como usar, em resumo
 
 1. Baixe o `DLSS5-AutoInstaller.exe` acima e execute.
