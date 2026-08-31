@@ -159,9 +159,12 @@ public static class InstallPlanBuilder
         {
             plan.Warnings.Add(
                 "DirectX 8: quem traduz é o dgVoodoo2 (D3D8.dll → D3D11), exatamente como no D3D9. " +
-                "Confirme a marca d'água do dgVoodoo na tela do jogo — é o único teste confiável de " +
-                "que ele está interceptando. Se o jogo tiver um seletor de resolução/renderizador no " +
-                "primeiro início, rode-o uma vez depois de instalar.");
+                "O dgVoodoo.conf é gravado no perfil Legado — VRAM em 256 MB, AdapterIDType=nvidia e " +
+                "MSD3DDeviceNames=true — porque jogo dessa época inspeciona o adaptador antes de criar " +
+                "o device e recusa o cartão virtual do dgVoodoo (o Max Payne responde \"requires a " +
+                "DirectX 8 compatible display adapter\"). Se mesmo assim aparecer essa mensagem, use o " +
+                "botão \"Painel do dgVoodoo\" na tela de verificação e troque VideoCard para " +
+                "geforce_ti_4800 ou ati_radeon_8500 — não precisa reinstalar.");
         }
 
         if (profile.Api == GraphicsApi.Vulkan && profile.Architecture == PeArchitecture.X64)

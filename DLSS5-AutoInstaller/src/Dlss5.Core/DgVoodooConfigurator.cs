@@ -7,10 +7,27 @@ namespace Dlss5.Core;
 /// Importante: a chave "VideoCard" existe em [Glide] E em [DirectX] — um replace
 /// global (como no snippet original) estragaria a de Glide. Aqui a troca é por seção.
 /// </summary>
+/// <summary>Como configurar o dgVoodoo, conforme a idade do jogo.</summary>
+public enum DgVoodooProfile
+{
+    /// <summary>D3D9 e afins — o que a especificação validou.</summary>
+    Padrao,
+
+    /// <summary>
+    /// DirectX 8 e jogos da mesma época. Eles inspecionam o adaptador antes de criar o
+    /// device, e o cartão virtual do dgVoodoo se identifica como ele mesmo: o Max Payne
+    /// responde a isso com "requires a DirectX 8 compatible display adapter" e nem chega
+    /// a abrir. Este perfil mantém o internal3D (que é o de mais capacidades) mas faz a
+    /// identidade parecer uma placa NVIDIA comum, com os nomes de device padrão da
+    /// Microsoft — as duas chaves que o próprio dgVoodoo documenta para esse caso.
+    /// </summary>
+    Legado,
+}
+
 public static class DgVoodooConfigurator
 {
     /// <summary>(seção, chave) => valor. Só mexe nas linhas dessas seções.</summary>
-    private static readonly (string Section, string Key, string Value)[] Targets =
+    private static readonly (string Section, string Key, string Value)[] Base =
     {
         ("General",    "OutputAPI",          "d3d11_fl11_0"),
         ("DirectX",    "DisableAndPassThru", "false"),
@@ -19,9 +36,43 @@ public static class DgVoodooConfigurator
         ("DirectXExt", "dgVoodooWatermark",  "true"),
     };
 
-    /// <summary>Aplica os ajustes ao texto do .conf, preservando formatação/alinhamento.</summary>
-    public static string Patch(string confText)
+    /// <summary>
+    /// O que muda para jogo antigo. VRAM volta a 256 MB (o padrão do próprio dgVoodoo):
+    /// jogo de 2001 não foi escrito esperando uma placa de 1 GB, e alguns fazem conta
+    /// errada com valores grandes.
+    /// </summary>
+    private static readonly (string Section, string Key, string Value)[] Legado =
     {
+        ("DirectX",    "VRAM",              "256"),
+        ("DirectXExt", "AdapterIDType",     "nvidia"),
+        ("DirectXExt", "MSD3DDeviceNames",  "true"),
+    };
+
+    /// <summary>Chaves efetivamente aplicadas para um perfil.</summary>
+    public static IReadOnlyList<(string Section, string Key, string Value)> TargetsFor(DgVoodooProfile perfil)
+    {
+        if (perfil == DgVoodooProfile.Padrao) return Base;
+
+        var lista = Base.ToList();
+        foreach (var extra in Legado)
+        {
+            int i = lista.FindIndex(t =>
+                t.Section.Equals(extra.Section, StringComparison.OrdinalIgnoreCase) &&
+                t.Key.Equals(extra.Key, StringComparison.OrdinalIgnoreCase));
+            if (i >= 0) lista[i] = extra;
+            else lista.Add(extra);
+        }
+        return lista;
+    }
+
+    /// <summary>Perfil adequado à API do jogo.</summary>
+    public static DgVoodooProfile ProfileFor(GraphicsApi api) =>
+        api == GraphicsApi.D3D8 ? DgVoodooProfile.Legado : DgVoodooProfile.Padrao;
+
+    /// <summary>Aplica os ajustes ao texto do .conf, preservando formatação/alinhamento.</summary>
+    public static string Patch(string confText, DgVoodooProfile perfil = DgVoodooProfile.Padrao)
+    {
+        var Targets = TargetsFor(perfil);
         var lines = confText.Replace("\r\n", "\n").Split('\n');
         string currentSection = "";
         var applied = new HashSet<(string, string)>();
@@ -60,8 +111,9 @@ public static class DgVoodooConfigurator
     }
 
     /// <summary>Lista os alvos que NÃO foram encontrados no texto (para diagnóstico).</summary>
-    public static IReadOnlyList<string> MissingKeys(string confText)
+    public static IReadOnlyList<string> MissingKeys(string confText, DgVoodooProfile perfil = DgVoodooProfile.Padrao)
     {
+        var Targets = TargetsFor(perfil);
         var lines = confText.Replace("\r\n", "\n").Split('\n');
         string currentSection = "";
         var found = new HashSet<(string, string)>();

@@ -859,6 +859,7 @@ public sealed class MainForm : Form
         bar.Controls.Add(MakeButton("Abrir o jogo", 8, 0, 120, (_, _) => LaunchGame()));
         bar.Controls.Add(MakeButton("Desinstalar (reverter)", 8, 0, 170, (_, _) => RevertInstall()));
         bar.Controls.Add(MakeButton("Desfazer tudo (forçado)", 8, 0, 170, (_, _) => FaxinaCompleta()));
+        bar.Controls.Add(MakeButton("Painel do dgVoodoo", 8, 0, 150, (_, _) => AbrirPainelDgVoodoo()));
 
         _p4.Controls.Add(split);
         _p4.Controls.Add(bar);
@@ -968,6 +969,38 @@ public sealed class MainForm : Form
             }
         }
         catch (Exception ex) { Warn(ex.Message); }
+    }
+
+    /// <summary>
+    /// Abre o painel do dgVoodoo já na pasta certa. É por ele que se troca a placa que o
+    /// wrapper finge ser — o ajuste que resolve o jogo antigo que recusa o adaptador — e
+    /// a troca vale na hora, sem reinstalar nada.
+    /// </summary>
+    private void AbrirPainelDgVoodoo()
+    {
+        var pasta = _profile?.RendererFolder ?? _profile?.ExeFolder;
+        if (string.IsNullOrWhiteSpace(pasta) || !Directory.Exists(pasta))
+        {
+            Warn("Faça a detecção primeiro.");
+            return;
+        }
+
+        var cpl = Path.Combine(pasta, "dgVoodooCpl.exe");
+        if (!File.Exists(cpl))
+        {
+            Warn($"dgVoodooCpl.exe não está em {pasta}. Ele só é instalado nos jogos que " +
+                 "precisam do dgVoodoo (32-bit em DirectX 8 ou 9).");
+            return;
+        }
+
+        try
+        {
+            // O painel edita o dgVoodoo.conf da pasta de onde é aberto: sem o
+            // WorkingDirectory certo ele mexeria no arquivo errado.
+            Process.Start(new ProcessStartInfo(cpl) { UseShellExecute = true, WorkingDirectory = pasta });
+            _status.Text = "Painel do dgVoodoo aberto. Aba DirectX → VideoCard. Salve e reabra o jogo.";
+        }
+        catch (Exception ex) { Warn("Não consegui abrir o painel: " + ex.Message); }
     }
 
     /// <summary>

@@ -21,6 +21,8 @@ public class DgVoodooConfiguratorTests
         VRAM                                = 256
 
         [DirectXExt]
+        AdapterIDType                       = 
+        MSD3DDeviceNames                    = false
         dgVoodooWatermark                   = false
         """;
 
@@ -51,6 +53,41 @@ public class DgVoodooConfiguratorTests
         var result = DgVoodooConfigurator.Patch(Sample);
         Assert.Contains("Adapter                              = 0", result);
         Assert.Contains("Memory                              = 8", result);
+    }
+
+    [Fact]
+    public void PerfilLegado_FazOAdaptadorParecerUmaPlacaComum()
+    {
+        // Jogo de DirectX 8 checa a placa antes de criar o device e recusa o cartão
+        // virtual do dgVoodoo: o Max Payne responde "requires a DirectX 8 compatible
+        // display adapter" e nem abre. As duas chaves abaixo são o que o próprio
+        // dgVoodoo documenta para esse caso.
+        var result = DgVoodooConfigurator.Patch(Sample, DgVoodooProfile.Legado);
+
+        Assert.Contains("AdapterIDType                       = nvidia", result);
+        Assert.Contains("MSD3DDeviceNames                    = true", result);
+        // VRAM volta ao padrão do dgVoodoo: jogo de 2001 não espera placa de 1 GB.
+        Assert.Contains("VRAM                                = 256", result);
+        // O resto continua igual ao perfil padrão.
+        Assert.Contains("DisableAndPassThru                  = false", result);
+        Assert.Contains("VideoCard                           = internal3D", result);
+    }
+
+    [Fact]
+    public void PerfilPadrao_NaoMexeNasChavesDeCompatibilidade()
+    {
+        var result = DgVoodooConfigurator.Patch(Sample);
+
+        Assert.Contains("VRAM                                = 1024", result);
+        Assert.DoesNotContain("= nvidia", result);
+        Assert.Contains("MSD3DDeviceNames                    = false", result);
+    }
+
+    [Fact]
+    public void PerfilSegueAApiDoJogo()
+    {
+        Assert.Equal(DgVoodooProfile.Legado, DgVoodooConfigurator.ProfileFor(GraphicsApi.D3D8));
+        Assert.Equal(DgVoodooProfile.Padrao, DgVoodooConfigurator.ProfileFor(GraphicsApi.D3D9));
     }
 
     [Fact]

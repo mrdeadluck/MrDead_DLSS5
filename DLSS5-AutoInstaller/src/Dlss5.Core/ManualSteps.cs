@@ -48,6 +48,16 @@ public static class ManualSteps
                 "Isso força o D3D9, que é obrigatório porque Vulkan 32-bit não é suportado. " +
                 "REMOVA essa opção depois da primeira execução, senão o jogo reseta as configurações toda vez.", true));
 
+        if (profile.Api == GraphicsApi.D3D8)
+            steps.Add(new ManualStep(n++, "Se o jogo recusar o adaptador de vídeo",
+                "Jogo de DirectX 8 checa a placa antes de abrir, e o cartão virtual do dgVoodoo se " +
+                "identifica como ele mesmo — daí mensagens como \"requires a DirectX 8 compatible " +
+                "display adapter\". O programa já grava o perfil Legado (AdapterIDType=nvidia, " +
+                "MSD3DDeviceNames=true, VRAM 256 MB), que resolve a maioria dos casos. Se persistir, " +
+                "abra o Painel do dgVoodoo (botão na tela de verificação), aba DirectX, e troque " +
+                "VideoCard: tente geforce_ti_4800, depois ati_radeon_8500. É só salvar e reabrir o " +
+                "jogo — nada precisa ser reinstalado.", false));
+
         if (profile.NeedsDgVoodoo)
             steps.Add(new ManualStep(n++, "Conferir a marca d'água do dgVoodoo",
                 "Abra o jogo: a marca d'água do dgVoodoo tem que aparecer na tela. " +

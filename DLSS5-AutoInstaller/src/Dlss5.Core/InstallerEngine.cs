@@ -139,7 +139,7 @@ public sealed partial class InstallerEngine
                     break;
 
                 case PlanActionKind.PatchDgVoodooConf:
-                    PatchConf(action.SourcePath!, action.TargetPath!, manifest);
+                    PatchConf(action.SourcePath!, action.TargetPath!, manifest, profile.Api);
                     break;
 
                 case PlanActionKind.RegistryOverride:
@@ -175,19 +175,22 @@ public sealed partial class InstallerEngine
         _log($"Gerado: {target}");
     }
 
-    private void PatchConf(string source, string target, InstallManifest manifest)
+    private void PatchConf(string source, string target, InstallManifest manifest, GraphicsApi api)
     {
         EnsureDirFor(target, manifest);
         BackupIfExists(target, manifest);
+        var perfil = DgVoodooConfigurator.ProfileFor(api);
         var text = File.ReadAllText(source);
-        var patched = DgVoodooConfigurator.Patch(text);
+        var patched = DgVoodooConfigurator.Patch(text, perfil);
         File.WriteAllText(target, patched);
         Track(manifest, target);
 
-        var missing = DgVoodooConfigurator.MissingKeys(patched);
+        var missing = DgVoodooConfigurator.MissingKeys(patched, perfil);
         if (missing.Count > 0)
             _log($"Aviso: chaves não encontradas no dgVoodoo.conf: {string.Join(", ", missing)}");
-        _log($"dgVoodoo.conf ajustado: {target}");
+        _log($"dgVoodoo.conf ajustado ({perfil}): {target}");
+        foreach (var (secao, chave, valor) in DgVoodooConfigurator.TargetsFor(perfil))
+            _log($"   [{secao}] {chave} = {valor}");
     }
 
     /// <summary>Tudo que a instalação pode ter deixado na pasta do exe.</summary>
