@@ -129,7 +129,7 @@ public sealed record PlanAction(
     string? TargetPath);
 
 /// <summary>Resultado de um checkpoint de verificação (spec 9).</summary>
-public enum CheckState
+public enum CheckStatus
 {
     Pass,
     Fail,
@@ -142,6 +142,6 @@ public enum CheckState
 public sealed record CheckResult(
     int Number,
     string Title,
-    CheckState State,
+    CheckStatus State,
     string Detail,
     string? FixHint = null);

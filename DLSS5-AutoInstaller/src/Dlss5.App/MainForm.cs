@@ -729,9 +729,9 @@ public sealed class MainForm : Form
             item.SubItems.Add(c.FixHint ?? "");
             item.ForeColor = c.State switch
             {
-                CheckState.Pass => Color.DarkGreen,
-                CheckState.Fail => Color.Firebrick,
-                CheckState.Warning => Color.DarkGoldenrod,
+                CheckStatus.Pass => Color.DarkGreen,
+                CheckStatus.Fail => Color.Firebrick,
+                CheckStatus.Warning => Color.DarkGoldenrod,
                 _ => SystemColors.ControlText,
             };
             _lvChecks.Items.Add(item);
@@ -766,12 +766,12 @@ public sealed class MainForm : Form
         _status.Text = "Verificação atualizada.";
     }
 
-    private static string StateText(CheckState s) => s switch
+    private static string StateText(CheckStatus s) => s switch
     {
-        CheckState.Pass => "OK",
-        CheckState.Fail => "FALHA",
-        CheckState.Warning => "ATENÇÃO",
-        CheckState.Manual => "MANUAL",
+        CheckStatus.Pass => "OK",
+        CheckStatus.Fail => "FALHA",
+        CheckStatus.Warning => "ATENÇÃO",
+        CheckStatus.Manual => "MANUAL",
         _ => "N/A",
     };
 

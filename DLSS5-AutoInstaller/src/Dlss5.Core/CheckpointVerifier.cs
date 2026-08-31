@@ -18,7 +18,7 @@ public static class CheckpointVerifier
         // 1 — override no registro
         var status = SignatureOverride.Query();
         r.Add(new CheckResult(1, "Override de assinatura NGX no registro",
-            status.AllSet ? CheckState.Pass : CheckState.Fail,
+            status.AllSet ? CheckStatus.Pass : CheckStatus.Fail,
             status.AllSet
                 ? "As 3 chaves estão com DWORD 1."
                 : "Faltando em: " + string.Join(", ",
@@ -30,7 +30,7 @@ public static class CheckpointVerifier
         {
             bool rebooted = SignatureOverride.RebootedSinceEnable(appliedUtc);
             r.Add(new CheckResult(2, "Reinício após aplicar o override",
-                rebooted ? CheckState.Pass : CheckState.Fail,
+                rebooted ? CheckStatus.Pass : CheckStatus.Fail,
                 rebooted
                     ? "O PC foi reiniciado depois de aplicar o override."
                     : "O override foi aplicado nesta sessão e o PC ainda não foi reiniciado.",
@@ -39,7 +39,7 @@ public static class CheckpointVerifier
         else
         {
             r.Add(new CheckResult(2, "Reinício após aplicar o override",
-                status.AllSet ? CheckState.Warning : CheckState.Manual,
+                status.AllSet ? CheckStatus.Warning : CheckStatus.Manual,
                 status.AllSet
                     ? "Override já estava aplicado antes desta instalação; se nunca reiniciou depois, reinicie."
                     : "Sem override aplicado por este programa.",
@@ -48,9 +48,9 @@ public static class CheckpointVerifier
 
         // 4 — exe real e arquitetura
         r.Add(profile.RealExePath is not null && profile.Architecture != PeArchitecture.Unknown
-            ? new CheckResult(4, "Executável real identificado", CheckState.Pass,
+            ? new CheckResult(4, "Executável real identificado", CheckStatus.Pass,
                 $"{Path.GetFileName(profile.RealExePath)} ({profile.Architecture}, {profile.Api}) → rota {route}")
-            : new CheckResult(4, "Executável real identificado", CheckState.Fail,
+            : new CheckResult(4, "Executável real identificado", CheckStatus.Fail,
                 "Não identificado.", "Selecione manualmente o executável real do jogo."));
 
         // 6 — arquitetura dos dxgi.dll instalados
@@ -60,13 +60,13 @@ public static class CheckpointVerifier
             var arch = PeFile.GetArchitecture(dxgi);
             bool ok = arch == profile.Architecture;
             r.Add(new CheckResult(6, "dxgi.dll do jogo com a arquitetura do exe",
-                ok ? CheckState.Pass : CheckState.Fail,
+                ok ? CheckStatus.Pass : CheckStatus.Fail,
                 $"dxgi.dll é {arch}, exe é {profile.Architecture}.",
                 ok ? null : "Arquitetura trocada: reinstale para extrair a versão certa do ReShade."));
         }
         else
         {
-            r.Add(new CheckResult(6, "dxgi.dll do jogo", CheckState.Fail,
+            r.Add(new CheckResult(6, "dxgi.dll do jogo", CheckStatus.Fail,
                 "dxgi.dll não está na pasta do exe.", "Rode a instalação."));
         }
 
@@ -78,13 +78,13 @@ public static class CheckpointVerifier
                 var arch = PeFile.GetArchitecture(hostDxgi);
                 bool ok = arch == PeArchitecture.X64;
                 r.Add(new CheckResult(6, "host64\\dxgi.dll é x64",
-                    ok ? CheckState.Pass : CheckState.Fail,
+                    ok ? CheckStatus.Pass : CheckStatus.Fail,
                     $"host64\\dxgi.dll é {arch}.",
                     ok ? null : "Precisa ser o ReShade x64."));
             }
             else
             {
-                r.Add(new CheckResult(6, "host64\\dxgi.dll é x64", CheckState.Fail,
+                r.Add(new CheckResult(6, "host64\\dxgi.dll é x64", CheckStatus.Fail,
                     "host64\\dxgi.dll não existe.", "Rode a instalação."));
             }
 
@@ -94,7 +94,7 @@ public static class CheckpointVerifier
                 ? Directory.EnumerateFiles(exe, "*.addon64", SearchOption.TopDirectoryOnly).ToList()
                 : new List<string>();
             r.Add(new CheckResult(10, "Layout 32-bit correto",
-                addon32 && strayAddon64.Count == 0 ? CheckState.Pass : CheckState.Fail,
+                addon32 && strayAddon64.Count == 0 ? CheckStatus.Pass : CheckStatus.Fail,
                 addon32
                     ? (strayAddon64.Count == 0
                         ? "addon32 na raiz e nenhum .addon64 solto."
@@ -108,7 +108,7 @@ public static class CheckpointVerifier
         // 11 — efeitos encontráveis
         var feedFx = Path.Combine(exe, "reshade-shaders", "Shaders", "DLSS5_Feed.fx");
         r.Add(new CheckResult(11, "Shaders no lugar",
-            File.Exists(feedFx) ? CheckState.Pass : CheckState.Fail,
+            File.Exists(feedFx) ? CheckStatus.Pass : CheckStatus.Fail,
             File.Exists(feedFx)
                 ? "reshade-shaders\\Shaders\\DLSS5_Feed.fx presente."
                 : "DLSS5_Feed.fx não encontrado.",
@@ -134,7 +134,7 @@ public static class CheckpointVerifier
                 mvFirst = mvIdx >= 0 && mvIdx < feedIdx;
             }
             r.Add(new CheckResult(13, "Provedor de MV marcado ACIMA do DLSS 5 Feed",
-                hasFeed && hasMv && mvFirst ? CheckState.Pass : CheckState.Fail,
+                hasFeed && hasMv && mvFirst ? CheckStatus.Pass : CheckStatus.Fail,
                 techLine ?? "linha Techniques= ausente",
                 hasFeed && hasMv && mvFirst
                     ? null
@@ -142,7 +142,7 @@ public static class CheckpointVerifier
         }
         else
         {
-            r.Add(new CheckResult(13, "ReShadePreset.ini", CheckState.Fail,
+            r.Add(new CheckResult(13, "ReShadePreset.ini", CheckStatus.Fail,
                 "Preset não encontrado.", "Rode a instalação."));
         }
 
@@ -154,7 +154,7 @@ public static class CheckpointVerifier
             var conf = Path.Combine(renderer, "dgVoodoo.conf");
             bool d3d9Ok = File.Exists(d3d9) && PeFile.GetArchitecture(d3d9) == PeArchitecture.X86;
             r.Add(new CheckResult(5, "dgVoodoo2 na pasta do renderizador",
-                d3d9Ok ? CheckState.Pass : CheckState.Fail,
+                d3d9Ok ? CheckStatus.Pass : CheckStatus.Fail,
                 d3d9Ok ? $"D3D9.dll (x86) em {renderer}" : $"D3D9.dll x86 ausente em {renderer}",
                 d3d9Ok ? null : "No Source o D3D9.dll vai em bin\\, não na raiz."));
 
@@ -164,12 +164,12 @@ public static class CheckpointVerifier
                 bool passthru = text.Contains("DisableAndPassThru", StringComparison.OrdinalIgnoreCase)
                                 && !ValueIs(text, "DisableAndPassThru", "true");
                 r.Add(new CheckResult(5, "dgVoodoo.conf ajustado",
-                    passthru ? CheckState.Pass : CheckState.Fail,
+                    passthru ? CheckStatus.Pass : CheckStatus.Fail,
                     passthru ? "DisableAndPassThru=false (dgVoodoo ativo)." : "DisableAndPassThru ainda está true.",
                     passthru ? null : "Com passthru=true o dgVoodoo não faz nada — causa nº 1 de 'não acontece nada'."));
             }
 
-            r.Add(new CheckResult(5, "Marca d'água do dgVoodoo na tela", CheckState.Manual,
+            r.Add(new CheckResult(5, "Marca d'água do dgVoodoo na tela", CheckStatus.Manual,
                 "Abra o jogo: a marca d'água do dgVoodoo tem que aparecer.",
                 "Sem marca d'água, o dgVoodoo não está interceptando."));
         }
@@ -200,7 +200,7 @@ public static class CheckpointVerifier
         var log = Path.Combine(exeFolder, "ReShade.log");
         if (!File.Exists(log))
         {
-            yield return new CheckResult(7, "ReShade carregou", CheckState.Manual,
+            yield return new CheckResult(7, "ReShade carregou", CheckStatus.Manual,
                 "ReShade.log ainda não existe — abra o jogo uma vez.",
                 "Depois de abrir o jogo, volte aqui e clique em Verificar de novo.");
             yield break;
@@ -213,14 +213,14 @@ public static class CheckpointVerifier
         bool loaded = size > ReShadeLogPlaceholderSize
                       && text.Contains("ReShade", StringComparison.OrdinalIgnoreCase);
         yield return new CheckResult(7, "ReShade carregou",
-            loaded ? CheckState.Pass : CheckState.Fail,
+            loaded ? CheckStatus.Pass : CheckStatus.Fail,
             loaded ? $"ReShade.log com {size} bytes." : $"ReShade.log com {size} bytes (placeholder).",
             loaded ? null : "Arquitetura do dxgi.dll errada, local errado, ou outro módulo tomou o nome dxgi.dll.");
 
         bool sawSwapchain = text.Contains("CreateSwapChain", StringComparison.OrdinalIgnoreCase)
                             || text.Contains("Recreated runtime environment", StringComparison.OrdinalIgnoreCase);
         yield return new CheckResult(8, "ReShade viu o swapchain",
-            sawSwapchain ? CheckState.Pass : (loaded ? CheckState.Fail : CheckState.Manual),
+            sawSwapchain ? CheckStatus.Pass : (loaded ? CheckStatus.Fail : CheckStatus.Manual),
             sawSwapchain
                 ? "Log tem CreateSwapChain / Recreated runtime environment."
                 : "Log sem CreateSwapChain: o ReShade carregou mas não é a factory do renderizador.",
@@ -232,7 +232,7 @@ public static class CheckpointVerifier
         var feedLog = Path.Combine(exeFolder, "dlss5-feed.log");
         if (!File.Exists(feedLog))
         {
-            yield return new CheckResult(15, "Feeder entregando frames", CheckState.Manual,
+            yield return new CheckResult(15, "Feeder entregando frames", CheckStatus.Manual,
                 "dlss5-feed.log ainda não existe — abra o jogo com os efeitos marcados.",
                 null);
             yield break;
@@ -245,7 +245,7 @@ public static class CheckpointVerifier
                      || text.Contains("DLAA", StringComparison.OrdinalIgnoreCase);
         bool delivered = text.Contains("delivered", StringComparison.OrdinalIgnoreCase);
         yield return new CheckResult(15, "Feeder entregando frames",
-            ready && delivered ? CheckState.Pass : CheckState.Warning,
+            ready && delivered ? CheckStatus.Pass : CheckStatus.Warning,
             ready && delivered
                 ? "Log mostra feature pronta e frames entregues."
                 : "Log existe mas ainda sem 'feature ready ... DLAA' + 'frame N delivered'.",
@@ -255,7 +255,7 @@ public static class CheckpointVerifier
         {
             var hostLog = Path.Combine(exeFolder, "host64", "dlss5-feed-host.log");
             yield return new CheckResult(16, "Processo auxiliar host64 rodando",
-                File.Exists(hostLog) ? CheckState.Pass : CheckState.Manual,
+                File.Exists(hostLog) ? CheckStatus.Pass : CheckStatus.Manual,
                 File.Exists(hostLog) ? "host64\\dlss5-feed-host.log presente." : "Log do host ainda não existe.",
                 null);
         }

@@ -199,7 +199,8 @@ public class PlanBuilderTests
         Assert.True(Targets(plan, @"game\renodx-dlss5.addon64"));
         Assert.True(Targets(plan, @"game\nvngx_dlssnr.dll"));
         // Nada de host64 em jogo 64-bit.
-        Assert.False(plan.Actions.Any(a => a.TargetPath?.Contains(@"host64", StringComparison.OrdinalIgnoreCase) == true));
+        Assert.DoesNotContain(plan.Actions,
+            a => a.TargetPath?.Contains(@"host64", StringComparison.OrdinalIgnoreCase) == true);
     }
 
     [Fact]
@@ -238,8 +239,8 @@ public class PlanBuilderTests
         var plan = InstallPlanBuilder.Build(profile, FullKit(), new InstallOptions());
 
         Assert.True(Targets(plan, @"bin\D3D9.dll"));
-        Assert.True(plan.Actions.Any(a => a.Kind == PlanActionKind.PatchDgVoodooConf
-                                       && a.TargetPath!.EndsWith(@"bin\dgVoodoo.conf", StringComparison.OrdinalIgnoreCase)));
+        Assert.Contains(plan.Actions, a => a.Kind == PlanActionKind.PatchDgVoodooConf
+                                        && a.TargetPath!.EndsWith(@"bin\dgVoodoo.conf", StringComparison.OrdinalIgnoreCase));
         // ReShade continua na pasta do EXE, nunca em bin\.
         Assert.True(Targets(plan, @"game\dxgi.dll"));
     }
