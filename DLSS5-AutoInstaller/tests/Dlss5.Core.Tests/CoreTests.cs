@@ -216,6 +216,29 @@ public class ApiDetectorTests
     }
 }
 
+public class ForbiddenFilesTests
+{
+    [Fact]
+    public void KeepsGameStreamlineWhenTheGameHasNativeDlss()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-forbidden-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "sl.interposer.dll"), "x");
+        File.WriteAllText(Path.Combine(dir, "nvngx_dlssg.dll"), "x");
+
+        // Com DLSS nativo as sl.*.dll são do próprio jogo: apagá-las derrubaria o DLSS.
+        var kept = ForbiddenFiles.FindPresent(dir, keepGameStreamline: true);
+        Assert.DoesNotContain(kept, f => f.EndsWith("sl.interposer.dll", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(kept, f => f.EndsWith("nvngx_dlssg.dll", StringComparison.OrdinalIgnoreCase));
+
+        // Sem DLSS nativo elas são sobra de tentativa anterior e saem.
+        var removed = ForbiddenFiles.FindPresent(dir);
+        Assert.Contains(removed, f => f.EndsWith("sl.interposer.dll", StringComparison.OrdinalIgnoreCase));
+
+        Directory.Delete(dir, true);
+    }
+}
+
 public class RouteTests
 {
     private static GameProfile Profile(PeArchitecture arch, GraphicsApi api) =>
@@ -290,6 +313,36 @@ public class PlanBuilderTests
 
     private static bool Targets(InstallPlan plan, string relative) =>
         plan.Actions.Any(a => a.TargetPath?.EndsWith(relative, StringComparison.OrdinalIgnoreCase) == true);
+
+    [Fact]
+    public void NativeDlss_OutsideD3D12_StillInstallsTheFeeder()
+    {
+        // O RenoDX só enxerga NGX em D3D12. Num jogo D3D11 com DLSS nativo ele fica em
+        // "HOOKS ARMED / NO DLSS CREATE SEEN", então o Feeder continua sendo necessário.
+        var profile = Profile(PeArchitecture.X64, GraphicsApi.D3D11);
+        profile.HasNativeDlss = true;
+
+        Assert.True(profile.NeedsFeeder);
+        Assert.False(profile.UsesRenodxDirectPath);
+
+        var plan = InstallPlanBuilder.Build(profile, FullKit(), new InstallOptions());
+        Assert.True(Targets(plan, "dlss5-feed.addon64"));
+        Assert.Contains(plan.Warnings, w => w.Contains("D3D12", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void NativeDlss_InD3D12_SkipsTheFeeder()
+    {
+        var profile = Profile(PeArchitecture.X64, GraphicsApi.D3D12);
+        profile.HasNativeDlss = true;
+
+        Assert.False(profile.NeedsFeeder);
+        Assert.True(profile.UsesRenodxDirectPath);
+
+        var plan = InstallPlanBuilder.Build(profile, FullKit(), new InstallOptions());
+        Assert.False(Targets(plan, "dlss5-feed.addon64"));
+        Assert.True(Targets(plan, "renodx-dlss5.addon64"));
+    }
 
     [Fact]
     public void RouteA_PutsEverythingInExeFolder()

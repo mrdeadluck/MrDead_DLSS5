@@ -141,7 +141,7 @@ public sealed class InstallerEngine
                 plan.Options.OverlayAlt)
             : ReShadeConfigWriter.BuildPresetIni(
                 plan.Options.MvProvider,
-                feederUsed: !plan.Profile.HasNativeDlss);
+                feederUsed: plan.Profile.NeedsFeeder);
         File.WriteAllText(target, content);
         Track(manifest, target);
         _log($"Gerado: {target}");

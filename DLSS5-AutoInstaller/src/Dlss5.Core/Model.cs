@@ -105,6 +105,21 @@ public sealed class GameProfile
         }
     }
 
+    /// <summary>
+    /// O RenoDX se pendura direto nas chamadas de DLSS que o jogo já faz, mas só enxerga
+    /// NGX em D3D12 (spec 1: "só funciona em jogos com DLSS nativo, 64-bit, D3D12").
+    /// Num jogo D3D11 ou Vulkan com DLSS nativo ele instala os hooks e nunca vê um create
+    /// — daí o "HOOKS ARMED / NO DLSS CREATE SEEN".
+    /// </summary>
+    public bool UsesRenodxDirectPath => HasNativeDlss && Api == GraphicsApi.D3D12;
+
+    /// <summary>
+    /// O Feeder entra sempre que o RenoDX não consegue pegar o DLSS do próprio jogo —
+    /// inclusive em jogo COM DLSS nativo que não seja D3D12, porque ele roda o NGX num
+    /// device D3D12 privado e por isso independe da API do jogo.
+    /// </summary>
+    public bool NeedsFeeder => !UsesRenodxDirectPath;
+
     /// <summary>Precisa do dgVoodoo2 (rota C).</summary>
     public bool NeedsDgVoodoo => Route == InstallRoute.C;
 

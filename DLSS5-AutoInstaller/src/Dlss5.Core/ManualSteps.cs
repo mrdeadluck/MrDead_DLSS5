@@ -24,6 +24,13 @@ public static class ManualSteps
             "Isso não dá para automatizar de forma confiável: a Steam restaura o arquivo do overlay ao reabrir. " +
             "Overlays podem carregar o DXGI antes do ReShade e roubar a interceptação.", false));
 
+        if (profile.HasNativeDlss && profile.NeedsFeeder)
+            steps.Add(new ManualStep(n++, "Desligar o DLSS/upscaling nas opções do jogo",
+                $"Este jogo tem DLSS nativo, mas roda em {profile.Api} — e o RenoDX só consegue se pendurar " +
+                "no DLSS do próprio jogo quando ele é D3D12. Aqui quem faz o trabalho é o Feeder, que roda o " +
+                "NGX num device D3D12 próprio e entrega DLAA (resolução de render = saída). Deixe o upscaling " +
+                "do jogo em desligado/nativo: os dois ligados ao mesmo tempo brigam pela mesma imagem.", true));
+
         steps.Add(new ManualStep(n++, "Desligar MSAA/SSAA nas opções gráficas do jogo",
             "O Generic Depth não enxerga um depth buffer multisampled, e SSAA conflita com o DLAA. " +
             "FXAA e SMAA são pós-processo e podem continuar ligados.", true));

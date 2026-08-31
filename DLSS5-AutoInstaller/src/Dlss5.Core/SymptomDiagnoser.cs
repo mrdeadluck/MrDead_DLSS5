@@ -50,8 +50,9 @@ public static class SymptomDiagnoser
 
         new("error X3020",
             "Shader não compila (X3020)",
-            "DRME em Vulkan: 'cannot sample from texture that is also used as render target'.",
-            "Troque o provedor para o Launchpad, ou rode o jogo em D3D11/D3D12."),
+            "O DRME (MotionEstimation.fx) não compila: 'cannot sample from texture that is also " +
+            "used as render target'. Acontece em D3D11 também, não só em Vulkan.",
+            "Use o Launchpad como provedor de motion vectors (é o padrão do programa)."),
 
         new("STANDBY",
             "Painel em STANDBY",

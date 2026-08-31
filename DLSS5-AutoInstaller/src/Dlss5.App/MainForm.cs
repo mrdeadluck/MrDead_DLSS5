@@ -432,11 +432,11 @@ public sealed class MainForm : Form
     /// </summary>
     private void UpdateMvAvailability()
     {
-        bool feederUsed = _profile is not null && !_profile.HasNativeDlss;
+        bool feederUsed = _profile is null || _profile.NeedsFeeder;
         _cboMv.Enabled = feederUsed;
         _lblMvNote.Text = feederUsed
             ? string.Empty
-            : "não usado: com DLSS nativo quem trabalha é o RenoDX";
+            : "não usado: em D3D12 com DLSS nativo quem trabalha é o RenoDX";
     }
 
     private void SyncProfileFromUi()

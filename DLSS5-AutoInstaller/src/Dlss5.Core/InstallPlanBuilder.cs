@@ -30,7 +30,7 @@ public static class InstallPlanBuilder
             return plan;
         }
 
-        var missing = kit.MissingFor(route, profile.HasNativeDlss);
+        var missing = kit.MissingFor(route, profile.UsesRenodxDirectPath);
         if (missing.Count > 0)
         {
             foreach (var m in missing)
@@ -54,7 +54,8 @@ public static class InstallPlanBuilder
         // Limpeza dos proibidos primeiro (spec 3.7 / prólogo).
         if (options.CleanForbidden)
         {
-            foreach (var f in ForbiddenFiles.FindPresent(exe))
+            // Com DLSS nativo, as sl.*.dll são do próprio jogo: apagá-las mataria o DLSS.
+            foreach (var f in ForbiddenFiles.FindPresent(exe, keepGameStreamline: profile.HasNativeDlss))
                 plan.Actions.Add(new PlanAction(PlanActionKind.DeleteForbiddenFile,
                     $"Remover arquivo proibido {Path.GetFileName(f)}", null, f));
         }
@@ -77,9 +78,9 @@ public static class InstallPlanBuilder
         plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
             "Gerar ReShade.ini", null, Path.Combine(exe, "ReShade.ini")));
         plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
-            profile.HasNativeDlss
-                ? "Gerar ReShadePreset.ini (sem efeitos: com DLSS nativo o RenoDX se pendura na chamada do próprio jogo)"
-                : $"Gerar ReShadePreset.ini (MV = {options.MvProvider}, acima do DLSS 5 Feed)",
+            profile.NeedsFeeder
+                ? $"Gerar ReShadePreset.ini (MV = {options.MvProvider}, acima do DLSS 5 Feed)"
+                : "Gerar ReShadePreset.ini (sem efeitos: com DLSS nativo em D3D12 o RenoDX se pendura na chamada do próprio jogo)",
             null, Path.Combine(exe, "ReShadePreset.ini")));
 
         // Pasta de shaders.
@@ -91,7 +92,7 @@ public static class InstallPlanBuilder
         if (route == InstallRoute.A)
         {
             // 64-bit: tudo na pasta do exe.
-            if (!profile.HasNativeDlss)
+            if (profile.NeedsFeeder)
                 Copy(kit.FeedAddon64, exe, "dlss5-feed.addon64");
             Copy(kit.RenodxAddon64, exe, "renodx-dlss5.addon64");
             Copy(kit.NvngxDlssnr, exe, "nvngx_dlssnr.dll");
@@ -118,6 +119,16 @@ public static class InstallPlanBuilder
                 plan.Actions.Add(new PlanAction(PlanActionKind.PatchDgVoodooConf,
                     $"Copiar e ajustar dgVoodoo.conf → {Rel(profile, Path.Combine(renderer, "dgVoodoo.conf"))}",
                     kit.DgVoodooConf, Path.Combine(renderer, "dgVoodoo.conf")));
+        }
+
+        if (profile.HasNativeDlss && !profile.UsesRenodxDirectPath)
+        {
+            plan.Warnings.Add(
+                $"O jogo tem DLSS nativo, mas roda em {profile.Api} — e o RenoDX só enxerga NGX em D3D12. " +
+                "Sozinho ele ficaria em \"HOOKS ARMED / NO DLSS CREATE SEEN\", sem nunca aplicar nada. " +
+                "Por isso o Feeder (dlss5-feed.addon64) entra mesmo assim: ele roda o NGX num device D3D12 " +
+                "próprio. Nas opções do jogo, DESLIGUE o DLSS/upscaling — o Feeder faz DLAA (resolução de " +
+                "render = saída), então os dois juntos só atrapalham.");
         }
 
         if (profile.Api == GraphicsApi.Vulkan && profile.Architecture == PeArchitecture.X64)
