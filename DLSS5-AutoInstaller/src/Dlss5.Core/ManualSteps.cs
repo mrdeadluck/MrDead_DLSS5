@@ -41,7 +41,7 @@ public static class ManualSteps
                 "Sem ela, o D3D9.dll está na pasta errada (no Source vai em bin\\) ou o passthru continua ligado.", false));
 
         steps.Add(new ManualStep(n++, "Abrir o jogo e conferir o painel do ReShade",
-            $"No jogo, aperte {(options.OverlayKey == ReShadeConfigWriter.KeyInsert ? "Insert" : "Home")} para abrir o ReShade. " +
+            $"No jogo, aperte {options.OverlayKeyLabel} para abrir o ReShade. " +
             "Na aba Início, o provedor de motion vectors e o DLSS 5 Feed já vêm marcados na ordem certa " +
             "(o programa gerou o preset). Confirme na aba Complementos que o DLSS 5 Feed aparece listado" +
             (profile.Route == InstallRoute.A ? " junto com o DLSS 5 Neural Rendering." : ". Em jogo 32-bit, as opções neurais ficam DENTRO do painel do DLSS 5 Feed, no grupo 'on the host', com botão Apply."), false));

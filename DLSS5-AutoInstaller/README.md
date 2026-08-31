@@ -35,12 +35,17 @@ administrador** — necessário para gravar no registro (`HKLM`) e em pastas den
    Pode estar bagunçada, com subpastas e cópias duplicadas: o programa varre tudo e acha
    cada peça pelo nome **e pela arquitetura real** lida no cabeçalho PE.
 2. **Pasta do jogo** — a pasta onde o jogo está instalado.
-3. **Detectar** — confira o que ele encontrou. O único palpite que erra com frequência é a
-   **API gráfica**, porque muitos jogos carregam o Direct3D dinamicamente e isso não
-   aparece na tabela de imports. Se você sabe que o jogo usa outra, corrija ali.
-4. **Gerar plano** — mostra exatamente o que será copiado e gerado, antes de tocar em
+3. **Detectar** — confira o que ele encontrou. A API gráfica é procurada em três frentes
+   (imports do PE, texto dentro do binário e pistas na pasta), e a tela diz se o resultado
+   é **detectado** (evidência forte e sem empate) ou apenas **provável** — nesse segundo
+   caso vale confirmar. Em jogo 64-bit, errar entre D3D11 e D3D12 não muda nada: as duas
+   caem na mesma rota A, com os mesmos arquivos nos mesmos lugares.
+4. **Tecla do overlay** — qualquer tecla (F1–F12, letras, números, numpad, Insert, Delete,
+   Pause…) com **Ctrl/Shift/Alt** opcionais. Útil quando o jogo engole a tecla escolhida:
+   uma combinação como `Ctrl+Shift+Home` não colide com nada.
+5. **Gerar plano** — mostra exatamente o que será copiado e gerado, antes de tocar em
    qualquer arquivo.
-5. **Instalar** → **Verificar**.
+6. **Instalar** → **Verificar**.
 
 No fim, a tela de verificação lista os checkpoints (o que passou, o que falhou e como
 corrigir), o roteiro dos passos manuais e um diagnóstico automático lido dos logs.
@@ -59,11 +64,11 @@ foi adicionado e os backups do que foi sobrescrito — a reversão desfaz tudo a
 |---|---|
 | Achar o executável real | Varre os `.exe`, pontua por profundidade/tamanho/nome, descarta launchers e redistribuíveis, reconhece o stub da engine Source |
 | Arquitetura | Campo `Machine` do cabeçalho PE (nunca pelo nome da pasta) |
-| API gráfica | Tabela de imports do PE + DLLs presentes + detecção da Source (`bin\shaderapi*.dll`) |
+| API gráfica | Imports do PE, **texto dentro do binário** (pega o Direct3D carregado com `LoadLibrary`, que não aparece nos imports), DLLs ao lado do exe, nome de jogos conhecidos e detecção da Source (`bin\shaderapi*.dll`). Cada pista tem peso; a tela informa se houve empate |
 | Escolha do caminho A/B/C | Árvore de decisão da spec (seção 5) |
 | Layout dos arquivos | Cada rota tem o seu; em jogo 32-bit os `.addon64` vão **só** em `host64\` |
 | ReShade | Copia o `dxgi.dll` da arquitetura certa ou **extrai** `ReShade32/64.dll` do instalador |
-| `ReShade.ini` | Gerado com `EffectSearchPaths`, `TextureSearchPaths`, `AddonPath` e a tecla do overlay |
+| `ReShade.ini` | Gerado com `EffectSearchPaths`, `TextureSearchPaths`, `AddonPath` e a combinação de teclas escolhida (`KeyOverlay=<vk>,<ctrl>,<shift>,<alt>`) |
 | `ReShadePreset.ini` | Gerado com o provedor de motion vectors **acima** do `DLSS5_Feed`, ambos já marcados |
 | `dgVoodoo.conf` | Patch consciente de seção (5 chaves) |
 | Override de assinatura | 3 chaves em `HKLM`, com verificação e reversão |

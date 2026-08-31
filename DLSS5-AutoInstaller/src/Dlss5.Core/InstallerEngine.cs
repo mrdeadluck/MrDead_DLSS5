@@ -134,8 +134,14 @@ public sealed class InstallerEngine
         BackupIfExists(target, manifest);
         var name = Path.GetFileName(target);
         string content = name.Equals("ReShade.ini", StringComparison.OrdinalIgnoreCase)
-            ? ReShadeConfigWriter.BuildReShadeIni(plan.Options.OverlayKey)
-            : ReShadeConfigWriter.BuildPresetIni(plan.Options.MvProvider);
+            ? ReShadeConfigWriter.BuildReShadeIni(
+                plan.Options.OverlayKey,
+                plan.Options.OverlayCtrl,
+                plan.Options.OverlayShift,
+                plan.Options.OverlayAlt)
+            : ReShadeConfigWriter.BuildPresetIni(
+                plan.Options.MvProvider,
+                feederUsed: !plan.Profile.HasNativeDlss);
         File.WriteAllText(target, content);
         Track(manifest, target);
         _log($"Gerado: {target}");

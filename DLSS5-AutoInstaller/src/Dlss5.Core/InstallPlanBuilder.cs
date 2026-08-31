@@ -7,6 +7,9 @@ public sealed class InstallPlan
     public List<PlanAction> Actions { get; } = new();
     public List<string> Blockers { get; } = new();
 
+    /// <summary>Coisas que não impedem instalar, mas que o usuário precisa saber.</summary>
+    public List<string> Warnings { get; } = new();
+
     public bool CanRun => Blockers.Count == 0 && Actions.Count > 0;
 }
 
@@ -74,7 +77,9 @@ public static class InstallPlanBuilder
         plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
             "Gerar ReShade.ini", null, Path.Combine(exe, "ReShade.ini")));
         plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
-            $"Gerar ReShadePreset.ini (MV = {options.MvProvider}, acima do DLSS 5 Feed)",
+            profile.HasNativeDlss
+                ? "Gerar ReShadePreset.ini (sem efeitos: com DLSS nativo o RenoDX se pendura na chamada do próprio jogo)"
+                : $"Gerar ReShadePreset.ini (MV = {options.MvProvider}, acima do DLSS 5 Feed)",
             null, Path.Combine(exe, "ReShadePreset.ini")));
 
         // Pasta de shaders.
@@ -113,6 +118,14 @@ public static class InstallPlanBuilder
                 plan.Actions.Add(new PlanAction(PlanActionKind.PatchDgVoodooConf,
                     $"Copiar e ajustar dgVoodoo.conf → {Rel(profile, Path.Combine(renderer, "dgVoodoo.conf"))}",
                     kit.DgVoodooConf, Path.Combine(renderer, "dgVoodoo.conf")));
+        }
+
+        if (profile.Api == GraphicsApi.Vulkan && profile.Architecture == PeArchitecture.X64)
+        {
+            plan.Warnings.Add(
+                "Vulkan: o ReShade não entra como dxgi.dll — ele é um layer global, instalado pelo " +
+                "instalador oficial do ReShade (é preciso marcar o jogo lá). O dxgi.dll copiado aqui " +
+                "fica sem uso; os addons, os shaders e o ReShade.ini com AddonPath continuam corretos.");
         }
 
         // Override de assinatura no registro.

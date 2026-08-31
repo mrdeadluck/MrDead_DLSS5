@@ -36,7 +36,12 @@ public sealed class MainForm : Form
     private readonly TextBox _txtRenderer = new();
     private readonly Label _lblRoute = new();
     private readonly ComboBox _cboMv = new();
+    private readonly Label _lblMvNote = new();
     private readonly ComboBox _cboKey = new();
+    private readonly CheckBox _chkCtrl = new();
+    private readonly CheckBox _chkShift = new();
+    private readonly CheckBox _chkAlt = new();
+    private readonly Label _lblKeyNote = new();
     private readonly CheckBox _chkRegistry = new();
     private readonly CheckBox _chkClean = new();
     private readonly TextBox _txtNotes = new();
@@ -75,6 +80,14 @@ public sealed class MainForm : Form
         if (Enum.TryParse<MvProvider>(_settings.MvProvider, out var mv))
             _options.MvProvider = mv;
         _options.OverlayKey = _settings.OverlayKey;
+        _options.OverlayCtrl = _settings.OverlayCtrl;
+        _options.OverlayShift = _settings.OverlayShift;
+        _options.OverlayAlt = _settings.OverlayAlt;
+        _cboMv.SelectedIndex = _options.MvProvider == MvProvider.Drme ? 1 : 0;
+        _chkCtrl.Checked = _options.OverlayCtrl;
+        _chkShift.Checked = _options.OverlayShift;
+        _chkAlt.Checked = _options.OverlayAlt;
+        SelectOverlayKey(_options.OverlayKey);
 
         ShowStep(0);
     }
@@ -277,16 +290,38 @@ public sealed class MainForm : Form
             _options.MvProvider = _cboMv.SelectedIndex == 1 ? MvProvider.Drme : MvProvider.Launchpad;
         _p1.Controls.Add(_cboMv);
 
-        _p1.Controls.Add(Caption("Tecla do overlay:", y, 520, 120));
-        _cboKey.SetBounds(650, y, 160, 25);
+        _lblMvNote.SetBounds(500, y + 5, 415, 20);
+        _lblMvNote.ForeColor = SystemColors.GrayText;
+        _p1.Controls.Add(_lblMvNote);
+        y += 34;
+
+        _p1.Controls.Add(Caption("Tecla do overlay:", y));
+        _cboKey.SetBounds(230, y, 260, 25);
         _cboKey.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cboKey.Items.AddRange(new object[] { "Home", "Insert" });
+        _cboKey.MaxDropDownItems = 18;
+        foreach (var k in ReShadeConfigWriter.OverlayKeys) _cboKey.Items.Add(k.Label);
         _cboKey.SelectedIndex = 0;
-        _cboKey.SelectedIndexChanged += (_, _) =>
-            _options.OverlayKey = _cboKey.SelectedIndex == 1
-                ? ReShadeConfigWriter.KeyInsert
-                : ReShadeConfigWriter.KeyHome;
+        _cboKey.SelectedIndexChanged += (_, _) => SyncOverlayKeyFromUi();
         _p1.Controls.Add(_cboKey);
+
+        _chkCtrl.Text = "Ctrl";
+        _chkCtrl.SetBounds(500, y + 3, 52, 22);
+        _chkCtrl.CheckedChanged += (_, _) => SyncOverlayKeyFromUi();
+        _p1.Controls.Add(_chkCtrl);
+
+        _chkShift.Text = "Shift";
+        _chkShift.SetBounds(556, y + 3, 56, 22);
+        _chkShift.CheckedChanged += (_, _) => SyncOverlayKeyFromUi();
+        _p1.Controls.Add(_chkShift);
+
+        _chkAlt.Text = "Alt";
+        _chkAlt.SetBounds(616, y + 3, 46, 22);
+        _chkAlt.CheckedChanged += (_, _) => SyncOverlayKeyFromUi();
+        _p1.Controls.Add(_chkAlt);
+
+        _lblKeyNote.SetBounds(668, y + 5, 247, 20);
+        _lblKeyNote.ForeColor = SystemColors.GrayText;
+        _p1.Controls.Add(_lblKeyNote);
         y += 36;
 
         _chkRegistry.Text = "Aplicar o override de assinatura NGX no registro (precisa reiniciar o PC depois)";
@@ -367,6 +402,43 @@ public sealed class MainForm : Form
         SyncProfileFromUi();
     }
 
+    private void SyncOverlayKeyFromUi()
+    {
+        int idx = _cboKey.SelectedIndex;
+        if (idx >= 0 && idx < ReShadeConfigWriter.OverlayKeys.Count)
+            _options.OverlayKey = ReShadeConfigWriter.OverlayKeys[idx].VirtualKey;
+        _options.OverlayCtrl = _chkCtrl.Checked;
+        _options.OverlayShift = _chkShift.Checked;
+        _options.OverlayAlt = _chkAlt.Checked;
+        _lblKeyNote.Text = "= " + _options.OverlayKeyLabel;
+    }
+
+    private void SelectOverlayKey(int virtualKey)
+    {
+        var keys = ReShadeConfigWriter.OverlayKeys;
+        int idx = 0;
+        for (int i = 0; i < keys.Count; i++)
+        {
+            if (keys[i].VirtualKey != virtualKey) continue;
+            idx = i;
+            break;
+        }
+        _cboKey.SelectedIndex = idx;
+    }
+
+    /// <summary>
+    /// Com DLSS nativo o Feeder não entra, então o provedor de motion vectors não é usado —
+    /// deixar o campo ligado só sugeriria uma escolha que não tem efeito nenhum.
+    /// </summary>
+    private void UpdateMvAvailability()
+    {
+        bool feederUsed = _profile is not null && !_profile.HasNativeDlss;
+        _cboMv.Enabled = feederUsed;
+        _lblMvNote.Text = feederUsed
+            ? string.Empty
+            : "não usado: com DLSS nativo quem trabalha é o RenoDX";
+    }
+
     private void SyncProfileFromUi()
     {
         if (_profile is null) return;
@@ -375,6 +447,7 @@ public sealed class MainForm : Form
         _profile.HasNativeDlss = _chkNativeDlss.Checked;
         if (!string.IsNullOrWhiteSpace(_txtRenderer.Text)) _profile.RendererFolder = _txtRenderer.Text;
         _profile.MvProvider = _options.MvProvider;
+        UpdateMvAvailability();
         UpdateRouteLabel();
     }
 
@@ -615,7 +688,8 @@ public sealed class MainForm : Form
         _chkNativeDlss.Checked = _profile.HasNativeDlss;
         _txtRenderer.Text = _profile.RendererFolder ?? _profile.ExeFolder;
         _cboMv.SelectedIndex = _options.MvProvider == MvProvider.Drme ? 1 : 0;
-        _cboKey.SelectedIndex = _options.OverlayKey == ReShadeConfigWriter.KeyInsert ? 1 : 0;
+        SelectOverlayKey(_options.OverlayKey);
+        UpdateMvAvailability();
 
         // Se o kit só tem um dos provedores, força o que existe.
         if (_kit.HasLaunchpad && !_kit.HasDrme) _cboMv.SelectedIndex = 0;
@@ -662,10 +736,22 @@ public sealed class MainForm : Form
         _lstPlan.Items.Clear();
         foreach (var a in _plan.Actions) _lstPlan.Items.Add(a.Description);
 
-        if (_plan.Blockers.Count > 0)
+        if (_plan.Blockers.Count > 0 || _plan.Warnings.Count > 0)
         {
+            var lines = new List<string>();
+            if (_plan.Blockers.Count > 0)
+            {
+                lines.Add("Impedimentos:");
+                lines.AddRange(_plan.Blockers);
+            }
+            if (_plan.Warnings.Count > 0)
+            {
+                if (lines.Count > 0) lines.Add("");
+                lines.Add("Avisos (não impedem instalar):");
+                lines.AddRange(_plan.Warnings);
+            }
             _txtBlockers.Visible = true;
-            _txtBlockers.Lines = _plan.Blockers.Prepend("Impedimentos:").ToArray();
+            _txtBlockers.Lines = lines.ToArray();
         }
         else
         {
@@ -674,6 +760,9 @@ public sealed class MainForm : Form
 
         _settings.MvProvider = _options.MvProvider.ToString();
         _settings.OverlayKey = _options.OverlayKey;
+        _settings.OverlayCtrl = _options.OverlayCtrl;
+        _settings.OverlayShift = _options.OverlayShift;
+        _settings.OverlayAlt = _options.OverlayAlt;
         _settings.Save();
 
         ShowStep(2);

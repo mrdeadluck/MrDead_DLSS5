@@ -110,6 +110,110 @@ public class ReShadeConfigWriterTests
         Assert.Contains("KeyOverlay=36,0,0,0",
             ReShadeConfigWriter.BuildReShadeIni(ReShadeConfigWriter.KeyHome));
     }
+
+    [Fact]
+    public void Ini_WritesModifiers()
+    {
+        // O ReShade lê KeyOverlay=<vk>,<ctrl>,<shift>,<alt>.
+        Assert.Contains("KeyOverlay=36,1,1,0",
+            ReShadeConfigWriter.BuildReShadeIni(ReShadeConfigWriter.KeyHome, ctrl: true, shift: true));
+        Assert.Contains("KeyOverlay=118,0,0,1",
+            ReShadeConfigWriter.BuildReShadeIni(118, alt: true));
+    }
+
+    [Fact]
+    public void DescribeKey_NamesTheCombination()
+    {
+        Assert.Equal("Home", ReShadeConfigWriter.DescribeKey(ReShadeConfigWriter.KeyHome));
+        Assert.Equal("Ctrl+Shift+Insert",
+            ReShadeConfigWriter.DescribeKey(ReShadeConfigWriter.KeyInsert, ctrl: true, shift: true));
+        Assert.Equal("Alt+F7", ReShadeConfigWriter.DescribeKey(118, alt: true));
+    }
+
+    [Fact]
+    public void OverlayKeys_AreUniqueAndCoverTheUsualSuspects()
+    {
+        var keys = ReShadeConfigWriter.OverlayKeys;
+        Assert.Equal(keys.Count, keys.Select(k => k.VirtualKey).Distinct().Count());
+        Assert.Contains(keys, k => k.VirtualKey == ReShadeConfigWriter.KeyHome);
+        Assert.Contains(keys, k => k.VirtualKey == ReShadeConfigWriter.KeyInsert);
+        Assert.Contains(keys, k => k.Label == "F1" && k.VirtualKey == 112);
+        Assert.Contains(keys, k => k.Label == "F12" && k.VirtualKey == 123);
+        Assert.Contains(keys, k => k.Label == "Tecla K" && k.VirtualKey == 75);
+    }
+
+    [Fact]
+    public void Preset_IsEmptyWhenFeederNotInstalled()
+    {
+        // DLSS nativo: quem trabalha é o RenoDX; nenhum efeito do ReShade participa.
+        var preset = ReShadeConfigWriter.BuildPresetIni(MvProvider.Launchpad, feederUsed: false);
+        Assert.Contains("Techniques=", preset);
+        Assert.DoesNotContain("DLSS5_Feed@", preset);
+        Assert.DoesNotContain("MartysMods_Launchpad@", preset);
+    }
+}
+
+public class ApiDetectorTests
+{
+    private static string WriteFakeBinary(byte[] content)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-apitest-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "game.exe");
+        File.WriteAllBytes(path, content);
+        return path;
+    }
+
+    private static byte[] Bury(params (string Text, bool Utf16)[] markers)
+    {
+        var buffer = new byte[64 * 1024];
+        int offset = 1024;
+        foreach (var (text, utf16) in markers)
+        {
+            var bytes = utf16
+                ? System.Text.Encoding.Unicode.GetBytes(text)
+                : System.Text.Encoding.ASCII.GetBytes(text);
+            Array.Copy(bytes, 0, buffer, offset, bytes.Length);
+            offset += 4096;
+        }
+        return buffer;
+    }
+
+    [Fact]
+    public void Detect_FindsApiFromAsciiString()
+    {
+        // O import table não mostra carga dinâmica; o nome da função fica no binário.
+        var exe = WriteFakeBinary(Bury(("D3D12CreateDevice", false)));
+        var result = ApiDetector.Detect(exe, Path.GetDirectoryName(exe)!);
+        Assert.Equal(GraphicsApi.D3D12, result.Api);
+    }
+
+    [Fact]
+    public void Detect_FindsApiFromWideString()
+    {
+        // LoadLibraryW guarda o nome em UTF-16: o scanner precisa enxergar os dois formatos.
+        var exe = WriteFakeBinary(Bury(("vulkan-1.dll", true)));
+        var result = ApiDetector.Detect(exe, Path.GetDirectoryName(exe)!);
+        Assert.Equal(GraphicsApi.Vulkan, result.Api);
+    }
+
+    [Fact]
+    public void Detect_ReportsUnknownWhenNothingFound()
+    {
+        var exe = WriteFakeBinary(new byte[32 * 1024]);
+        var result = ApiDetector.Detect(exe, Path.GetDirectoryName(exe)!);
+        Assert.Equal(GraphicsApi.Unknown, result.Api);
+        Assert.False(result.Confident);
+    }
+
+    [Fact]
+    public void Detect_IsNotConfidentWhenTwoApisAppear()
+    {
+        // Jogo que cita D3D11 e D3D12: a decisão volta para o usuário, sem fingir certeza.
+        var exe = WriteFakeBinary(Bury(("D3D11CreateDevice", false), ("D3D12CreateDevice", false)));
+        var result = ApiDetector.Detect(exe, Path.GetDirectoryName(exe)!);
+        Assert.False(result.Confident);
+    }
 }
 
 public class RouteTests

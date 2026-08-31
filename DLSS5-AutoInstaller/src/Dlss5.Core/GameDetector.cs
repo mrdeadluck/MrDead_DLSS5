@@ -135,31 +135,32 @@ public static class GameDetector
 
         profile.RendererFolder = exeDir;
 
-        var imports = profile.RealExePath is null
-            ? Array.Empty<string>().AsEnumerable().ToList()
-            : PeFile.GetImportedDlls(profile.RealExePath).ToList();
+        var detection = ApiDetector.Detect(profile.RealExePath, exeDir);
+        profile.ApiDetection = detection;
 
-        bool ImportsAny(params string[] names) =>
-            imports.Any(i => names.Any(n => i.StartsWith(n, StringComparison.OrdinalIgnoreCase)));
-
-        if (ImportsAny("d3d12")) profile.Api = GraphicsApi.D3D12;
-        else if (ImportsAny("d3d11")) profile.Api = GraphicsApi.D3D11;
-        else if (ImportsAny("d3d10")) profile.Api = GraphicsApi.D3D10;
-        else if (ImportsAny("d3d9")) profile.Api = GraphicsApi.D3D9;
-        else if (ImportsAny("vulkan-1")) profile.Api = GraphicsApi.Vulkan;
-        else if (ImportsAny("dxgi")) profile.Api = GraphicsApi.D3D11; // dxgi sem d3dNN: D3D11+ é o palpite
-        else if (ImportsAny("opengl32")) profile.Api = GraphicsApi.OpenGL;
-
-        if (profile.Api == GraphicsApi.Unknown)
+        if (detection.Api != GraphicsApi.Unknown)
         {
-            notes.Add("API gráfica não detectada pelos imports (muitos jogos carregam Direct3D dinamicamente). " +
-                      "Confirme a API manualmente.");
-            // Palpite razoável por arquitetura, que o usuário pode corrigir.
-            profile.Api = profile.Architecture == PeArchitecture.X64 ? GraphicsApi.D3D11 : GraphicsApi.D3D9;
+            profile.Api = detection.Api;
+            notes.Add(detection.Confident
+                ? $"API detectada: {detection.Api} — {detection.TopSources()}."
+                : $"API provável: {detection.Api} — {detection.TopSources()}. " +
+                  "A evidência não é conclusiva; confirme se você sabe que o jogo usa outra.");
         }
         else
         {
-            notes.Add($"API sugerida pelos imports do exe: {profile.Api}. Confirme se o jogo pode usar outra.");
+            profile.Api = profile.Architecture == PeArchitecture.X64
+                ? GraphicsApi.D3D11
+                : GraphicsApi.D3D9;
+            notes.Add($"Nenhuma pista de API no executável nem nas DLLs ao lado. Assumi {profile.Api} " +
+                      "pela arquitetura — confirme antes de instalar.");
+        }
+
+        // Tira o peso da escolha quando ela não muda nada (rota A cobre as duas).
+        if (profile.Architecture == PeArchitecture.X64 &&
+            profile.Api is GraphicsApi.D3D11 or GraphicsApi.D3D12)
+        {
+            notes.Add("Em 64-bit, D3D11 e D3D12 caem na mesma rota A: se a escolha entre essas duas " +
+                      "estiver trocada, os arquivos instalados são exatamente os mesmos.");
         }
     }
 

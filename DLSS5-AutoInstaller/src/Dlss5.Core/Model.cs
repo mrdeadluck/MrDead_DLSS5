@@ -60,6 +60,9 @@ public sealed class GameProfile
 
     public GraphicsApi Api { get; set; } = GraphicsApi.Unknown;
 
+    /// <summary>Como a API foi descoberta (pistas e confiança), para explicar na tela.</summary>
+    public ApiDetection? ApiDetection { get; set; }
+
     /// <summary>O jogo já tem DLSS nativo? (dispensa o Feeder)</summary>
     public bool HasNativeDlss { get; set; }
 

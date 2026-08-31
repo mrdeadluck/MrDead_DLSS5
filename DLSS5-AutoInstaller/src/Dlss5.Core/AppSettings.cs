@@ -9,6 +9,9 @@ public sealed class AppSettings
     public string? LastGameFolder { get; set; }
     public string MvProvider { get; set; } = nameof(Core.MvProvider.Launchpad);
     public int OverlayKey { get; set; } = ReShadeConfigWriter.KeyHome;
+    public bool OverlayCtrl { get; set; }
+    public bool OverlayShift { get; set; }
+    public bool OverlayAlt { get; set; }
 
     private static string Dir => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
