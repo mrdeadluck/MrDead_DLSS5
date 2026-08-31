@@ -80,6 +80,16 @@ public static class CheckpointVerifier
                       "detecção e instale de novo — a escolha fica guardada entre execuções."));
         }
 
+        // 12 — quem mais está disputando o DXGI agora
+        var overlays = Overlays.Detectar(Overlays.ProcessosRodando());
+        r.Add(overlays.Count == 0
+            ? new CheckResult(12, "Sobreposições concorrendo pelo DXGI", CheckStatus.Pass,
+                "Nenhuma sobreposição conhecida rodando agora.")
+            : new CheckResult(12, "Sobreposições concorrendo pelo DXGI", CheckStatus.Warning,
+                "Rodando agora: " + string.Join(", ", overlays.Select(o => o.Nome)) +
+                ". Elas carregam o DXGI antes do ReShade e ficam com a interceptação.",
+                string.Join("  |  ", overlays.Select(o => $"{o.Nome}: {o.ComoDesligar}"))));
+
         // 3 — o DLSS do jogo e o DLSS 5 disputando a mesma imagem
         if (profile.HasNativeDlss && profile.NeedsFeeder)
         {

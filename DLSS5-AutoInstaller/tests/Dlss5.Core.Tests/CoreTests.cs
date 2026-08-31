@@ -1638,3 +1638,47 @@ public class LogEmOutraPastaTests
         finally { Directory.Delete(raiz, true); }
     }
 }
+
+public class OverlaysTests
+{
+    [Fact]
+    public void DetectaPeloNomeDoProcessoIgnorandoMaiusculas()
+    {
+        var achados = Overlays.Detectar(new[] { "EADesktop", "chrome", "RTSS", "explorer" });
+
+        Assert.Contains(achados, o => o.Nome == "EA App");
+        Assert.Contains(achados, o => o.Nome.Contains("RivaTuner"));
+        Assert.Equal(2, achados.Count);
+
+        Assert.Contains(Overlays.Detectar(new[] { "eadesktop" }), o => o.Nome == "EA App");
+    }
+
+    [Fact]
+    public void MaquinaLimpaNaoAcusaNada()
+    {
+        Assert.Empty(Overlays.Detectar(new[] { "explorer", "svchost", "notepad" }));
+    }
+
+    [Fact]
+    public void OQuePrecisaFicarAbertoNaoPedeParaFechar()
+    {
+        // "Feche o EA App" é conselho impossível: sem ele o Titanfall não abre. O que sai
+        // é a sobreposição.
+        var ea = Overlays.Conhecidos.Single(o => o.Nome == "EA App");
+        Assert.True(ea.PrecisaFicarAberto);
+        Assert.Contains("PRECISA continuar aberto", ea.ComoDesligar);
+
+        var rtss = Overlays.Conhecidos.Single(o => o.Nome.Contains("RivaTuner"));
+        Assert.False(rtss.PrecisaFicarAberto);
+    }
+
+    [Fact]
+    public void TodaSobreposicaoDizOndeFicaAOpcao()
+    {
+        Assert.All(Overlays.Conhecidos, o =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(o.Processo));
+            Assert.False(string.IsNullOrWhiteSpace(o.ComoDesligar));
+        });
+    }
+}
