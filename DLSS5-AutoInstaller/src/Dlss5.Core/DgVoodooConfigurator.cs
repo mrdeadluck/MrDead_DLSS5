@@ -91,7 +91,7 @@ public static class DgVoodooConfigurator
         ("GeForce FX 5700 Ultra (DirectX 9)", "geforce_fx_5700_ultra"),
         ("Matrox Parhelia-512", "matrox_parhelia-512"),
         ("GeForce 9800 GT", "geforce_9800_gt"),
-        ("SVGA (sem aceleração 3D declarada)", "svga"),
+        ("SVGA (sem 3D: só para jogo que não exige aceleração)", "svga"),
     };
 
     /// <summary>Aplica os ajustes ao texto do .conf, preservando formatação/alinhamento.</summary>

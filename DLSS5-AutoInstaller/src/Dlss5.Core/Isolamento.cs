@@ -108,8 +108,14 @@ public sealed class Isolamento
     {
         EstadoIsolamento.SemDgVoodoo =>
             "dgVoodoo DESLIGADO. Abra o jogo (pela Steam, se for da Steam).\r\n\r\n" +
-            "• Se o jogo ABRIR: o dgVoodoo é quem está barrando. O DLSS 5 depende dele nesta " +
-            "rota, então a saída é achar a configuração que este jogo aceita.\r\n" +
+            "• Se o jogo ABRIR: o dgVoodoo é quem está barrando. O overlay do ReShade NÃO vai " +
+            "abrir neste teste, e isso é esperado — sem o dgVoodoo não há D3D11, e sem D3D11 o " +
+            "ReShade não tem onde se pendurar. Não é sintoma novo.\r\n" +
+            "   APROVEITE QUE O JOGO ABRIU: se ele tem tela de configuração de vídeo, é agora " +
+            "que dá para mexer nela. Coloque uma resolução clássica (1024x768) e, se houver " +
+            "opção de aceleração, tire a exigência de \"Hardware T&L\" — jogo que grava " +
+            "\"T&L\" e o nome da placa de verdade recusa o adaptador do dgVoodoo na volta, " +
+            "porque nenhum dos dois bate. Depois religue o dgVoodoo e abra de novo.\r\n" +
             "• Se o jogo AINDA recusar: a instalação não tem nada a ver com isso — o jogo já " +
             "falharia sozinho nesta máquina, e o problema é outro (monitor, resolução do " +
             "desktop, configuração salva do próprio jogo).",

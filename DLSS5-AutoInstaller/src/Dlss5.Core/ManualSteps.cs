@@ -56,7 +56,13 @@ public static class ManualSteps
                 "MSD3DDeviceNames=true, VRAM 256 MB), que resolve a maioria dos casos. Se persistir, " +
                 "abra o Painel do dgVoodoo (botão na tela de verificação), aba DirectX, e troque " +
                 "VideoCard: tente geforce_ti_4800, depois ati_radeon_8500. É só salvar e reabrir o " +
-                "jogo — nada precisa ser reinstalado.", false));
+                "jogo — nada precisa ser reinstalado.\r\n\r\n" +
+                "Se nada disso resolver, o culpado costuma ser a configuração que o PRÓPRIO jogo " +
+                "gravou. Esses jogos têm tela de vídeo onde ficam salvos o nome da placa e o modo " +
+                "de aceleração (\"D3D Hardware T&L\"), e nenhum dos dois bate com o adaptador do " +
+                "dgVoodoo. Use \"Isolar a causa\" para desligar o dgVoodoo, abra o jogo — ele volta " +
+                "a abrir —, ajuste ali a resolução para uma clássica e a aceleração para a opção " +
+                "sem T&L, e só então religue o dgVoodoo.", false));
 
         if (profile.NeedsDgVoodoo)
             steps.Add(new ManualStep(n++, "Conferir a marca d'água do dgVoodoo",
