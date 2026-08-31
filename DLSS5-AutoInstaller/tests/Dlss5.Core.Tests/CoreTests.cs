@@ -216,29 +216,6 @@ public class ApiDetectorTests
     }
 }
 
-public class ForbiddenFilesTests
-{
-    [Fact]
-    public void KeepsGameStreamlineWhenTheGameHasNativeDlss()
-    {
-        var dir = Path.Combine(Path.GetTempPath(), "dlss5-forbidden-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(dir);
-        File.WriteAllText(Path.Combine(dir, "sl.interposer.dll"), "x");
-        File.WriteAllText(Path.Combine(dir, "nvngx_dlssg.dll"), "x");
-
-        // Com DLSS nativo as sl.*.dll são do próprio jogo: apagá-las derrubaria o DLSS.
-        var kept = ForbiddenFiles.FindPresent(dir, keepGameStreamline: true);
-        Assert.DoesNotContain(kept, f => f.EndsWith("sl.interposer.dll", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(kept, f => f.EndsWith("nvngx_dlssg.dll", StringComparison.OrdinalIgnoreCase));
-
-        // Sem DLSS nativo elas são sobra de tentativa anterior e saem.
-        var removed = ForbiddenFiles.FindPresent(dir);
-        Assert.Contains(removed, f => f.EndsWith("sl.interposer.dll", StringComparison.OrdinalIgnoreCase));
-
-        Directory.Delete(dir, true);
-    }
-}
-
 public class RouteTests
 {
     private static GameProfile Profile(PeArchitecture arch, GraphicsApi api) =>
@@ -579,6 +556,27 @@ public class ForbiddenFilesTests
             Assert.Contains("sl.interposer.dll", found);
             Assert.Contains("nvngx_dlssg.dll", found);
             Assert.DoesNotContain("jogo.exe", found);
+        }
+        finally { if (Directory.Exists(dir)) Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void KeepsGameStreamlineWhenTheGameHasNativeDlss()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5game_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(Path.Combine(dir, "sl.interposer.dll"), "x");
+            File.WriteAllText(Path.Combine(dir, "nvngx_dlssg.dll"), "x");
+
+            // Com DLSS nativo as sl.*.dll são do próprio jogo: apagá-las derrubaria o DLSS
+            // que o RenoDX precisa enxergar. O resto da lista continua saindo.
+            var kept = ForbiddenFiles.FindPresent(dir, keepGameStreamline: true)
+                .Select(Path.GetFileName).ToList();
+
+            Assert.DoesNotContain("sl.interposer.dll", kept);
+            Assert.Contains("nvngx_dlssg.dll", kept);
         }
         finally { if (Directory.Exists(dir)) Directory.Delete(dir, true); }
     }
