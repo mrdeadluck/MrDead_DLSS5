@@ -173,8 +173,21 @@ public static class CheckpointVerifier
             File.Exists(feedFx) ? null : "Rode a instalação (ou reinstale: o desinstalador do ReShade apaga reshade-shaders\\)."));
 
         // 13 — preset com o provedor acima do Feed
+        //
+        // Só faz sentido quando o Feeder está instalado. No caminho direto do RenoDX
+        // (D3D12 com DLSS nativo) o preset sai VAZIO de propósito — não há efeito de
+        // ReShade participando — e exigir a linha ali fazia uma instalação correta
+        // aparecer como FALHA em vermelho.
         var preset = Path.Combine(exe, "ReShadePreset.ini");
-        if (File.Exists(preset))
+        if (!profile.NeedsFeeder)
+        {
+            r.Add(new CheckResult(13, "Preset do ReShade", CheckStatus.NotApplicable,
+                "Sem efeitos, como esperado: em D3D12 com DLSS nativo quem trabalha é o addon " +
+                "do RenoDX, não um shader do ReShade.",
+                "A aba Início do ReShade fica vazia neste caminho. O que importa está na aba " +
+                "Complementos, em DLSS 5 Neural Rendering."));
+        }
+        else if (File.Exists(preset))
         {
             var text = File.ReadAllText(preset);
             var techLine = text.Split('\n')
@@ -237,7 +250,7 @@ public static class CheckpointVerifier
         r.AddRange(VerifyReShadeLog(exe, profile.GameFolder));
 
         // 14/15/16 — dependem do jogo rodando
-        r.AddRange(VerifyFeedLogs(exe, route));
+        r.AddRange(VerifyFeedLogs(exe, route, profile.NeedsFeeder));
 
         return r;
     }
@@ -312,6 +325,30 @@ public static class CheckpointVerifier
             loaded ? $"ReShade.log com {size} bytes." : $"ReShade.log com {size} bytes (placeholder).",
             loaded ? null : "Arquitetura do dxgi.dll errada, local errado, ou outro módulo tomou o nome dxgi.dll.");
 
+        // 14 — o DLSS 5 chegou a rodar? É a única pergunta que interessa, e até agora o
+        // programa não sabia responder: ele conferia arquivo, não resultado.
+        var renodx = RenodxLog.Ler(text);
+        if (renodx is not null)
+        {
+            var estado = renodx.AssinaturaRecusada ? CheckStatus.Fail
+                       : renodx.Ativo ? CheckStatus.Pass
+                       : renodx.HooksSemUso ? CheckStatus.Fail
+                       : CheckStatus.Warning;
+
+            yield return new CheckResult(14, "DLSS 5 aplicado na imagem", estado, renodx.Resumo,
+                estado == CheckStatus.Pass
+                    ? "Está funcionando. É DLAA: mesma resolução de render e de saída, então não " +
+                      "há ganho de FPS e a diferença é de imagem. No caminho direto (D3D12 com DLSS " +
+                      "nativo) a aba Início do ReShade fica VAZIA de propósito — quem trabalha é o " +
+                      "addon, na aba Complementos."
+                    : renodx.AssinaturaRecusada
+                        ? "Aplique o override no registro e REINICIE o PC — o driver só lê essa chave na inicialização."
+                        : renodx.HooksSemUso
+                            ? "O RenoDX só enxerga NGX em D3D12. Fora disso quem trabalha é o Feeder; " +
+                              "confirme que o DLSS 5 Feed está marcado no preset."
+                            : "Abra o jogo, jogue alguns segundos e verifique de novo.");
+        }
+
         bool sawSwapchain = text.Contains("CreateSwapChain", StringComparison.OrdinalIgnoreCase)
                             || text.Contains("Recreated runtime environment", StringComparison.OrdinalIgnoreCase);
         yield return new CheckResult(8, "ReShade viu o swapchain",
@@ -322,8 +359,17 @@ public static class CheckpointVerifier
             sawSwapchain ? null : "O dxgi.dll tem que estar na pasta do EXE. Overlays podem estar chegando antes.");
     }
 
-    private static IEnumerable<CheckResult> VerifyFeedLogs(string exeFolder, InstallRoute route)
+    private static IEnumerable<CheckResult> VerifyFeedLogs(
+        string exeFolder, InstallRoute route, bool needsFeeder = true)
     {
+        if (!needsFeeder)
+        {
+            yield return new CheckResult(15, "Feeder", CheckStatus.NotApplicable,
+                "Não instalado neste caminho: o RenoDX se pendura direto na chamada de DLSS do jogo.",
+                null);
+            yield break;
+        }
+
         var feedLog = Path.Combine(exeFolder, "dlss5-feed.log");
         if (!File.Exists(feedLog))
         {

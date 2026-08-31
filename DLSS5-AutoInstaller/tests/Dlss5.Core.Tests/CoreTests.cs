@@ -1682,3 +1682,115 @@ public class OverlaysTests
         });
     }
 }
+
+public class RenodxLogTests
+{
+    // Trechos fiéis ao ReShade.log do Onimusha, onde o caminho direto do RenoDX
+    // (D3D12 + DLSS nativo) funcionou de ponta a ponta.
+    private const string LogOnimusha = """
+        INFO | [DLSS 5 Neural Rendering] DLSS5 Generic: RenoDX DLSS5 Generic v4.1.5 loaded
+        INFO | [DLSS 5 Neural Rendering] DLSS5 Generic: D3D12 NGX hooks installed across 3 module copy(ies)
+        INFO | [DLSS 5 Neural Rendering] DLSS5 Generic: signed DLSSNR 310.8.0 D3D12 runtime initialized
+        INFO | [DLSS 5 Neural Rendering] DLSS5 Generic: NGX feature create intercepted: feature=1 (DLSS/DLAA), slot=0
+        INFO | [DLSS 5 Neural Rendering] DLSS5 Generic: inline feature 18 evaluation succeeded (count=1, NR input 2560x1440)
+        INFO | [DLSS 5 Neural Rendering] DLSS5 Generic: inline feature 18 evaluation succeeded (count=60, NR input 2560x1440)
+        """;
+
+    [Fact]
+    public void ReconheceQueFuncionouEQuantosFramesRodaram()
+    {
+        var s = RenodxLog.Ler(LogOnimusha);
+
+        Assert.NotNull(s);
+        Assert.True(s!.Ativo);
+        Assert.Equal(60, s.Avaliacoes);   // fica com a maior contagem, não a primeira
+        Assert.False(s.HooksSemUso);
+        Assert.False(s.AssinaturaRecusada);
+        Assert.Contains("ATIVO", s.Resumo);
+    }
+
+    [Fact]
+    public void HooksArmadosSemChamadaNaoContaComoFuncionando()
+    {
+        // Caso do God of War: D3D11 com DLSS nativo, o RenoDX só enxerga NGX em D3D12.
+        var s = RenodxLog.Ler(
+            "[DLSS 5 Neural Rendering] DLSS5 Generic: HOOKS ARMED — NO DLSS CREATE SEEN (creates 0)");
+
+        Assert.NotNull(s);
+        Assert.False(s!.Ativo);
+        Assert.True(s.HooksSemUso);
+    }
+
+    [Fact]
+    public void AssinaturaRecusadaEhReportadaSeparadamente()
+    {
+        var s = RenodxLog.Ler("[DLSS 5 Neural Rendering] DLSS5 Generic: NGX result 0xBAD00007");
+
+        Assert.NotNull(s);
+        Assert.True(s!.AssinaturaRecusada);
+        Assert.Contains("reiniciar", s.Resumo);
+    }
+
+    [Fact]
+    public void LogSemOAddonNaoRendeStatus()
+    {
+        Assert.Null(RenodxLog.Ler("INFO | Initializing crosire's ReShade version '6.8.0'"));
+        Assert.Null(RenodxLog.Ler(""));
+        Assert.Null(RenodxLog.Ler(null));
+    }
+}
+
+public class CaminhoDiretoNaoAcusaFalsoAlarmeTests
+{
+    private static GameProfile PerfilD3D12ComDlssNativo(string pasta) => new()
+    {
+        GameFolder = pasta,
+        RealExePath = Path.Combine(pasta, "jogo.exe"),
+        Architecture = PeArchitecture.X64,
+        Api = GraphicsApi.D3D12,
+        HasNativeDlss = true,
+    };
+
+    [Fact]
+    public void PresetVazioNoCaminhoDiretoNaoEhFalha()
+    {
+        // O preset sai sem efeitos de propósito: quem trabalha é o addon do RenoDX.
+        // Cobrar a linha Techniques ali pintava de vermelho uma instalação correta.
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5direto_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var perfil = PerfilD3D12ComDlssNativo(dir);
+            Assert.False(perfil.NeedsFeeder);   // pré-condição do caso
+
+            File.WriteAllText(Path.Combine(dir, "ReShadePreset.ini"), "[jogo.exe]\nTechniques=\n");
+
+            var checagens = CheckpointVerifier.Verify(perfil, null);
+            var c13 = checagens.First(c => c.Number == 13);
+            var c15 = checagens.First(c => c.Number == 15);
+
+            Assert.Equal(CheckStatus.NotApplicable, c13.State);
+            Assert.Equal(CheckStatus.NotApplicable, c15.State);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void ComFeederOPresetContinuaSendoCobrado()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5feeder_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var perfil = PerfilD3D12ComDlssNativo(dir);
+            perfil.HasNativeDlss = false;       // agora o Feeder entra
+            Assert.True(perfil.NeedsFeeder);
+
+            File.WriteAllText(Path.Combine(dir, "ReShadePreset.ini"), "[jogo.exe]\nTechniques=\n");
+
+            var c13 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 13);
+            Assert.Equal(CheckStatus.Fail, c13.State);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}
