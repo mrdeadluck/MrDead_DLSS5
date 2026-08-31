@@ -538,6 +538,91 @@ public class KitResolverTests
     }
 }
 
+public class ReShadeExtractorTests
+{
+    /// <summary>Monta um "instalador": bytes de lixo (como um PE) + um ZIP anexado no fim.</summary>
+    private static string WriteSetupWithAppendedZip(string entryName, byte[] entryContent, int prefixSize)
+    {
+        byte[] zipBytes;
+        using (var mem = new MemoryStream())
+        {
+            using (var zip = new System.IO.Compression.ZipArchive(
+                       mem, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+            {
+                var entry = zip.CreateEntry(entryName);
+                using var w = entry.Open();
+                w.Write(entryContent, 0, entryContent.Length);
+            }
+            zipBytes = mem.ToArray();
+        }
+
+        var prefix = new byte[prefixSize];
+        new Random(1234).NextBytes(prefix);
+        // Uma assinatura falsa de local file header no meio do "PE", como no instalador real.
+        prefix[100] = 0x50; prefix[101] = 0x4B; prefix[102] = 0x03; prefix[103] = 0x04;
+
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-setup-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "ReShade_Setup_Fake.exe");
+        using (var fs = File.Create(path))
+        {
+            fs.Write(prefix, 0, prefix.Length);
+            fs.Write(zipBytes, 0, zipBytes.Length);
+        }
+        return path;
+    }
+
+    [Fact]
+    public void ExtractTrailingZip_ReadsZipAppendedAfterAPrefix()
+    {
+        // Reproduz o instalador do ReShade: o offset do diretório central gravado no EOCD é
+        // relativo ao início do ZIP, não ao do arquivo. Sem corrigir esse deslocamento, o
+        // ZipArchive falha com "number of entries ... does not correspond".
+        var content = System.Text.Encoding.ASCII.GetBytes("conteudo da dll do reshade");
+        var setup = WriteSetupWithAppendedZip("ReShade32.dll", content, prefixSize: 4096);
+
+        try
+        {
+            using var stream = ReShadeExtractor.ExtractTrailingZip(setup);
+            Assert.NotNull(stream);
+
+            using var zip = new System.IO.Compression.ZipArchive(
+                stream!, System.IO.Compression.ZipArchiveMode.Read);
+            var entry = zip.Entries.FirstOrDefault(e => e.Name == "ReShade32.dll");
+            Assert.NotNull(entry);
+
+            using var reader = new StreamReader(entry!.Open());
+            Assert.Equal("conteudo da dll do reshade", reader.ReadToEnd());
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(setup)!, true);
+        }
+    }
+
+    [Fact]
+    public void PlainZipFileOpen_DoesNotHandleTheAppendedZip()
+    {
+        // A armadilha que causou o bug: abrir o arquivo direto falha, mas em .NET 8 o erro
+        // só aparece ao TOCAR nas entradas, porque o diretório central é lido sob demanda —
+        // e aí ele escapa de um catch posto só em volta do open. Não fixamos em qual dos dois
+        // pontos a exceção sai; o que importa é que o caminho direto não serve.
+        var setup = WriteSetupWithAppendedZip("ReShade32.dll", new byte[] { 1, 2, 3 }, prefixSize: 4096);
+        try
+        {
+            Assert.Throws<InvalidDataException>(() =>
+            {
+                using var zip = System.IO.Compression.ZipFile.OpenRead(setup);
+                _ = zip.Entries.Count;
+            });
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(setup)!, true);
+        }
+    }
+}
+
 public class ForbiddenFilesTests
 {
     [Fact]

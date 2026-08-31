@@ -24,18 +24,41 @@ public static class ReShadeExtractor
 
         ZipArchive OpenSetup()
         {
+            ZipArchive? direct = null;
             try
             {
-                return ZipFile.OpenRead(setupPath);
+                direct = ZipFile.OpenRead(setupPath);
+
+                // O ZipArchive lê o diretório central sob demanda. Num instalador com o zip
+                // ANEXADO depois do PE, abrir passa e só o acesso às entradas estoura
+                // ("number of entries ... does not correspond"), porque o offset gravado no
+                // EOCD é relativo ao início do zip, não ao início do arquivo. Forçar a
+                // leitura aqui é o que faz o erro cair neste catch, e não lá na frente.
+                _ = direct.Entries.Count;
+                return direct;
             }
             catch (InvalidDataException)
             {
-                // .exe sem estrutura zip legível no início: procura o zip anexado
-                // (End Of Central Directory) e reabre a partir do início real.
+                direct?.Dispose();
+
+                // Procura o zip anexado e reabre a partir do início real dele.
                 var ms = ExtractTrailingZip(setupPath)
                     ?? throw new InvalidOperationException(
-                        $"Não encontrei um ZIP embutido em {Path.GetFileName(setupPath)}.");
-                return new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: false);
+                        $"Não encontrei um ZIP legível em {Path.GetFileName(setupPath)}. " +
+                        "Aponte o kit para uma pasta que tenha o dxgi.dll do ReShade já extraído.");
+
+                var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: false);
+                try
+                {
+                    _ = zip.Entries.Count;
+                }
+                catch (InvalidDataException ex)
+                {
+                    zip.Dispose();
+                    throw new InvalidOperationException(
+                        $"O ZIP embutido em {Path.GetFileName(setupPath)} não pôde ser lido: {ex.Message}");
+                }
+                return zip;
             }
         }
 
@@ -60,7 +83,7 @@ public static class ReShadeExtractor
     /// acha a assinatura EOCD (PK\x05\x06) no fim, deriva o início do zip e
     /// devolve um MemoryStream só com o trecho do zip.
     /// </summary>
-    internal static MemoryStream? ExtractTrailingZip(string path)
+    public static MemoryStream? ExtractTrailingZip(string path)
     {
         byte[] data;
         try
