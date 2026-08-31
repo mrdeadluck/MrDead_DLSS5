@@ -68,6 +68,7 @@ public sealed class MainForm : Form
     };
     private Button _btnPlaca = new();
     private Button _btnPainelDg = new();
+    private Button _btnTestarConf = new();
     private readonly CheckBox _chkTnL = new()
     {
         Text = "T&&L por hardware",
@@ -899,7 +900,9 @@ public sealed class MainForm : Form
         barraDg.Controls.Add(_chkTnL);
         _btnPlaca = MakeButton("Aplicar e testar", 4, 0, 140, (_, _) => TrocarPlacaDgVoodoo());
         _btnPainelDg = MakeButton("Painel do dgVoodoo", 4, 0, 150, (_, _) => AbrirPainelDgVoodoo());
+        _btnTestarConf = MakeButton("O conf é lido?", 4, 0, 130, (_, _) => TestarLeituraDoConf());
         barraDg.Controls.Add(_btnPlaca);
+        barraDg.Controls.Add(_btnTestarConf);
         barraDg.Controls.Add(_btnPainelDg);
 
         barraDg.Dock = DockStyle.Fill;
@@ -989,6 +992,74 @@ public sealed class MainForm : Form
 
             MessageBox.Show(this, texto, "Isolar a causa",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex) { Warn(ex.Message); }
+    }
+
+    /// <summary>
+    /// Descobre se o dgVoodoo está mesmo lendo o dgVoodoo.conf que geramos.
+    ///
+    /// Toda a afinação até aqui — placa, T&L, resoluções, VRAM — parte de uma suposição
+    /// que nunca foi verificada: a de que o arquivo é lido. Se não for, o wrapper roda com
+    /// os padrões dele e nada do que foi escrito teve efeito, o que explicaria por que
+    /// nenhuma tentativa mudou coisa alguma.
+    ///
+    /// O teste usa DisableAndPassThru: com ele em true o dgVoodoo sai da frente e repassa
+    /// tudo ao Direct3D do Windows, então o jogo TEM que abrir. Se não abrir, o arquivo
+    /// não está sendo lido — e o rumo passa a ser outro.
+    /// </summary>
+    private void TestarLeituraDoConf()
+    {
+        var pasta = _profile?.RendererFolder ?? _profile?.ExeFolder;
+        var conf = string.IsNullOrWhiteSpace(pasta) ? null : Path.Combine(pasta, "dgVoodoo.conf");
+        if (conf is null || !File.Exists(conf)) { Warn($"dgVoodoo.conf não está em {pasta}."); return; }
+
+        var rodando = ProcessoDoJogoRodando(_profile?.RealExePath);
+        if (rodando is not null) { Warn($"Feche o jogo ({rodando}.exe) antes."); return; }
+
+        try
+        {
+            var texto = File.ReadAllText(conf);
+            bool emTeste = string.Equals(
+                DgVoodooConfigurator.LerChave(texto, "DirectX", "DisableAndPassThru"),
+                "true", StringComparison.OrdinalIgnoreCase);
+
+            if (!emTeste)
+            {
+                File.WriteAllText(conf,
+                    DgVoodooConfigurator.DefinirChave(texto, "DirectX", "DisableAndPassThru", "true"));
+                _status.Text = "Passthru ligado. Abra o jogo e volte a clicar em \"O conf é lido?\".";
+                MessageBox.Show(this,
+                    "Gravei DisableAndPassThru = true.\r\n\r\n" +
+                    "Com isso o dgVoodoo repassa tudo ao Direct3D do Windows — ele sai da frente " +
+                    "sem sair da pasta. Se o conf estiver sendo lido, o jogo TEM que abrir.\r\n\r\n" +
+                    "Abra o jogo agora e clique neste botão de novo.",
+                    "O conf é lido?", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            bool abriu = MessageBox.Show(this, "Com o passthru ligado, o jogo abriu?",
+                "O conf é lido?", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
+
+            File.WriteAllText(conf,
+                DgVoodooConfigurator.DefinirChave(File.ReadAllText(conf), "DirectX", "DisableAndPassThru", "false"));
+
+            _status.Text = abriu
+                ? "O conf é lido: os ajustes daqui têm efeito."
+                : "O conf NÃO é lido: os ajustes daqui são inertes.";
+
+            MessageBox.Show(this, abriu
+                ? "O dgVoodoo LÊ o conf.\r\n\r\nEntão placa, T&L e resoluções realmente têm " +
+                  "efeito, e vale varrer as combinações: para cada placa da lista, teste com a " +
+                  "caixa \"T&L por hardware\" marcada e desmarcada.\r\n\r\n" +
+                  "Passthru devolvido para false."
+                : "O dgVoodoo NÃO está lendo o conf.\r\n\r\nCom passthru=true ele deveria ter " +
+                  "saído da frente e o jogo deveria abrir. Como não abriu, o arquivo não chega " +
+                  "até ele — e TUDO que foi ajustado aqui até agora foi inerte.\r\n\r\n" +
+                  "Isso muda o rumo: o problema deixa de ser qual valor usar e passa a ser o " +
+                  "arquivo não ser encontrado. Me mande este resultado.\r\n\r\n" +
+                  "Passthru devolvido para false.",
+                "O conf é lido?", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex) { Warn(ex.Message); }
     }
@@ -1474,6 +1545,7 @@ public sealed class MainForm : Form
         _btnPlaca.Visible = _profile.NeedsDgVoodoo;
         _btnPainelDg.Visible = _profile.NeedsDgVoodoo;
         _chkTnL.Visible = _profile.NeedsDgVoodoo;
+        _btnTestarConf.Visible = _profile.NeedsDgVoodoo;
 
         _grid.Rows.Clear();
         foreach (var c in CheckpointVerifier.Verify(_profile, _manifest))

@@ -1496,3 +1496,48 @@ public class TnLTests
         Assert.Contains("DisableD3DTnLDevice                 = false", r);
     }
 }
+
+public class ChaveAvulsaTests
+{
+    private const string Conf = """
+        [Glide]
+        DisableAndPassThru                  = true
+
+        [DirectX]
+        DisableAndPassThru                  = false
+        VideoCard                           = internal3D
+        """;
+
+    [Fact]
+    public void EscreveSoNaSecaoPedida()
+    {
+        // DisableAndPassThru existe em [Glide] e em [DirectX]: mexer na errada troca o
+        // significado do teste inteiro.
+        var r = DgVoodooConfigurator.DefinirChave(Conf, "DirectX", "DisableAndPassThru", "true");
+
+        var glide = r.Split("[DirectX]")[0];
+        var directx = r.Split("[DirectX]")[1];
+        Assert.Contains("DisableAndPassThru                  = true", glide);
+        Assert.Contains("DisableAndPassThru                  = true", directx);
+        Assert.Contains("VideoCard                           = internal3D", r);
+    }
+
+    [Fact]
+    public void LeOValorDaSecaoCerta()
+    {
+        Assert.Equal("false", DgVoodooConfigurator.LerChave(Conf, "DirectX", "DisableAndPassThru"));
+        Assert.Equal("true", DgVoodooConfigurator.LerChave(Conf, "Glide", "DisableAndPassThru"));
+        Assert.Null(DgVoodooConfigurator.LerChave(Conf, "DirectX", "NaoExiste"));
+        Assert.Null(DgVoodooConfigurator.LerChave(Conf, "SecaoNenhuma", "VideoCard"));
+    }
+
+    [Fact]
+    public void IdaEVoltaPreservaOResto()
+    {
+        var ligado = DgVoodooConfigurator.DefinirChave(Conf, "DirectX", "DisableAndPassThru", "true");
+        var voltou = DgVoodooConfigurator.DefinirChave(ligado, "DirectX", "DisableAndPassThru", "false");
+
+        Assert.Equal("false", DgVoodooConfigurator.LerChave(voltou, "DirectX", "DisableAndPassThru"));
+        Assert.Equal("internal3D", DgVoodooConfigurator.LerChave(voltou, "DirectX", "VideoCard"));
+    }
+}

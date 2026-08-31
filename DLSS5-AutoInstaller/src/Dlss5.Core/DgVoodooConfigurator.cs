@@ -154,6 +154,52 @@ public static class DgVoodooConfigurator
         return sb.ToString();
     }
 
+    /// <summary>Escreve uma única chave, sem tocar em mais nada no arquivo.</summary>
+    public static string DefinirChave(string confText, string secao, string chave, string valor)
+    {
+        var lines = confText.Replace("\r\n", "\n").Split('\n');
+        string atual = "";
+        for (int i = 0; i < lines.Length; i++)
+        {
+            var raw = lines[i];
+            var trimmed = raw.TrimStart();
+            if (trimmed.StartsWith('['))
+            {
+                int fim = trimmed.IndexOf(']');
+                if (fim > 1) atual = trimmed.Substring(1, fim - 1).Trim();
+                continue;
+            }
+            int eq = raw.IndexOf('=');
+            if (eq <= 0) continue;
+            if (!atual.Equals(secao, StringComparison.OrdinalIgnoreCase)) continue;
+            if (!raw[..eq].Trim().Equals(chave, StringComparison.OrdinalIgnoreCase)) continue;
+            lines[i] = raw[..(eq + 1)] + " " + valor;
+        }
+        return string.Join("\r\n", lines);
+    }
+
+    /// <summary>Valor atual de uma chave, ou null se ela não existir na seção.</summary>
+    public static string? LerChave(string confText, string secao, string chave)
+    {
+        string atual = "";
+        foreach (var raw in confText.Replace("\r\n", "\n").Split('\n'))
+        {
+            var trimmed = raw.TrimStart();
+            if (trimmed.StartsWith('['))
+            {
+                int fim = trimmed.IndexOf(']');
+                if (fim > 1) atual = trimmed.Substring(1, fim - 1).Trim();
+                continue;
+            }
+            int eq = raw.IndexOf('=');
+            if (eq <= 0) continue;
+            if (!atual.Equals(secao, StringComparison.OrdinalIgnoreCase)) continue;
+            if (!raw[..eq].Trim().Equals(chave, StringComparison.OrdinalIgnoreCase)) continue;
+            return raw[(eq + 1)..].Trim();
+        }
+        return null;
+    }
+
     /// <summary>Lista os alvos que NÃO foram encontrados no texto (para diagnóstico).</summary>
     public static IReadOnlyList<string> MissingKeys(string confText, DgVoodooProfile perfil = DgVoodooProfile.Padrao)
     {
