@@ -16,6 +16,7 @@ quebra nada.
 arraste o PNG, renomeie para `mrdead.png` se necessário e confirme o commit. O
 build automático embute a imagem e publica um executável novo.
 
-Qualquer resolução serve (a imagem é redimensionada na hora de desenhar), mas
-quadrada fica melhor no recorte circular. Algo em torno de 256×256 mantém o
-executável leve.
+Qualquer resolução e qualquer nome de PNG funcionam — o programa procura por
+`mrdead.png` e, se não achar, usa o primeiro PNG desta pasta. Mas vale reduzir
+para algo em torno de 256×256 antes de subir: a imagem é desenhada com 56px, e
+o arquivo vai embutido no executável.

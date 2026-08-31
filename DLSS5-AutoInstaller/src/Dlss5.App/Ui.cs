@@ -94,8 +94,14 @@ internal static class Ui
         try
         {
             var asm = System.Reflection.Assembly.GetExecutingAssembly();
-            var nome = asm.GetManifestResourceNames()
-                .FirstOrDefault(n => n.EndsWith("mrdead.png", StringComparison.OrdinalIgnoreCase));
+            var recursos = asm.GetManifestResourceNames();
+            // Nome esperado primeiro; se não houver, qualquer PNG de assets/ serve —
+            // assim um upload com nome diferente continua funcionando.
+            var nome = recursos.FirstOrDefault(n =>
+                           n.EndsWith("mrdead.png", StringComparison.OrdinalIgnoreCase))
+                       ?? recursos.FirstOrDefault(n =>
+                           n.Contains(".assets.", StringComparison.OrdinalIgnoreCase) &&
+                           n.EndsWith(".png", StringComparison.OrdinalIgnoreCase));
             if (nome is null) return null;
 
             using var stream = asm.GetManifestResourceStream(nome);
