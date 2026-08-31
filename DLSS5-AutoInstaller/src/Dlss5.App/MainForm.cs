@@ -531,7 +531,7 @@ public sealed class MainForm : Form
         _p1.Controls.Add(_chkRegistry);
         y += 28;
 
-        _chkClean.Text = "Remover arquivos que atrapalham (sl.*.dll, nvngx_dlssg.dll, licenças)";
+        _chkClean.Text = "Remover restos de instalação anterior (nunca mexe em arquivo do jogo)";
         _chkClean.SetBounds(230, y, 640, 24);
         _chkClean.Checked = true;
         _chkClean.CheckedChanged += (_, _) => _options.CleanForbidden = _chkClean.Checked;
@@ -808,15 +808,29 @@ public sealed class MainForm : Form
     private void RevertInstall()
     {
         if (_profile is null) return;
-        var manifest = _manifest ?? InstallManifest.Load(_profile.ExeFolder);
-        if (manifest is null)
+
+        var manifest = _manifest ?? InstallManifest.Find(_profile.GameFolder, _profile.ExeFolder);
+        bool semManifesto = manifest is null;
+        if (semManifesto)
         {
-            Warn("Não encontrei o manifesto da instalação nesta pasta.");
-            return;
+            // Sem manifesto ainda dá para desfazer o essencial: devolver os backups e
+            // limpar o que ficou. Recusar aqui deixaria o jogo quebrado sem saída.
+            manifest = new InstallManifest
+            {
+                GameFolder = _profile.GameFolder,
+                ExeFolder = _profile.ExeFolder,
+            };
         }
-        if (MessageBox.Show(this,
-                "Isto vai remover os arquivos instalados, restaurar backups e desfazer o override do registro.\r\n\r\nContinuar?",
-                "Reverter instalação", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+
+        var aviso = semManifesto
+            ? "Não achei o manifesto desta instalação.\r\n\r\nMesmo assim posso devolver ao lugar " +
+              "todo arquivo do jogo que tenha sido movido para backup (.dlss5bak) e apagar o que o " +
+              "ReShade deixou para trás.\r\n\r\nContinuar?"
+            : "Isto vai remover os arquivos instalados, devolver os backups ao lugar e desfazer o " +
+              "override do registro.\r\n\r\nContinuar?";
+
+        if (MessageBox.Show(this, aviso, "Reverter instalação",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
             return;
 
         var engine = new InstallerEngine(Log);
@@ -824,9 +838,11 @@ public sealed class MainForm : Form
         _txtLog.Clear();
         try
         {
-            engine.Revert(manifest, removeRegistryOverride: true);
+            engine.Revert(manifest!, removeRegistryOverride: !semManifesto);
             _manifest = null;
-            _status.Text = "Reversão concluída. Reinicie o PC para o override sair de vez.";
+            _status.Text = semManifesto
+                ? "Backups devolvidos e restos apagados. Confira as opções do jogo."
+                : "Reversão concluída. Reinicie o PC para o override sair de vez.";
         }
         catch (Exception ex) { Warn(ex.Message); }
     }

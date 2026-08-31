@@ -690,45 +690,94 @@ public class ReShadeExtractorTests
 
 public class ForbiddenFilesTests
 {
-    [Fact]
-    public void FindPresent_DetectsStreamlineInterposer()
+    private static string PastaComArquivos(params string[] nomes)
     {
         var dir = Path.Combine(Path.GetTempPath(), "dlss5game_" + Guid.NewGuid().ToString("N"));
-        try
-        {
-            Directory.CreateDirectory(dir);
-            File.WriteAllText(Path.Combine(dir, "sl.interposer.dll"), "x");
-            File.WriteAllText(Path.Combine(dir, "nvngx_dlssg.dll"), "x");
-            File.WriteAllText(Path.Combine(dir, "jogo.exe"), "x");
-
-            var found = ForbiddenFiles.FindPresent(dir).Select(Path.GetFileName).ToList();
-
-            Assert.Contains("sl.interposer.dll", found);
-            Assert.Contains("nvngx_dlssg.dll", found);
-            Assert.DoesNotContain("jogo.exe", found);
-        }
-        finally { if (Directory.Exists(dir)) Directory.Delete(dir, true); }
+        Directory.CreateDirectory(dir);
+        foreach (var n in nomes) File.WriteAllText(Path.Combine(dir, n), "x");
+        return dir;
     }
 
     [Fact]
-    public void KeepsGameStreamlineWhenTheGameHasNativeDlss()
+    public void NuncaRemoveArquivoDoProprioJogo()
     {
-        var dir = Path.Combine(Path.GetTempPath(), "dlss5game_" + Guid.NewGuid().ToString("N"));
+        // Um teste real em Forza mostrou o estrago: apagar as sl.*.dll fez as opções de
+        // DLSS sumirem do menu do jogo. Elas nem existem no kit — quando estão na pasta,
+        // são do jogo. O mesmo vale para a nvngx_dlssg.dll (frame generation).
+        var dir = PastaComArquivos("sl.interposer.dll", "sl.dlss.dll", "nvngx_dlssg.dll",
+                                   "ReShade_Setup_6.8.0_Addon.exe", "jogo.exe");
         try
         {
-            Directory.CreateDirectory(dir);
-            File.WriteAllText(Path.Combine(dir, "sl.interposer.dll"), "x");
-            File.WriteAllText(Path.Combine(dir, "nvngx_dlssg.dll"), "x");
+            var remover = ForbiddenFiles.FindPresent(dir).Select(Path.GetFileName).ToList();
 
-            // Com DLSS nativo as sl.*.dll são do próprio jogo: apagá-las derrubaria o DLSS
-            // que o RenoDX precisa enxergar. O resto da lista continua saindo.
-            var kept = ForbiddenFiles.FindPresent(dir, keepGameStreamline: true)
-                .Select(Path.GetFileName).ToList();
+            Assert.DoesNotContain("sl.interposer.dll", remover);
+            Assert.DoesNotContain("sl.dlss.dll", remover);
+            Assert.DoesNotContain("nvngx_dlssg.dll", remover);
+            Assert.DoesNotContain("jogo.exe", remover);
 
-            Assert.DoesNotContain("sl.interposer.dll", kept);
-            Assert.Contains("nvngx_dlssg.dll", kept);
+            // O instalador do ReShade não tem o que fazer na pasta do jogo.
+            Assert.Contains("ReShade_Setup_6.8.0_Addon.exe", remover);
         }
-        finally { if (Directory.Exists(dir)) Directory.Delete(dir, true); }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void ListaOsArquivosDoJogoParaAvisar()
+    {
+        var dir = PastaComArquivos("sl.interposer.dll", "nvngx_dlssg.dll", "jogo.exe");
+        try
+        {
+            var doJogo = ForbiddenFiles.FindGameOwned(dir);
+            Assert.Contains("sl.interposer.dll", doJogo);
+            Assert.Contains("nvngx_dlssg.dll", doJogo);
+            Assert.DoesNotContain("jogo.exe", doJogo);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}
+
+public class ReversaoTests
+{
+    [Fact]
+    public void DevolveBackupOrfaoSemPrecisarDoManifesto()
+    {
+        // O caso do amigo: instalação feita com outro exe apontado, manifesto não
+        // encontrado, e o jogo ficou sem os arquivos movidos para .dlss5bak.
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5rev_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var alvo = Path.Combine(dir, "sl.interposer.dll");
+            File.WriteAllText(alvo + InstallerEngine.BackupSuffix, "conteudo original");
+
+            new InstallerEngine(_ => { }).RestaurarBackupsOrfaos(dir);
+
+            Assert.True(File.Exists(alvo));
+            Assert.Equal("conteudo original", File.ReadAllText(alvo));
+            Assert.False(File.Exists(alvo + InstallerEngine.BackupSuffix));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void ApagaOsArquivosQueOReShadeCriaAoRodar()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5rev_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            foreach (var n in new[] { "ReShade.log", "dlss5-feed.log", "dlss5-feed.cfg" })
+                File.WriteAllText(Path.Combine(dir, n), "x");
+            File.WriteAllText(Path.Combine(dir, "jogo.exe"), "x");
+
+            new InstallerEngine(_ => { }).LimparRestosDeExecucao(dir);
+
+            Assert.False(File.Exists(Path.Combine(dir, "ReShade.log")));
+            Assert.False(File.Exists(Path.Combine(dir, "dlss5-feed.log")));
+            Assert.False(File.Exists(Path.Combine(dir, "dlss5-feed.cfg")));
+            Assert.True(File.Exists(Path.Combine(dir, "jogo.exe")));
+        }
+        finally { Directory.Delete(dir, true); }
     }
 }
 

@@ -54,8 +54,7 @@ public static class InstallPlanBuilder
         // Limpeza dos proibidos primeiro (spec 3.7 / prólogo).
         if (options.CleanForbidden)
         {
-            // Com DLSS nativo, as sl.*.dll são do próprio jogo: apagá-las mataria o DLSS.
-            foreach (var f in ForbiddenFiles.FindPresent(exe, keepGameStreamline: profile.HasNativeDlss))
+            foreach (var f in ForbiddenFiles.FindPresent(exe))
                 plan.Actions.Add(new PlanAction(PlanActionKind.DeleteForbiddenFile,
                     $"Remover arquivo proibido {Path.GetFileName(f)}", null, f));
         }
@@ -119,6 +118,17 @@ public static class InstallPlanBuilder
                 plan.Actions.Add(new PlanAction(PlanActionKind.PatchDgVoodooConf,
                     $"Copiar e ajustar dgVoodoo.conf → {Rel(profile, Path.Combine(renderer, "dgVoodoo.conf"))}",
                     kit.DgVoodooConf, Path.Combine(renderer, "dgVoodoo.conf")));
+        }
+
+        // As sl.*.dll e a nvngx_dlssg.dll são do jogo, não do kit. O programa não encosta
+        // nelas — só avisa, porque elas explicam de onde vem o DLSS nativo.
+        var doJogo = ForbiddenFiles.FindGameOwned(exe);
+        if (doJogo.Count > 0)
+        {
+            plan.Warnings.Add(
+                "A pasta tem arquivos de DLSS do próprio jogo (" + string.Join(", ", doJogo) + "). " +
+                "Eles são mantidos: é por eles que o jogo chega ao DLSS, e removê-los faria as opções " +
+                "de DLSS sumirem do menu.");
         }
 
         if (profile.HasNativeDlss && !profile.UsesRenodxDirectPath)

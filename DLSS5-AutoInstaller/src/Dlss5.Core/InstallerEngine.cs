@@ -44,6 +44,34 @@ public sealed class InstallManifest
         File.WriteAllText(Path.Combine(folder, FileName), JsonSerializer.Serialize(this, JsonOpts));
     }
 
+    /// <summary>
+    /// Procura o manifesto na pasta do exe e, se não achar, em qualquer subpasta do jogo.
+    /// A instalação pode ter sido feita apontando outro executável (jogo Unreal, launcher),
+    /// e aí o manifesto não está onde a detecção de agora aponta.
+    /// </summary>
+    public static InstallManifest? Find(string? gameFolder, string? exeFolder)
+    {
+        if (!string.IsNullOrWhiteSpace(exeFolder))
+        {
+            var direto = Load(exeFolder);
+            if (direto is not null) return direto;
+        }
+        if (string.IsNullOrWhiteSpace(gameFolder) || !Directory.Exists(gameFolder)) return null;
+        try
+        {
+            foreach (var achado in Directory.EnumerateFiles(gameFolder, FileName, SearchOption.AllDirectories))
+            {
+                var m = Load(Path.GetDirectoryName(achado)!);
+                if (m is not null) return m;
+            }
+        }
+        catch
+        {
+            // pasta sem permissão de leitura: segue sem manifesto
+        }
+        return null;
+    }
+
     public static InstallManifest? Load(string folder)
     {
         var path = Path.Combine(folder, FileName);
@@ -160,6 +188,86 @@ public sealed class InstallerEngine
         if (missing.Count > 0)
             _log($"Aviso: chaves não encontradas no dgVoodoo.conf: {string.Join(", ", missing)}");
         _log($"dgVoodoo.conf ajustado: {target}");
+    }
+
+    /// <summary>Nomes que o ReShade e o Feeder criam ao rodar, e que o manifesto não conhece.</summary>
+    private static readonly string[] RestosDeExecucao =
+    {
+        "ReShade.log", "ReShade64.json", "ReShade32.json",
+        "ReShade64_XR.json", "ReShade32_XR.json",
+        "dlss5-feed.log", "dlss5-feed.cfg", "dlss5-feed-host.log",
+    };
+
+    /// <summary>Devolve ao lugar todo arquivo *.dlss5bak encontrado na pasta.</summary>
+    public void RestaurarBackupsOrfaos(string? pasta)
+    {
+        if (string.IsNullOrWhiteSpace(pasta) || !Directory.Exists(pasta)) return;
+
+        List<string> backups;
+        try
+        {
+            backups = Directory.EnumerateFiles(pasta, "*" + BackupSuffix, SearchOption.AllDirectories).ToList();
+        }
+        catch
+        {
+            return;
+        }
+
+        foreach (var backup in backups)
+        {
+            var original = backup[..^BackupSuffix.Length];
+            try
+            {
+                if (!File.Exists(backup)) continue;
+                File.Move(backup, original, overwrite: true);
+                _log($"Devolvido ao lugar: {original}");
+            }
+            catch (Exception ex)
+            {
+                _log($"Aviso: não consegui devolver {original}: {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>Apaga os arquivos que só aparecem depois que o jogo roda uma vez.</summary>
+    public void LimparRestosDeExecucao(string? exeFolder)
+    {
+        if (string.IsNullOrWhiteSpace(exeFolder) || !Directory.Exists(exeFolder)) return;
+
+        foreach (var nome in RestosDeExecucao)
+        {
+            foreach (var alvo in new[]
+                     {
+                         Path.Combine(exeFolder, nome),
+                         Path.Combine(exeFolder, "host64", nome),
+                     })
+            {
+                try
+                {
+                    if (!File.Exists(alvo)) continue;
+                    File.Delete(alvo);
+                    _log($"Apagado (gerado ao rodar): {alvo}");
+                }
+                catch (Exception ex)
+                {
+                    _log($"Aviso: {alvo}: {ex.Message}");
+                }
+            }
+        }
+
+        foreach (var pasta in new[] { "host64", "reshade-shaders" })
+        {
+            try
+            {
+                var alvo = Path.Combine(exeFolder, pasta);
+                if (Directory.Exists(alvo) && !Directory.EnumerateFileSystemEntries(alvo).Any())
+                    Directory.Delete(alvo);
+            }
+            catch
+            {
+                // pasta com conteúdo do usuário: fica
+            }
+        }
     }
 
     private void RemoveForbidden(string path, InstallManifest manifest)
@@ -291,6 +399,15 @@ public sealed class InstallerEngine
             }
             catch { /* pasta com conteúdo do usuário: deixa quieto */ }
         }
+
+        // Rede de segurança: qualquer .dlss5bak que sobrou volta ao lugar, mesmo sem
+        // constar no manifesto. É o que salva uma instalação antiga ou interrompida.
+        RestaurarBackupsOrfaos(manifest.ExeFolder);
+        RestaurarBackupsOrfaos(manifest.GameFolder);
+
+        // O ReShade e o addon criam estes depois de instalar, então não estão no
+        // manifesto — e sem apagá-los a "desinstalação" deixa sujeira para trás.
+        LimparRestosDeExecucao(manifest.ExeFolder);
 
         if (removeRegistryOverride && manifest.RegistryOverrideApplied)
         {
