@@ -36,7 +36,7 @@ Em Releases o download é ilimitado e não consome cota nenhuma.
 
 | Pasta | Conteúdo |
 |---|---|
-| [`DLSS 5 Files/`](DLSS%205%20Files) | O kit: `nvngx_dlssnr.dll`, `nvngx_dlss.dll`, os addons do RenoDX e do Feeder, o dgVoodoo2 e a pasta `reshade-shaders`. É esta pasta que você aponta no programa. |
+| [`DLSS 5 Files/`](DLSS%205%20Files) | O kit (230 MB), já sem duplicatas: as DLLs `nvngx_*`, os addons do RenoDX e do Feeder, o ReShade, o dgVoodoo2 e a pasta `reshade-shaders`. É esta pasta que você aponta no programa. |
 | [`DLSS5-AutoInstaller/`](DLSS5-AutoInstaller) | Código-fonte do programa (.NET 8 / WinForms) e [seu README](DLSS5-AutoInstaller/README.md) com o passo a passo de uso. |
 | [`docs/`](docs) | A especificação técnica: como o DLSS 5 funciona nesse contexto, matriz de suporte, os três caminhos de instalação, checkpoints e diagnóstico por sintoma. |
 
@@ -58,21 +58,18 @@ inteira o clone é bem mais prático.
 
 ## Compartilhar com alguém
 
-O repositório é público, mas **não peça para a pessoa clonar**: o kit tem 1 GB e
-o download de LFS sai da cota mensal de quem é dono do repositório (1 GB/mês).
-Um clone já esgota o mês inteiro.
+A pasta `DLSS 5 Files` já está enxuta (230 MB) e traz um `LEIA-ME.txt` com as
+instruções. Então:
 
-Monte um pacote enxuto e mande por WhatsApp, Drive ou pendrive:
+1. Copie o `DLSS5-AutoInstaller.exe` para dentro da pasta `DLSS 5 Files`.
+2. Clique com o botão direito na pasta → **Enviar para → Pasta compactada**.
+3. Mande o `.zip` por Drive, WhatsApp ou pendrive.
 
-```powershell
-.\scripts\Montar-Pacote.ps1 -Zip
-```
+Pronto — quem receber extrai, lê o `LEIA-ME.txt` e roda o executável.
 
-Ele separa só o que o instalador usa (~225 MB em vez de 1 GB), baixa o
-executável mais recente, escreve um `LEIA-ME.txt` explicando tudo para quem vai
-receber e, com `-Zip`, fecha o pacote. As três maiores coisas do kit ficam de
-fora de propósito: os dois `.zip` repetem o que já está extraído, e o zip do
-Streamline contém justamente as DLLs que **não** podem ir para a pasta do jogo.
+> Evite pedir para a pessoa clonar o repositório: o download dos arquivos
+> grandes sai da cota mensal de LFS de quem é dono (1 GB/mês). Mandar o zip
+> direto não gasta cota nenhuma.
 
 ---
 

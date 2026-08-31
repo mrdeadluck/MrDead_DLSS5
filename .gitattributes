@@ -3,6 +3,11 @@
 # ([[:space:]] é como o git representa os espaços do nome da pasta):
 DLSS[[:space:]]5[[:space:]]Files/** filter=lfs diff=lfs merge=lfs -text
 
+# Exceção: texto do kit fica FORA do LFS. São poucos KB, dá para ler direto no
+# GitHub, e não consome cota. Regras posteriores vencem as anteriores.
+DLSS[[:space:]]5[[:space:]]Files/**/*.txt !filter !diff !merge text
+DLSS[[:space:]]5[[:space:]]Files/**/*.md !filter !diff !merge text
+
 # Extensões de binários grandes, em qualquer lugar do repositório:
 *.dll filter=lfs diff=lfs merge=lfs -text
 *.bin filter=lfs diff=lfs merge=lfs -text

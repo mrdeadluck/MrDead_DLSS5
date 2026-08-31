@@ -1,0 +1,66 @@
+DLSS 5 Neural Rendering — como usar
+===================================
+
+O QUE É
+   Aplica o passo neural do DLSS 5 em jogos que não têm suporte nativo.
+   Você aponta duas pastas no programa e ele faz o resto: descobre o
+   executável real do jogo, a arquitetura, a API gráfica, copia cada
+   arquivo para o lugar certo e já deixa o ReShade configurado.
+
+O QUE VOCÊ PRECISA TER
+   - Placa NVIDIA RTX (testado em RTX 40 / Ada)
+   - Driver NVIDIA 616.56 ou mais novo
+   - Windows 64-bit
+
+PASSO A PASSO
+   1. Execute o DLSS5-AutoInstaller.exe
+
+      O Windows vai avisar que o app é desconhecido — ele não tem
+      assinatura digital paga. Clique em "Mais informações" e depois em
+      "Executar assim mesmo". Ele pede permissão de administrador, e
+      precisa mesmo: grava no registro e em pastas de Arquivos de
+      Programas.
+
+   2. Pasta do kit  -> esta pasta aqui
+      Pasta do jogo -> onde o jogo está instalado
+
+   3. Detectar > Gerar plano > Instalar > Verificar
+
+   4. REINICIE O WINDOWS depois de instalar pela primeira vez.
+
+      O programa grava uma chave no registro que libera a assinatura do
+      módulo neural, e o driver da NVIDIA só lê essa chave quando o PC
+      liga. Sem reiniciar, o DLSS 5 falha com o erro 0xBAD00007 mesmo
+      com todo o resto certo. É o motivo número 1 de "não funcionou".
+
+   5. Abra o jogo e aperte Home para ver o painel do ReShade.
+
+      Se algo não funcionar, volte ao programa e clique em "Verificar de
+      novo": ele lê os logs do jogo e diz em que ponto exatamente parou
+      e como corrigir.
+
+O QUE ESPERAR — leia antes, evita decepção
+   - É DLAA, não é upscaling. A resolução de renderização continua igual
+     à de saída: a imagem melhora, mas NÃO há ganho de FPS. Pelo
+     contrário, custa desempenho.
+   - A interface do jogo (HUD) é processada junto com a cena.
+   - Em movimento rápido pode aparecer rastro/fantasma, porque os vetores
+     de movimento são estimados por shader, não vêm do jogo.
+   - Consome bastante VRAM. Se travar, teste primeiro em 1080p e em modo
+     janela.
+
+AVISOS
+   - NÃO use em jogos online com anti-cheat (EAC, BattlEye, Vanguard).
+     A liberação de assinatura vale para o sistema inteiro e pode ser
+     interpretada como violação de integridade.
+   - Desligue as sobreposições da Steam e do NVIDIA App no jogo que for
+     usar: elas disputam o mesmo ponto de interceptação.
+   - Desligue MSAA/SSAA nas opções gráficas do jogo. FXAA e SMAA podem
+     continuar ligados.
+
+SE DER ERRADO
+   O botão "Desinstalar (reverter)" na última tela desfaz tudo que foi
+   colocado na pasta do jogo, inclusive restaurando arquivos movidos.
+
+Programa e código-fonte:
+   https://github.com/mrdeadluck/MrDead_DLSS5
