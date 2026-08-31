@@ -19,11 +19,12 @@ public class DgVoodooConfiguratorTests
         DisableAndPassThru                  = true
         VideoCard                           = internal3D
         VRAM                                = 256
+        dgVoodooWatermark                   = false
 
         [DirectXExt]
         AdapterIDType                       = 
         MSD3DDeviceNames                    = false
-        dgVoodooWatermark                   = false
+        DefaultEnumeratedResolutions        = all
         """;
 
     [Fact]
@@ -71,6 +72,49 @@ public class DgVoodooConfiguratorTests
         // O resto continua igual ao perfil padrão.
         Assert.Contains("DisableAndPassThru                  = false", result);
         Assert.Contains("VideoCard                           = internal3D", result);
+    }
+
+    [Fact]
+    public void PerfilLegado_EnumeraSoAsResolucoesDaEpoca()
+    {
+        // Com "all" o dgVoodoo lista toda resolução do monitor nas três profundidades de
+        // cor, e jogo de 2001 guarda isso em vetor fixo — estourando, ele não acha modo
+        // válido nenhum e conclui que a placa não serve.
+        var result = DgVoodooConfigurator.Patch(Sample, DgVoodooProfile.Legado);
+        Assert.Contains("DefaultEnumeratedResolutions        = classics", result);
+    }
+
+    [Fact]
+    public void TrocaDePlacaSobrescreveApenasOVideoCardDoDirectX()
+    {
+        var result = DgVoodooConfigurator.Patch(Sample, DgVoodooProfile.Legado, "geforce_ti_4800");
+
+        Assert.Contains("VideoCard                           = geforce_ti_4800", result);
+        // A VideoCard do [Glide] é outra chave, com o mesmo nome, e não pode ser tocada.
+        Assert.Contains("VideoCard                           = voodoo_2", result);
+    }
+
+    [Fact]
+    public void TodaPlacaOferecidaExisteNaListaDoDgVoodoo()
+    {
+        // Nome fora da lista documentada o dgVoodoo ignora em silêncio, e o jogo segue
+        // recusando o adaptador sem que se descubra por quê.
+        string[] validos =
+        {
+            "svga", "internal3D", "geforce_ti_4800", "ati_radeon_8500",
+            "matrox_parhelia-512", "geforce_fx_5700_ultra", "geforce_9800_gt",
+        };
+        Assert.All(DgVoodooConfigurator.Placas, p => Assert.Contains(p.Valor, validos));
+    }
+
+    [Fact]
+    public void MarcaDaguaEhEscritaNaSecaoCerta()
+    {
+        // Ela mora em [DirectX]. Enquanto o alvo apontava para [DirectXExt] a chave nunca
+        // era escrita, e só não fez falta porque o conf do kit já vem com ela ligada.
+        var result = DgVoodooConfigurator.Patch(Sample);
+        Assert.Contains("dgVoodooWatermark                   = true", result);
+        Assert.DoesNotContain("[DirectXExt] dgVoodooWatermark", DgVoodooConfigurator.MissingKeys(Sample));
     }
 
     [Fact]

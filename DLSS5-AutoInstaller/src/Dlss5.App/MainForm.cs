@@ -56,6 +56,8 @@ public sealed class MainForm : Form
     private readonly TextBox _txtLog = new();
 
     // Passo 4 — verificação
+    private readonly Panel _barraDgVoodoo = new();
+    private readonly ComboBox _cboPlaca = new();
     private readonly DataGridView _grid = new();
     private readonly TextBox _txtGuide = new();
 
@@ -859,10 +861,73 @@ public sealed class MainForm : Form
         bar.Controls.Add(MakeButton("Abrir o jogo", 8, 0, 120, (_, _) => LaunchGame()));
         bar.Controls.Add(MakeButton("Desinstalar (reverter)", 8, 0, 170, (_, _) => RevertInstall()));
         bar.Controls.Add(MakeButton("Desfazer tudo (forçado)", 8, 0, 170, (_, _) => FaxinaCompleta()));
-        bar.Controls.Add(MakeButton("Painel do dgVoodoo", 8, 0, 150, (_, _) => AbrirPainelDgVoodoo()));
+
+        // Trocar a placa que o dgVoodoo finge ser é o ajuste que resolve jogo antigo que
+        // recusa o adaptador, e não dá para saber de antemão qual valor cada jogo aceita.
+        // Aqui a troca é reescrita direto no conf: o teste seguinte é reabrir o jogo, sem
+        // desinstalar e instalar tudo de novo a cada tentativa.
+        var barraDg = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 40, Padding = new Padding(0, 6, 0, 0) };
+        barraDg.Controls.Add(new Label
+        {
+            Text = "Placa que o dgVoodoo finge ser:",
+            AutoSize = false,
+            Width = 190,
+            Height = 26,
+            TextAlign = ContentAlignment.MiddleLeft,
+        });
+        _cboPlaca.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cboPlaca.Width = 300;
+        foreach (var (rotulo, _) in DgVoodooConfigurator.Placas) _cboPlaca.Items.Add(rotulo);
+        _cboPlaca.SelectedIndex = 0;
+        barraDg.Controls.Add(_cboPlaca);
+        barraDg.Controls.Add(MakeButton("Aplicar e testar", 4, 0, 140, (_, _) => TrocarPlacaDgVoodoo()));
+        barraDg.Controls.Add(MakeButton("Painel do dgVoodoo", 4, 0, 150, (_, _) => AbrirPainelDgVoodoo()));
+
+        _barraDgVoodoo.Dock = DockStyle.Bottom;
+        _barraDgVoodoo.Height = 40;
+        _barraDgVoodoo.Visible = false;
+        _barraDgVoodoo.Controls.Add(barraDg);
 
         _p4.Controls.Add(split);
         _p4.Controls.Add(bar);
+        _p4.Controls.Add(_barraDgVoodoo);
+    }
+
+    /// <summary>Reescreve o dgVoodoo.conf com outra placa, sem reinstalar nada.</summary>
+    private void TrocarPlacaDgVoodoo()
+    {
+        var pasta = _profile?.RendererFolder ?? _profile?.ExeFolder;
+        var conf = string.IsNullOrWhiteSpace(pasta) ? null : Path.Combine(pasta, "dgVoodoo.conf");
+        if (conf is null || !File.Exists(conf))
+        {
+            Warn($"dgVoodoo.conf não está em {pasta}. Instale primeiro.");
+            return;
+        }
+
+        var rodando = ProcessoDoJogoRodando(_profile?.RealExePath);
+        if (rodando is not null)
+        {
+            Warn($"Feche o jogo ({rodando}.exe) antes: ele lê o conf ao abrir.");
+            return;
+        }
+
+        int idx = _cboPlaca.SelectedIndex;
+        if (idx < 0 || idx >= DgVoodooConfigurator.Placas.Count) return;
+        var (rotulo, valor) = DgVoodooConfigurator.Placas[idx];
+
+        try
+        {
+            var perfil = DgVoodooConfigurator.ProfileFor(_profile!.Api);
+            var texto = DgVoodooConfigurator.Patch(File.ReadAllText(conf), perfil, valor);
+            File.WriteAllText(conf, texto);
+            _status.Text = $"dgVoodoo agora se apresenta como {rotulo}. Abra o jogo e veja se muda.";
+            MessageBox.Show(this,
+                $"Gravado: VideoCard = {valor}\r\n{conf}\r\n\r\n" +
+                "Abra o jogo. Se continuar recusando o adaptador, volte aqui e tente a próxima " +
+                "da lista — nada precisa ser reinstalado entre uma tentativa e outra.",
+                "Placa trocada", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex) { Warn("Não consegui gravar o dgVoodoo.conf: " + ex.Message); }
     }
 
     private void OpenFolder(string? folder)
@@ -1289,6 +1354,7 @@ public sealed class MainForm : Form
     {
         if (_profile is null) return;
         _manifest ??= InstallManifest.Load(_profile.ExeFolder);
+        _barraDgVoodoo.Visible = _profile.NeedsDgVoodoo;
 
         _grid.Rows.Clear();
         foreach (var c in CheckpointVerifier.Verify(_profile, _manifest))
