@@ -69,8 +69,8 @@ public sealed class MainForm : Form
     {
         Text = "DLSS 5 AutoInstaller";
         StartPosition = FormStartPosition.CenterScreen;
-        MinimumSize = new Size(1180, 720);
-        Size = new Size(1280, 840);
+        MinimumSize = new Size(940, 600);
+        Size = new Size(1240, 820);
         Font = Ui.BodyFont;
         BackColor = Ui.Page;
         ForeColor = Ui.Ink;
@@ -97,6 +97,51 @@ public sealed class MainForm : Form
         SelectOverlayKey(_options.OverlayKey);
 
         ShowStep(0);
+    }
+
+    protected override void OnLoad(EventArgs e)
+    {
+        base.OnLoad(e);
+        EncaixarNoMonitor();
+        AjustarQuebraDoTexto();
+    }
+
+    /// <summary>
+    /// Encolhe a janela até caber na área útil da tela. Roda no OnLoad porque só aí o
+    /// Windows já aplicou a escala do monitor: um mínimo definido em pixels de projeto
+    /// vira um mínimo bem maior a 125% ou 150%, e a janela acaba não cabendo na tela
+    /// nem podendo ser reduzida — foi o que aconteceu num notebook.
+    /// </summary>
+    private void EncaixarNoMonitor()
+    {
+        var area = Screen.FromControl(this).WorkingArea;
+        const int margem = 40;
+
+        var minLargura = Math.Min(MinimumSize.Width, Math.Max(640, area.Width - margem));
+        var minAltura = Math.Min(MinimumSize.Height, Math.Max(460, area.Height - margem));
+        MinimumSize = new Size(minLargura, minAltura);
+
+        Size = new Size(
+            Math.Max(minLargura, Math.Min(Width, area.Width - margem)),
+            Math.Max(minAltura, Math.Min(Height, area.Height - margem)));
+
+        Location = new Point(
+            area.X + Math.Max(0, (area.Width - Width) / 2),
+            area.Y + Math.Max(0, (area.Height - Height) / 2));
+    }
+
+    /// <summary>A linha de explicação quebra conforme a largura disponível, não num valor fixo.</summary>
+    private void AjustarQuebraDoTexto()
+    {
+        var largura = Math.Max(320, _content.ClientSize.Width - 8);
+        if (_stepHint.MaximumSize.Width != largura)
+            _stepHint.MaximumSize = new Size(largura, 0);
+    }
+
+    protected override void OnResize(EventArgs e)
+    {
+        base.OnResize(e);
+        AjustarQuebraDoTexto();
     }
 
     // ---------------------------------------------------------------- chrome
@@ -333,7 +378,7 @@ public sealed class MainForm : Form
 
     private void BuildStep0()
     {
-        _p0 = new Panel { Dock = DockStyle.Fill };
+        _p0 = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
 
         _p0.Controls.Add(Caption("Pasta do kit (arquivos DLSS 5):", 10, 0, 240));
         _txtKit.SetBounds(250, 8, 560, 25);
@@ -495,6 +540,7 @@ public sealed class MainForm : Form
 
         Ui.StyleReadOnlyBox(_txtNotes);
         _txtNotes.SetBounds(0, y, 920, 150);
+        _txtNotes.MinimumSize = new Size(0, 110);
         _txtNotes.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
         _p1.Controls.Add(_txtNotes);
     }
