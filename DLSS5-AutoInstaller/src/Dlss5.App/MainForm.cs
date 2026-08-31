@@ -805,6 +805,21 @@ public sealed class MainForm : Form
         catch (Exception ex) { Warn("Não consegui abrir o jogo: " + ex.Message); }
     }
 
+    /// <summary>Nome do processo se o jogo estiver rodando, senão null.</summary>
+    private static string? ProcessoDoJogoRodando(string? exePath)
+    {
+        if (string.IsNullOrWhiteSpace(exePath)) return null;
+        var nome = Path.GetFileNameWithoutExtension(exePath);
+        try
+        {
+            return Process.GetProcessesByName(nome).Length > 0 ? nome : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private void RevertInstall()
     {
         if (_profile is null) return;
@@ -820,6 +835,15 @@ public sealed class MainForm : Form
                 GameFolder = _profile.GameFolder,
                 ExeFolder = _profile.ExeFolder,
             };
+        }
+
+        // Arquivo aberto pelo jogo não é apagado, e a falha vira só uma linha no log.
+        var rodando = ProcessoDoJogoRodando(_profile.RealExePath);
+        if (rodando is not null)
+        {
+            Warn($"O jogo parece estar aberto ({rodando}.exe). Feche o jogo e a Steam " +
+                 "antes de desinstalar, senão os arquivos ficam travados e não saem.");
+            return;
         }
 
         var aviso = semManifesto
@@ -838,11 +862,28 @@ public sealed class MainForm : Form
         _txtLog.Clear();
         try
         {
-            engine.Revert(manifest!, removeRegistryOverride: !semManifesto);
+            var sobras = engine.Revert(manifest!, removeRegistryOverride: !semManifesto);
             _manifest = null;
-            _status.Text = semManifesto
-                ? "Backups devolvidos e restos apagados. Confira as opções do jogo."
-                : "Reversão concluída. Reinicie o PC para o override sair de vez.";
+
+            if (sobras.Count > 0)
+            {
+                // Arquivo em uso não é apagado. Sem dizer isso na cara, o usuário só
+                // descobre quando o overlay do ReShade aparece no jogo.
+                _status.Text = $"{sobras.Count} arquivo(s) não saíram — veja o log.";
+                MessageBox.Show(this,
+                    "A remoção não conseguiu apagar tudo:\r\n\r\n" +
+                    string.Join("\r\n", sobras.Take(12)) +
+                    (sobras.Count > 12 ? $"\r\n... e mais {sobras.Count - 12}" : "") +
+                    "\r\n\r\nQuase sempre é arquivo em uso. Feche o jogo E a Steam " +
+                    "(confira no Gerenciador de Tarefas) e clique em Desinstalar de novo.",
+                    "Sobraram arquivos", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            else
+            {
+                _status.Text = semManifesto
+                    ? "Backups devolvidos e restos apagados. Confira as opções do jogo."
+                    : "Reversão concluída. Reinicie o PC para o override sair de vez.";
+            }
         }
         catch (Exception ex) { Warn(ex.Message); }
     }

@@ -190,6 +190,46 @@ public sealed class InstallerEngine
         _log($"dgVoodoo.conf ajustado: {target}");
     }
 
+    /// <summary>Tudo que a instalação pode ter deixado na pasta do exe.</summary>
+    private static readonly string[] NossosArquivos =
+    {
+        "dxgi.dll", "ReShade.ini", "ReShade.log", "ReShadePreset.ini",
+        "ReShade64.json", "ReShade32.json", "ReShade64_XR.json", "ReShade32_XR.json",
+        "renodx-dlss5.addon64", "nvngx_dlssnr.dll",
+        "dlss5-feed.addon64", "dlss5-feed.addon32", "dlss5-feed.cfg", "dlss5-feed.log",
+        "D3D9.dll", "dgVoodoo.conf", "dgVoodooCpl.exe",
+    };
+
+    /// <summary>
+    /// Confere o que ainda está na pasta depois de reverter. Arquivo em uso não é
+    /// apagado — se o jogo ou a Steam estiverem abertos, a remoção falha em silêncio.
+    /// </summary>
+    public IReadOnlyList<string> ConferirSobras(string? exeFolder)
+    {
+        var sobras = new List<string>();
+        if (string.IsNullOrWhiteSpace(exeFolder) || !Directory.Exists(exeFolder)) return sobras;
+
+        foreach (var nome in NossosArquivos)
+        {
+            var caminho = Path.Combine(exeFolder, nome);
+            if (File.Exists(caminho)) sobras.Add(caminho);
+        }
+        foreach (var pasta in new[] { "reshade-shaders", "host64" })
+        {
+            var caminho = Path.Combine(exeFolder, pasta);
+            if (Directory.Exists(caminho)) sobras.Add(caminho + Path.DirectorySeparatorChar);
+        }
+        try
+        {
+            sobras.AddRange(Directory.EnumerateFiles(exeFolder, "*" + BackupSuffix, SearchOption.AllDirectories));
+        }
+        catch
+        {
+            // sem permissão de leitura: o que já foi listado basta
+        }
+        return sobras;
+    }
+
     /// <summary>Nomes que o ReShade e o Feeder criam ao rodar, e que o manifesto não conhece.</summary>
     private static readonly string[] RestosDeExecucao =
     {
@@ -348,7 +388,12 @@ public sealed class InstallerEngine
     }
 
     /// <summary>Desfaz a instalação a partir do manifesto (spec 13).</summary>
-    public void Revert(InstallManifest manifest, bool removeRegistryOverride)
+    /// <summary>
+    /// Desfaz a instalação e devolve a lista do que NÃO saiu. Devolver essa lista é o
+    /// ponto: antes cada falha virava só uma linha de aviso no log, e o usuário só
+    /// descobria que sobrou arquivo quando o overlay do ReShade aparecia no jogo.
+    /// </summary>
+    public IReadOnlyList<string> Revert(InstallManifest manifest, bool removeRegistryOverride)
     {
         foreach (var file in manifest.AddedFiles)
         {
@@ -418,5 +463,19 @@ public sealed class InstallerEngine
         var manifestPath = Path.Combine(manifest.ExeFolder, InstallManifest.FileName);
         try { if (File.Exists(manifestPath)) File.Delete(manifestPath); } catch { }
         _log("Reversão concluída.");
+
+        var sobras = ConferirSobras(manifest.ExeFolder);
+        if (sobras.Count > 0)
+        {
+            _log("");
+            _log("ATENÇÃO: estes arquivos NÃO foram removidos:");
+            foreach (var f in sobras) _log("   " + f);
+            _log("Feche o jogo e a Steam e tente de novo, ou apague à mão.");
+        }
+        else
+        {
+            _log("Conferido: nenhum arquivo da instalação sobrou na pasta.");
+        }
+        return sobras;
     }
 }

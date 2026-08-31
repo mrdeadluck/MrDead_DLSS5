@@ -760,6 +760,49 @@ public class ReversaoTests
     }
 
     [Fact]
+    public void ConfereEDenunciaOQueNaoSaiu()
+    {
+        // Forza: o dxgi.dll continuou na pasta depois de desinstalar e o overlay do
+        // ReShade seguiu abrindo no jogo. A falha existia no log como um aviso solto —
+        // agora ela é devolvida para a interface poder mostrar.
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5rev_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "dxgi.dll"), "x");
+            File.WriteAllText(Path.Combine(dir, "renodx-dlss5.addon64"), "x");
+            File.WriteAllText(Path.Combine(dir, "forzahorizon6.exe"), "x");
+            Directory.CreateDirectory(Path.Combine(dir, "reshade-shaders"));
+
+            var sobras = new InstallerEngine(_ => { }).ConferirSobras(dir);
+
+            Assert.Contains(sobras, f => f.EndsWith("dxgi.dll", StringComparison.Ordinal));
+            Assert.Contains(sobras, f => f.EndsWith("renodx-dlss5.addon64", StringComparison.Ordinal));
+            Assert.Contains(sobras, f => f.Contains("reshade-shaders", StringComparison.Ordinal));
+
+            // O executável do jogo não é nosso e não pode entrar na lista.
+            Assert.DoesNotContain(sobras, f => f.EndsWith("forzahorizon6.exe", StringComparison.Ordinal));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void NaoAcusaSobraNumaPastaLimpa()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5rev_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "forzahorizon6.exe"), "x");
+            File.WriteAllText(Path.Combine(dir, "nvngx_dlss.dll"), "x");
+            File.WriteAllText(Path.Combine(dir, "sl.interposer.dll"), "x");
+
+            Assert.Empty(new InstallerEngine(_ => { }).ConferirSobras(dir));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
     public void ApagaOsArquivosQueOReShadeCriaAoRodar()
     {
         var dir = Path.Combine(Path.GetTempPath(), "dlss5rev_" + Guid.NewGuid().ToString("N"));
