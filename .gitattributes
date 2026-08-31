@@ -1,0 +1,9 @@
+# Git LFS — arquivos grandes
+# Tudo que estiver dentro da pasta "DLSS 5 Files" vai para o LFS automaticamente
+# ([[:space:]] é como o git representa os espaços do nome da pasta):
+DLSS[[:space:]]5[[:space:]]Files/** filter=lfs diff=lfs merge=lfs -text
+
+# Extensões de binários grandes, em qualquer lugar do repositório:
+*.dll filter=lfs diff=lfs merge=lfs -text
+*.bin filter=lfs diff=lfs merge=lfs -text
+*.onnx filter=lfs diff=lfs merge=lfs -text
