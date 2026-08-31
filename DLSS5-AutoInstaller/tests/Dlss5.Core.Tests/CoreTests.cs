@@ -1301,3 +1301,134 @@ public class FaxinaTests
         finally { Directory.Delete(dir, true); }
     }
 }
+
+public class SteamGameTests
+{
+    private static string BibliotecaSteam(string installDir, string appId, out string pastaDoJogo)
+    {
+        var raiz = Path.Combine(Path.GetTempPath(), "dlss5steam_" + Guid.NewGuid().ToString("N"));
+        var steamapps = Path.Combine(raiz, "steamapps");
+        pastaDoJogo = Path.Combine(steamapps, "common", installDir);
+        Directory.CreateDirectory(pastaDoJogo);
+        File.WriteAllText(Path.Combine(steamapps, $"appmanifest_{appId}.acf"),
+            "\"AppState\"\n{\n\t\"appid\"\t\t\"" + appId + "\"\n\t\"installdir\"\t\t\"" + installDir + "\"\n}\n");
+        return raiz;
+    }
+
+    [Fact]
+    public void AchaOAppIdPelaPastaDoJogo()
+    {
+        // Abrir o .exe direto num jogo com DRM da Steam dá "Application load error
+        // 5:0000065434" — quem tem que lançar é o cliente da Steam.
+        var raiz = BibliotecaSteam("Max Payne", "12140", out var jogo);
+        try
+        {
+            Assert.Equal("12140", SteamGame.FindAppId(jogo));
+            Assert.Equal("steam://rungameid/12140", SteamGame.RunUrl("12140"));
+        }
+        finally { Directory.Delete(raiz, true); }
+    }
+
+    [Fact]
+    public void AchaOAppIdAPartirDeUmaSubpastaDoJogo()
+    {
+        // Jogo Unreal: o binário real mora em Binaries\Win64, vários níveis abaixo.
+        var raiz = BibliotecaSteam("Duskfade", "999", out var jogo);
+        try
+        {
+            var fundo = Path.Combine(jogo, "Duskfade", "Binaries", "Win64");
+            Directory.CreateDirectory(fundo);
+            Assert.Equal("999", SteamGame.FindAppId(fundo));
+        }
+        finally { Directory.Delete(raiz, true); }
+    }
+
+    [Fact]
+    public void ForaDaSteamNaoInventaAppId()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5nosteam_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            Assert.Null(SteamGame.FindAppId(dir));
+            Assert.Null(SteamGame.FindAppId(null));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}
+
+public class IsolamentoTests
+{
+    private static string PastaInstalada()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5iso_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "D3D8.dll"), "dgvoodoo");
+        File.WriteAllText(Path.Combine(dir, "dxgi.dll"), "reshade");
+        File.WriteAllText(Path.Combine(dir, "MaxPayne.exe"), "jogo");
+        return dir;
+    }
+
+    [Fact]
+    public void DesligaSoOSuspeitoDaVezESempreReligaOAnterior()
+    {
+        var dir = PastaInstalada();
+        var iso = new Isolamento(_ => { });
+        try
+        {
+            iso.Aplicar(EstadoIsolamento.SemDgVoodoo, dir, dir);
+            Assert.False(File.Exists(Path.Combine(dir, "D3D8.dll")));
+            Assert.True(File.Exists(Path.Combine(dir, "dxgi.dll")));
+
+            // Passar ao teste seguinte religa o dgVoodoo antes de desligar o ReShade,
+            // senão os dois ficariam fora e o resultado não diria nada.
+            iso.Aplicar(EstadoIsolamento.SemReShade, dir, dir);
+            Assert.True(File.Exists(Path.Combine(dir, "D3D8.dll")));
+            Assert.False(File.Exists(Path.Combine(dir, "dxgi.dll")));
+
+            iso.Aplicar(EstadoIsolamento.Tudo, dir, dir);
+            Assert.True(File.Exists(Path.Combine(dir, "D3D8.dll")));
+            Assert.True(File.Exists(Path.Combine(dir, "dxgi.dll")));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void NuncaApagaNada()
+    {
+        // Renomear é o ponto: o conteúdo tem que voltar intacto, e o exe do jogo nem é tocado.
+        var dir = PastaInstalada();
+        var iso = new Isolamento(_ => { });
+        try
+        {
+            iso.Aplicar(EstadoIsolamento.SemDgVoodoo, dir, dir);
+            Assert.True(File.Exists(Path.Combine(dir, "D3D8.dll" + Isolamento.Sufixo)));
+            Assert.True(File.Exists(Path.Combine(dir, "MaxPayne.exe")));
+
+            iso.ReligarTudo(dir);
+            Assert.Equal("dgvoodoo", File.ReadAllText(Path.Combine(dir, "D3D8.dll")));
+            Assert.Empty(Directory.EnumerateFiles(dir, "*" + Isolamento.Sufixo));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void DgVoodooEReShadePodemEstarEmPastasDiferentes()
+    {
+        // Engine Source: o dgVoodoo vai em bin\ e o ReShade fica na raiz.
+        var raiz = Path.Combine(Path.GetTempPath(), "dlss5iso_" + Guid.NewGuid().ToString("N"));
+        var bin = Path.Combine(raiz, "bin");
+        Directory.CreateDirectory(bin);
+        try
+        {
+            File.WriteAllText(Path.Combine(raiz, "dxgi.dll"), "reshade");
+            File.WriteAllText(Path.Combine(bin, "D3D9.dll"), "dgvoodoo");
+
+            new Isolamento(_ => { }).Aplicar(EstadoIsolamento.SemDgVoodoo, raiz, bin);
+
+            Assert.False(File.Exists(Path.Combine(bin, "D3D9.dll")));
+            Assert.True(File.Exists(Path.Combine(raiz, "dxgi.dll")));
+        }
+        finally { Directory.Delete(raiz, true); }
+    }
+}

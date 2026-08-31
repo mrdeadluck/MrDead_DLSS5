@@ -58,6 +58,17 @@ public sealed class MainForm : Form
     // Passo 4 — verificação
     private readonly Panel _barraDgVoodoo = new();
     private readonly ComboBox _cboPlaca = new();
+    private readonly Label _lblDgVoodoo = new()
+    {
+        Text = "Placa que o dgVoodoo finge ser:",
+        AutoSize = false,
+        Width = 190,
+        Height = 26,
+        TextAlign = ContentAlignment.MiddleLeft,
+    };
+    private Button _btnPlaca = new();
+    private Button _btnPainelDg = new();
+    private EstadoIsolamento _isolamento = EstadoIsolamento.Tudo;
     private readonly DataGridView _grid = new();
     private readonly TextBox _txtGuide = new();
 
@@ -867,30 +878,76 @@ public sealed class MainForm : Form
         // Aqui a troca é reescrita direto no conf: o teste seguinte é reabrir o jogo, sem
         // desinstalar e instalar tudo de novo a cada tentativa.
         var barraDg = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 40, Padding = new Padding(0, 6, 0, 0) };
-        barraDg.Controls.Add(new Label
-        {
-            Text = "Placa que o dgVoodoo finge ser:",
-            AutoSize = false,
-            Width = 190,
-            Height = 26,
-            TextAlign = ContentAlignment.MiddleLeft,
-        });
+        barraDg.Controls.Add(MakeButton("Isolar a causa", 4, 0, 130, (_, _) => IsolarCausa()));
+        barraDg.Controls.Add(_lblDgVoodoo);
+        _lblDgVoodoo.Visible = false;
         _cboPlaca.DropDownStyle = ComboBoxStyle.DropDownList;
         _cboPlaca.Width = 300;
         foreach (var (rotulo, _) in DgVoodooConfigurator.Placas) _cboPlaca.Items.Add(rotulo);
         _cboPlaca.SelectedIndex = 0;
         barraDg.Controls.Add(_cboPlaca);
-        barraDg.Controls.Add(MakeButton("Aplicar e testar", 4, 0, 140, (_, _) => TrocarPlacaDgVoodoo()));
-        barraDg.Controls.Add(MakeButton("Painel do dgVoodoo", 4, 0, 150, (_, _) => AbrirPainelDgVoodoo()));
+        _btnPlaca = MakeButton("Aplicar e testar", 4, 0, 140, (_, _) => TrocarPlacaDgVoodoo());
+        _btnPainelDg = MakeButton("Painel do dgVoodoo", 4, 0, 150, (_, _) => AbrirPainelDgVoodoo());
+        barraDg.Controls.Add(_btnPlaca);
+        barraDg.Controls.Add(_btnPainelDg);
 
         _barraDgVoodoo.Dock = DockStyle.Bottom;
         _barraDgVoodoo.Height = 40;
-        _barraDgVoodoo.Visible = false;
         _barraDgVoodoo.Controls.Add(barraDg);
 
         _p4.Controls.Add(split);
         _p4.Controls.Add(bar);
         _p4.Controls.Add(_barraDgVoodoo);
+    }
+
+    /// <summary>
+    /// Bisseção: desliga uma peça de cada vez e diz o que cada resultado significa.
+    /// Quando o jogo nem abre, os suspeitos são três — dgVoodoo, ReShade e o próprio jogo
+    /// — e trocar configuração no escuro não conclui nada. Renomear é reversível.
+    /// </summary>
+    private void IsolarCausa()
+    {
+        if (_profile is null) { Warn("Faça a detecção primeiro."); return; }
+
+        var rodando = ProcessoDoJogoRodando(_profile.RealExePath);
+        if (rodando is not null)
+        {
+            Warn($"Feche o jogo ({rodando}.exe) antes: arquivo em uso não é renomeado.");
+            return;
+        }
+
+        var proximo = _isolamento switch
+        {
+            EstadoIsolamento.Tudo => EstadoIsolamento.SemDgVoodoo,
+            EstadoIsolamento.SemDgVoodoo => EstadoIsolamento.SemReShade,
+            _ => EstadoIsolamento.Tudo,
+        };
+
+        // Sem dgVoodoo na jogada, o teste dele não existe: pula direto para o ReShade.
+        if (proximo == EstadoIsolamento.SemDgVoodoo && !_profile.NeedsDgVoodoo)
+            proximo = EstadoIsolamento.SemReShade;
+
+        ShowStep(3);
+        _txtLog.Clear();
+        try
+        {
+            var iso = new Isolamento(Log);
+            iso.Aplicar(proximo, _profile.ExeFolder, _profile.RendererFolder ?? _profile.ExeFolder);
+            _isolamento = proximo;
+
+            _status.Text = proximo switch
+            {
+                EstadoIsolamento.SemDgVoodoo => "Teste 1 de 2: dgVoodoo desligado. Abra o jogo e volte aqui.",
+                EstadoIsolamento.SemReShade => "Teste 2 de 2: ReShade desligado. Abra o jogo e volte aqui.",
+                _ => "Instalação religada por inteiro.",
+            };
+
+            MessageBox.Show(this, Isolamento.Leitura(proximo) +
+                "\r\n\r\nClique em \"Isolar a causa\" de novo para passar ao próximo teste " +
+                "(a última etapa religa tudo).",
+                "Isolar a causa", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex) { Warn(ex.Message); }
     }
 
     /// <summary>Reescreve o dgVoodoo.conf com outra placa, sem reinstalar nada.</summary>
@@ -942,6 +999,18 @@ public sealed class MainForm : Form
         if (_profile?.RealExePath is null || !File.Exists(_profile.RealExePath)) return;
         try
         {
+            // Jogo com DRM da Steam recusa ser aberto pelo .exe ("Application load error
+            // 5:0000065434"): o wrapper exige ter sido lançado pelo cliente. Então quando
+            // o jogo está numa biblioteca da Steam, quem abre é a Steam.
+            var appId = SteamGame.FindAppId(_profile.GameFolder);
+            if (appId is not null)
+            {
+                Process.Start(new ProcessStartInfo(SteamGame.RunUrl(appId)) { UseShellExecute = true });
+                _status.Text = $"Pedido à Steam para abrir o jogo (AppID {appId}). " +
+                               "Depois de fechar, clique em Verificar de novo.";
+                return;
+            }
+
             Process.Start(new ProcessStartInfo(_profile.RealExePath)
             {
                 UseShellExecute = true,
@@ -1127,8 +1196,10 @@ public sealed class MainForm : Form
         UseWaitCursor = true;
         try
         {
+            new Isolamento(Log).ReligarTudo(pasta);
             var sobras = engine.LimpezaTotal(pasta);
             _manifest = null;
+            _isolamento = EstadoIsolamento.Tudo;
             if (sobras.Count > 0)
             {
                 _status.Text = $"{sobras.Count} item(ns) não saíram — veja o log.";
@@ -1354,7 +1425,10 @@ public sealed class MainForm : Form
     {
         if (_profile is null) return;
         _manifest ??= InstallManifest.Load(_profile.ExeFolder);
-        _barraDgVoodoo.Visible = _profile.NeedsDgVoodoo;
+        _lblDgVoodoo.Visible = _profile.NeedsDgVoodoo;
+        _cboPlaca.Visible = _profile.NeedsDgVoodoo;
+        _btnPlaca.Visible = _profile.NeedsDgVoodoo;
+        _btnPainelDg.Visible = _profile.NeedsDgVoodoo;
 
         _grid.Rows.Clear();
         foreach (var c in CheckpointVerifier.Verify(_profile, _manifest))
