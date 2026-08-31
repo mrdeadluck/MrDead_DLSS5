@@ -54,8 +54,13 @@ public sealed class MainForm : Form
     private readonly TextBox _txtLog = new();
 
     // Passo 4 — verificação
-    private readonly ListView _lvChecks = new();
+    private readonly DataGridView _grid = new();
     private readonly TextBox _txtGuide = new();
+
+    private readonly Panel _sidebar = new();
+    private readonly Label[] _stepLabels = new Label[5];
+    private static readonly string[] StepNames =
+        { "Pastas", "Detecção", "Plano", "Instalação", "Verificação" };
 
     private int _step;
     private const int LastStep = 4;
@@ -64,9 +69,11 @@ public sealed class MainForm : Form
     {
         Text = "DLSS 5 AutoInstaller";
         StartPosition = FormStartPosition.CenterScreen;
-        MinimumSize = new Size(980, 700);
-        Size = new Size(1060, 780);
-        Font = new Font("Segoe UI", 9F);
+        MinimumSize = new Size(1180, 720);
+        Size = new Size(1280, 840);
+        Font = Ui.BodyFont;
+        BackColor = Ui.Page;
+        ForeColor = Ui.Ink;
 
         BuildChrome();
         BuildStep0();
@@ -96,29 +103,36 @@ public sealed class MainForm : Form
 
     private void BuildChrome()
     {
-        var root = new TableLayoutPanel
+        BuildSidebar();
+
+        var main = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             RowCount = 4,
-            Padding = new Padding(16),
+            Padding = new Padding(24, 20, 24, 16),
+            BackColor = Ui.Page,
         };
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        main.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        main.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        main.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        main.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        _stepTitle.Font = new Font("Segoe UI", 15F, FontStyle.Bold);
+        _stepTitle.Font = Ui.TitleFont;
+        _stepTitle.ForeColor = Ui.Ink;
         _stepTitle.AutoSize = true;
         _stepTitle.Margin = new Padding(0, 0, 0, 4);
 
         // AutoSize + MaximumSize deixa o texto quebrar linha sem ser cortado pela linha AutoSize.
         _stepHint.AutoSize = true;
-        _stepHint.MaximumSize = new Size(960, 0);
-        _stepHint.ForeColor = SystemColors.GrayText;
-        _stepHint.Margin = new Padding(0, 0, 0, 10);
+        _stepHint.MaximumSize = new Size(880, 0);
+        _stepHint.ForeColor = Ui.Muted;
+        _stepHint.Margin = new Padding(0, 0, 0, 12);
 
         _content.Dock = DockStyle.Fill;
+        _content.BackColor = Ui.Card;
+        _content.BorderStyle = BorderStyle.FixedSingle;
+        _content.Padding = new Padding(16);
 
         var footer = new TableLayoutPanel
         {
@@ -126,7 +140,7 @@ public sealed class MainForm : Form
             ColumnCount = 3,
             RowCount = 1,
             AutoSize = true,
-            Margin = new Padding(0, 10, 0, 0),
+            Margin = new Padding(0, 12, 0, 0),
         };
         footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -135,25 +149,96 @@ public sealed class MainForm : Form
         _status.AutoSize = false;
         _status.Dock = DockStyle.Fill;
         _status.TextAlign = ContentAlignment.MiddleLeft;
-        _status.ForeColor = SystemColors.GrayText;
+        _status.ForeColor = Ui.Muted;
 
-        _btnBack.Text = "< Voltar";
-        _btnBack.Size = new Size(110, 34);
+        Ui.MakeSecondary(_btnBack, "< Voltar");
+        _btnBack.Size = new Size(110, 36);
+        _btnBack.Margin = new Padding(0, 0, 8, 0);
         _btnBack.Click += (_, _) => ShowStep(_step - 1);
 
-        _btnNext.Text = "Avançar >";
-        _btnNext.Size = new Size(150, 34);
+        Ui.MakePrimary(_btnNext, "Avançar >");
+        _btnNext.Size = new Size(160, 36);
         _btnNext.Click += async (_, _) => await NextAsync();
 
         footer.Controls.Add(_status, 0, 0);
         footer.Controls.Add(_btnBack, 1, 0);
         footer.Controls.Add(_btnNext, 2, 0);
 
-        root.Controls.Add(_stepTitle, 0, 0);
-        root.Controls.Add(_stepHint, 0, 1);
-        root.Controls.Add(_content, 0, 2);
-        root.Controls.Add(footer, 0, 3);
+        main.Controls.Add(_stepTitle, 0, 0);
+        main.Controls.Add(_stepHint, 0, 1);
+        main.Controls.Add(_content, 0, 2);
+        main.Controls.Add(footer, 0, 3);
+
+        // TableLayoutPanel em vez de Dock: a posição da barra lateral não depende
+        // da ordem em que os controles entram na coleção.
+        var root = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            BackColor = Ui.Page,
+        };
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 210));
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        root.Controls.Add(_sidebar, 0, 0);
+        root.Controls.Add(main, 1, 0);
         Controls.Add(root);
+    }
+
+    private void BuildSidebar()
+    {
+        _sidebar.Dock = DockStyle.Fill;
+        _sidebar.BackColor = Ui.Sidebar;
+        _sidebar.Margin = new Padding(0);
+
+        _sidebar.Controls.Add(new Label
+        {
+            Text = "DLSS 5",
+            Font = Ui.BrandFont,
+            ForeColor = Color.White,
+            AutoSize = false,
+            Bounds = new Rectangle(22, 24, 170, 26),
+        });
+        _sidebar.Controls.Add(new Label
+        {
+            Text = "AutoInstaller",
+            Font = Ui.BodyFont,
+            ForeColor = Ui.SidebarIdle,
+            AutoSize = false,
+            Bounds = new Rectangle(23, 50, 170, 20),
+        });
+
+        int y = 96;
+        for (int i = 0; i < StepNames.Length; i++)
+        {
+            var lbl = new Label
+            {
+                Text = $"{i + 1}.   {StepNames[i]}",
+                AutoSize = false,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Font = Ui.StepFont,
+                ForeColor = Ui.SidebarIdle,
+                Padding = new Padding(14, 0, 0, 0),
+                Bounds = new Rectangle(0, y, 210, 36),
+            };
+            _sidebar.Controls.Add(lbl);
+            _stepLabels[i] = lbl;
+            y += 40;
+        }
+    }
+
+    /// <summary>Marca o passo atual na barra lateral e apaga os que ainda não chegaram.</summary>
+    private void UpdateSidebar()
+    {
+        for (int i = 0; i < _stepLabels.Length; i++)
+        {
+            bool current = i == _step;
+            _stepLabels[i].BackColor = current ? Ui.Accent : Ui.Sidebar;
+            _stepLabels[i].ForeColor = current
+                ? Color.White
+                : (i < _step ? Ui.SidebarDone : Ui.SidebarIdle);
+            _stepLabels[i].Font = current ? Ui.StepFontOn : Ui.StepFont;
+        }
     }
 
     private static Label Caption(string text, int top, int left = 0, int width = 220) => new()
@@ -167,7 +252,8 @@ public sealed class MainForm : Form
 
     private static Button MakeButton(string text, int top, int left, int width, EventHandler onClick)
     {
-        var b = new Button { Text = text, Top = top - 1, Left = left, Width = width, Height = 27 };
+        var b = Ui.Secondary(text);
+        b.SetBounds(left, top - 1, width, 29);
         b.Click += onClick;
         return b;
     }
@@ -338,10 +424,7 @@ public sealed class MainForm : Form
         _p1.Controls.Add(_chkClean);
         y += 34;
 
-        _txtNotes.Multiline = true;
-        _txtNotes.ReadOnly = true;
-        _txtNotes.ScrollBars = ScrollBars.Vertical;
-        _txtNotes.BorderStyle = BorderStyle.FixedSingle;
+        Ui.StyleReadOnlyBox(_txtNotes);
         _txtNotes.SetBounds(0, y, 920, 150);
         _txtNotes.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
         _p1.Controls.Add(_txtNotes);
@@ -476,17 +559,19 @@ public sealed class MainForm : Form
     {
         _p2 = new Panel { Dock = DockStyle.Fill };
 
-        _txtBlockers.Multiline = true;
-        _txtBlockers.ReadOnly = true;
-        _txtBlockers.ScrollBars = ScrollBars.Vertical;
-        _txtBlockers.BorderStyle = BorderStyle.FixedSingle;
-        _txtBlockers.ForeColor = Color.Firebrick;
+        Ui.StyleReadOnlyBox(_txtBlockers);
+        _txtBlockers.ForeColor = Ui.Bad;
         _txtBlockers.Dock = DockStyle.Top;
         _txtBlockers.Height = 90;
         _txtBlockers.Visible = false;
 
         _lstPlan.Dock = DockStyle.Fill;
         _lstPlan.IntegralHeight = false;
+        _lstPlan.BorderStyle = BorderStyle.FixedSingle;
+        _lstPlan.BackColor = Ui.Card;
+        _lstPlan.ForeColor = Ui.Ink;
+        _lstPlan.Font = Ui.BodyFont;
+        _lstPlan.ItemHeight = 22;
 
         _p2.Controls.Add(_lstPlan);
         _p2.Controls.Add(_txtBlockers);
@@ -499,12 +584,9 @@ public sealed class MainForm : Form
     private void BuildStep3()
     {
         _p3 = new Panel { Dock = DockStyle.Fill };
-        _txtLog.Multiline = true;
-        _txtLog.ReadOnly = true;
+        Ui.StyleReadOnlyBox(_txtLog, mono: true);
         _txtLog.ScrollBars = ScrollBars.Both;
         _txtLog.WordWrap = false;
-        _txtLog.BorderStyle = BorderStyle.FixedSingle;
-        _txtLog.Font = new Font("Consolas", 9F);
         _txtLog.Dock = DockStyle.Fill;
         _p3.Controls.Add(_txtLog);
     }
@@ -532,22 +614,49 @@ public sealed class MainForm : Form
             catch (ArgumentOutOfRangeException) { }
         };
 
-        _lvChecks.View = View.Details;
-        _lvChecks.FullRowSelect = true;
-        _lvChecks.GridLines = true;
-        _lvChecks.Dock = DockStyle.Fill;
-        _lvChecks.Columns.Add("Estado", 90);
-        _lvChecks.Columns.Add("Verificação", 300);
-        _lvChecks.Columns.Add("Detalhe", 380);
-        _lvChecks.Columns.Add("Como corrigir", 420);
+        // DataGridView e não ListView: o ListView em modo Details corta o texto, e é
+        // justamente na coluna de detalhe/correção que está o que precisa ser lido.
+        _grid.Dock = DockStyle.Fill;
+        _grid.BackgroundColor = Ui.Card;
+        _grid.BorderStyle = BorderStyle.None;
+        _grid.GridColor = Ui.Line;
+        _grid.ReadOnly = true;
+        _grid.AllowUserToAddRows = false;
+        _grid.AllowUserToDeleteRows = false;
+        _grid.AllowUserToResizeRows = false;
+        _grid.RowHeadersVisible = false;
+        _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        _grid.MultiSelect = false;
+        _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        _grid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
+        _grid.EnableHeadersVisualStyles = false;
+        _grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single;
+        _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+        _grid.ColumnHeadersHeight = 34;
+        _grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(243, 245, 249);
+        _grid.ColumnHeadersDefaultCellStyle.ForeColor = Ui.Muted;
+        _grid.ColumnHeadersDefaultCellStyle.Font = Ui.BoldFont;
+        _grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(6, 0, 0, 0);
+        _grid.DefaultCellStyle.Font = Ui.BodyFont;
+        _grid.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
+        _grid.DefaultCellStyle.Padding = new Padding(6, 6, 6, 6);
+        _grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(233, 241, 251);
+        _grid.DefaultCellStyle.SelectionForeColor = Ui.Ink;
 
-        _txtGuide.Multiline = true;
-        _txtGuide.ReadOnly = true;
-        _txtGuide.ScrollBars = ScrollBars.Vertical;
-        _txtGuide.BorderStyle = BorderStyle.FixedSingle;
+        _grid.ColumnCount = 4;
+        _grid.Columns[0].HeaderText = "Estado";
+        _grid.Columns[0].FillWeight = 11;
+        _grid.Columns[1].HeaderText = "Verificação";
+        _grid.Columns[1].FillWeight = 25;
+        _grid.Columns[2].HeaderText = "Detalhe";
+        _grid.Columns[2].FillWeight = 35;
+        _grid.Columns[3].HeaderText = "Como corrigir";
+        _grid.Columns[3].FillWeight = 29;
+
+        Ui.StyleReadOnlyBox(_txtGuide);
         _txtGuide.Dock = DockStyle.Fill;
 
-        split.Panel1.Controls.Add(_lvChecks);
+        split.Panel1.Controls.Add(_grid);
         split.Panel2.Controls.Add(_txtGuide);
 
         var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 44, Padding = new Padding(0, 8, 0, 0) };
@@ -626,6 +735,7 @@ public sealed class MainForm : Form
         };
         _stepTitle.Text = title;
         _stepHint.Text = hint;
+        UpdateSidebar();
         _content.Controls.Add(panel);
         panel.Dock = DockStyle.Fill;
 
@@ -809,21 +919,33 @@ public sealed class MainForm : Form
         if (_profile is null) return;
         _manifest ??= InstallManifest.Load(_profile.ExeFolder);
 
-        _lvChecks.Items.Clear();
+        _grid.Rows.Clear();
         foreach (var c in CheckpointVerifier.Verify(_profile, _manifest))
         {
-            var item = new ListViewItem(StateText(c.State));
-            item.SubItems.Add($"{c.Number}. {c.Title}");
-            item.SubItems.Add(c.Detail);
-            item.SubItems.Add(c.FixHint ?? "");
-            item.ForeColor = c.State switch
+            int i = _grid.Rows.Add(StateText(c.State), $"{c.Number}. {c.Title}",
+                c.Detail, c.FixHint ?? "");
+            var row = _grid.Rows[i];
+            var color = Ui.ForState(c.State switch
             {
-                CheckStatus.Pass => Color.DarkGreen,
-                CheckStatus.Fail => Color.Firebrick,
-                CheckStatus.Warning => Color.DarkGoldenrod,
-                _ => SystemColors.ControlText,
-            };
-            _lvChecks.Items.Add(item);
+                CheckStatus.Pass => CheckStatusKind.Ok,
+                CheckStatus.Fail => CheckStatusKind.Bad,
+                CheckStatus.Warning => CheckStatusKind.Warn,
+                CheckStatus.Manual => CheckStatusKind.Info,
+                _ => CheckStatusKind.Neutral,
+            });
+
+            // Só o estado leva cor forte; o resto fica legível em preto, e a linha que
+            // falhou ganha destaque no nome da verificação.
+            row.Cells[0].Style.ForeColor = color;
+            row.Cells[0].Style.SelectionForeColor = color;
+            row.Cells[0].Style.Font = Ui.BoldFont;
+            if (c.State is CheckStatus.Fail or CheckStatus.Warning)
+            {
+                row.Cells[1].Style.ForeColor = color;
+                row.Cells[1].Style.SelectionForeColor = color;
+            }
+            if (c.State == CheckStatus.Pass)
+                row.Cells[2].Style.ForeColor = Ui.Muted;
         }
 
         var sb = new System.Text.StringBuilder();
