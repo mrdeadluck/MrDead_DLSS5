@@ -538,6 +538,71 @@ public class KitResolverTests
     }
 }
 
+public class GameDetectorTests
+{
+    /// <summary>PE mínimo: só o que o GetArchitecture lê (MZ, offset em 0x3C, "PE\0\0", machine).</summary>
+    private static void WriteFakePe(string path, PeArchitecture arch, int totalSize)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var bytes = new byte[Math.Max(totalSize, 0x100)];
+        bytes[0] = (byte)'M';
+        bytes[1] = (byte)'Z';
+        const int peOffset = 0x80;
+        BitConverter.GetBytes(peOffset).CopyTo(bytes, 0x3C);
+        bytes[peOffset] = (byte)'P';
+        bytes[peOffset + 1] = (byte)'E';
+        ushort machine = arch == PeArchitecture.X64 ? (ushort)0x8664 : (ushort)0x014C;
+        BitConverter.GetBytes(machine).CopyTo(bytes, peOffset + 4);
+        File.WriteAllBytes(path, bytes);
+    }
+
+    private static string NewGameDir() =>
+        Path.Combine(Path.GetTempPath(), "dlss5-game-" + Guid.NewGuid().ToString("N"));
+
+    [Fact]
+    public void PicksTheUnrealShippingBinary_NotTheRootShim()
+    {
+        // O exe da raiz de um jogo Unreal só relança o binário real. Instalar ao lado dele
+        // deixa o ReShade numa pasta que o processo que renderiza nunca consulta — e aí o
+        // ReShade.log nem chega a existir.
+        var dir = NewGameDir();
+        try
+        {
+            WriteFakePe(Path.Combine(dir, "Duskfade.exe"), PeArchitecture.X64, 300 * 1024);
+            var shipping = Path.Combine(dir, "Duskfade", "Binaries", "Win64", "Duskfade-Win64-Shipping.exe");
+            WriteFakePe(shipping, PeArchitecture.X64, 2 * 1024 * 1024);
+            WriteFakePe(Path.Combine(dir, "Engine", "Binaries", "Win64", "CrashReportClient.exe"),
+                PeArchitecture.X64, 5 * 1024 * 1024);
+
+            var detection = GameDetector.Detect(dir);
+
+            Assert.Equal(shipping, detection.Profile.RealExePath);
+            Assert.Contains(detection.Notes, n => n.Contains("Unreal", StringComparison.OrdinalIgnoreCase));
+        }
+        finally { if (Directory.Exists(dir)) Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void KeepsTheRootExeWhenThereIsNoEngineLayout()
+    {
+        // Caso comum (Unity e afins): o exe da raiz é o certo, e um instalador enterrado
+        // em _CommonRedist não pode roubar a escolha.
+        var dir = NewGameDir();
+        try
+        {
+            var root = Path.Combine(dir, "Jogo.exe");
+            WriteFakePe(root, PeArchitecture.X64, 600 * 1024);
+            WriteFakePe(Path.Combine(dir, "_CommonRedist", "vcredist", "vcredist_x64.exe"),
+                PeArchitecture.X64, 10 * 1024 * 1024);
+
+            var detection = GameDetector.Detect(dir);
+
+            Assert.Equal(root, detection.Profile.RealExePath);
+        }
+        finally { if (Directory.Exists(dir)) Directory.Delete(dir, true); }
+    }
+}
+
 public class ReShadeExtractorTests
 {
     /// <summary>Monta um "instalador": bytes de lixo (como um PE) + um ZIP anexado no fim.</summary>

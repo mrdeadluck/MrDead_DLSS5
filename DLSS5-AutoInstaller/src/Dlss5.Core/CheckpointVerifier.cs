@@ -202,7 +202,10 @@ public static class CheckpointVerifier
         {
             yield return new CheckResult(7, "ReShade carregou", CheckStatus.Manual,
                 "ReShade.log ainda não existe — abra o jogo uma vez.",
-                "Depois de abrir o jogo, volte aqui e clique em Verificar de novo.");
+                "Depois de abrir o jogo, volte aqui e clique em Verificar de novo. Se você JÁ abriu " +
+                "e o arquivo continua não existindo, o executável escolhido não é o que renderiza: " +
+                "procure na pasta do jogo por Binaries\\Win64 ou por um *-Shipping.exe (Unreal) e " +
+                "aponte esse exe no botão \"Outro...\" da tela de detecção.");
             yield break;
         }
 

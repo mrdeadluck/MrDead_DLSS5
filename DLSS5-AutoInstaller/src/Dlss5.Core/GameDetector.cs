@@ -28,6 +28,13 @@ public static class GameDetector
         "easyanticheat", "battleye", "engine\\extras",
     };
 
+    /// <summary>Executáveis auxiliares que a Unreal instala junto e nunca renderizam.</summary>
+    private static readonly string[] HelperExeNames =
+    {
+        "crashreportclient", "unrealcefsubprocess", "epicwebhelper", "unrealeditor",
+        "unrealpak", "bootstrappackagedgame",
+    };
+
     public static DetectionResult Detect(string gameFolder)
     {
         var profile = new GameProfile { GameFolder = gameFolder };
@@ -53,6 +60,11 @@ public static class GameDetector
             .FirstOrDefault(c => LauncherNameHints.Any(h =>
                 Path.GetFileNameWithoutExtension(c.Path).Contains(h, StringComparison.OrdinalIgnoreCase)))
             ?.Path;
+
+        var bestRel = Path.GetRelativePath(gameFolder, best.Path).Replace('/', '\\');
+        if (bestRel.Contains("\\Binaries\\Win", StringComparison.OrdinalIgnoreCase))
+            result.Notes.Add($"Unreal Engine detectada: o alvo é {bestRel}, não o exe da raiz " +
+                             "(esse é só um atalho). Tudo vai para a pasta do binário real.");
 
         DetectApiAndRenderer(profile, result.Notes);
         DetectNativeDlss(profile, result.Notes);
@@ -99,6 +111,21 @@ public static class GameDetector
             var exeDir = Path.GetDirectoryName(exe)!;
             if (size < 300 * 1024 && HasSourceRendererDll(Path.Combine(exeDir, "bin")))
                 score += 70;
+
+            // Unreal Engine: o exe da raiz é só um atalho que relança o binário real em
+            // <Jogo>\Binaries\Win64\<Nome>-Shipping.exe. Sem reconhecer isso, a instalação
+            // para ao lado do atalho — numa pasta onde o processo que renderiza nunca procura,
+            // e o ReShade.log sequer chega a existir.
+            var relLower = "\\" + rel.Replace('/', '\\').ToLowerInvariant();
+            if (name.EndsWith("-shipping", StringComparison.OrdinalIgnoreCase))
+                score += 150;
+            if (relLower.Contains("\\binaries\\win64\\") || relLower.Contains("\\binaries\\win32\\"))
+                score += 60;
+            // Engine\Binaries guarda os auxiliares da própria engine, nunca o jogo.
+            if (relLower.Contains("\\engine\\binaries\\"))
+                score -= 140;
+            if (HelperExeNames.Any(h => name.Equals(h, StringComparison.OrdinalIgnoreCase)))
+                score -= 200;
 
             list.Add(new ExeCandidate(exe, arch, size, score));
         }
