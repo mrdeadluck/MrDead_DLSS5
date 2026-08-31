@@ -21,6 +21,9 @@ public static class ManualSteps
         steps.Add(new ManualStep(n++, "Desligar as sobreposições (overlays)",
             "Steam → clique direito no jogo → Propriedades → desmarque a sobreposição. " +
             "NVIDIA App → Configurações → Sobreposição no jogo → desligar. " +
+            "EA App/Origin (Titanfall, Battlefield, Need for Speed), Discord e " +
+            "RivaTuner/MSI Afterburner fazem a mesma coisa e são os que mais passam " +
+            "despercebidos — o RivaTuner costuma subir junto com o Windows. " +
             "Isso não dá para automatizar de forma confiável: a Steam restaura o arquivo do overlay ao reabrir. " +
             "Overlays podem carregar o DXGI antes do ReShade e roubar a interceptação.", false));
 

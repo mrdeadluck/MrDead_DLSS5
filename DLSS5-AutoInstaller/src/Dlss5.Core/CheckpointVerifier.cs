@@ -224,7 +224,7 @@ public static class CheckpointVerifier
         }
 
         // 7/8 — ReShade carregou e viu o swapchain (lê o log se já existir)
-        r.AddRange(VerifyReShadeLog(exe));
+        r.AddRange(VerifyReShadeLog(exe, profile.GameFolder));
 
         // 14/15/16 — dependem do jogo rodando
         r.AddRange(VerifyFeedLogs(exe, route));
@@ -244,17 +244,50 @@ public static class CheckpointVerifier
         return false;
     }
 
-    private static IEnumerable<CheckResult> VerifyReShadeLog(string exeFolder)
+    /// <summary>
+    /// O ReShade grava o log ao lado da DLL que foi carregada. Se ele não está na pasta do
+    /// exe mas existe em OUTRA pasta do jogo, isso não é "não carregou" — é "carregou em
+    /// outro lugar", e essa outra pasta é onde a instalação deveria ter ido. Achar o
+    /// arquivo é bem mais barato do que deduzir a estrutura de cada engine.
+    /// </summary>
+    private static string? LogEmOutraPasta(string exeFolder, string? gameFolder)
+    {
+        if (string.IsNullOrWhiteSpace(gameFolder) || !Directory.Exists(gameFolder)) return null;
+        try
+        {
+            return Directory.EnumerateFiles(gameFolder, "ReShade.log", SearchOption.AllDirectories)
+                .FirstOrDefault(p => !string.Equals(
+                    Path.GetDirectoryName(p), exeFolder, StringComparison.OrdinalIgnoreCase));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static IEnumerable<CheckResult> VerifyReShadeLog(string exeFolder, string? gameFolder = null)
     {
         var log = Path.Combine(exeFolder, "ReShade.log");
         if (!File.Exists(log))
         {
+            var noutraPasta = LogEmOutraPasta(exeFolder, gameFolder);
+            if (noutraPasta is not null)
+            {
+                yield return new CheckResult(7, "ReShade carregou — mas em outra pasta", CheckStatus.Fail,
+                    $"ReShade.log não está na pasta do exe, e sim em {Path.GetDirectoryName(noutraPasta)}.",
+                    "É ali que o processo que renderiza roda. Volte à Detecção, aponte no botão " +
+                    "\"Outro...\" o executável dessa pasta e instale de novo.");
+                yield break;
+            }
+
             yield return new CheckResult(7, "ReShade carregou", CheckStatus.Manual,
                 "ReShade.log ainda não existe — abra o jogo uma vez.",
                 "Depois de abrir o jogo, volte aqui e clique em Verificar de novo. Se você JÁ abriu " +
-                "e o arquivo continua não existindo, o executável escolhido não é o que renderiza: " +
-                "procure na pasta do jogo por Binaries\\Win64 ou por um *-Shipping.exe (Unreal) e " +
-                "aponte esse exe no botão \"Outro...\" da tela de detecção.");
+                "e o arquivo continua não existindo, o ReShade não foi carregado: quase sempre é " +
+                "uma sobreposição que pegou o DXGI antes (EA App/Origin, Discord, RivaTuner/MSI " +
+                "Afterburner, Steam, NVIDIA App) — desligue todas e teste de novo. Se ainda assim " +
+                "não aparecer, o executável escolhido não é o que renderiza: procure Binaries\\Win64 " +
+                "ou um *-Shipping.exe e aponte no botão \"Outro...\" da tela de detecção.");
             yield break;
         }
 

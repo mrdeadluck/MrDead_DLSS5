@@ -1581,3 +1581,60 @@ public class TeclaDoOverlayTests
         Assert.False(tecla.Value.Ctrl || tecla.Value.Shift || tecla.Value.Alt);
     }
 }
+
+public class LogEmOutraPastaTests
+{
+    [Fact]
+    public void LogNoutraPastaAponta_OExeErrado_EmVezDe_NaoCarregou()
+    {
+        // O ReShade grava o log ao lado da DLL carregada. Se ele existe em outra pasta do
+        // jogo, o ReShade carregou — só que num processo que roda de lá, e é ali que a
+        // instalação deveria ter ido. Dizer "abra o jogo uma vez" nesse caso é enganoso.
+        var raiz = Path.Combine(Path.GetTempPath(), "dlss5log_" + Guid.NewGuid().ToString("N"));
+        var real = Path.Combine(raiz, "Jogo", "Binaries", "Win64");
+        Directory.CreateDirectory(real);
+        try
+        {
+            File.WriteAllText(Path.Combine(real, "ReShade.log"), new string('x', 4000));
+
+            var perfil = new GameProfile
+            {
+                GameFolder = raiz,
+                RealExePath = Path.Combine(raiz, "atalho.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D11,
+            };
+
+            var c7 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 7);
+
+            Assert.Equal(CheckStatus.Fail, c7.State);
+            Assert.Contains("outra pasta", c7.Title);
+            Assert.Contains("Win64", c7.Detail);
+        }
+        finally { Directory.Delete(raiz, true); }
+    }
+
+    [Fact]
+    public void SemLogNenhumContinuaPedindoParaAbrirOJogo()
+    {
+        var raiz = Path.Combine(Path.GetTempPath(), "dlss5log_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(raiz);
+        try
+        {
+            var perfil = new GameProfile
+            {
+                GameFolder = raiz,
+                RealExePath = Path.Combine(raiz, "jogo.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D11,
+            };
+
+            var c7 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 7);
+
+            Assert.Equal(CheckStatus.Manual, c7.State);
+            // A causa mais comum quando o jogo JÁ foi aberto tem que estar na dica.
+            Assert.Contains("EA App", c7.FixHint!);
+        }
+        finally { Directory.Delete(raiz, true); }
+    }
+}
