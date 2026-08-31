@@ -71,6 +71,29 @@ public static class ReShadeConfigWriter
     }
 
     /// <summary>Nome legível da combinação, para instruções e para a tela.</summary>
+    /// <summary>
+    /// Lê a linha KeyOverlay de um ReShade.ini já gravado. O que vale para o jogo é o que
+    /// está no arquivo, não o que a tela mostra — e a tecla é lembrada entre execuções.
+    /// </summary>
+    public static (int VirtualKey, bool Ctrl, bool Shift, bool Alt)? LerTeclaDoOverlay(string iniText)
+    {
+        foreach (var linha in iniText.Replace("\r\n", "\n").Split('\n'))
+        {
+            var t = linha.Trim();
+            if (!t.StartsWith("KeyOverlay", StringComparison.OrdinalIgnoreCase)) continue;
+
+            int eq = t.IndexOf('=');
+            if (eq < 0) continue;
+
+            var partes = t[(eq + 1)..].Split(',', StringSplitOptions.TrimEntries);
+            if (partes.Length == 0 || !int.TryParse(partes[0], out var vk)) continue;
+
+            bool Bit(int i) => partes.Length > i && partes[i] == "1";
+            return (vk, Bit(1), Bit(2), Bit(3));
+        }
+        return null;
+    }
+
     public static string DescribeKey(int virtualKey, bool ctrl = false, bool shift = false, bool alt = false)
     {
         var name = OverlayKeys.FirstOrDefault(k => k.VirtualKey == virtualKey)?.Label

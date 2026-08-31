@@ -53,6 +53,33 @@ public static class CheckpointVerifier
             : new CheckResult(4, "Executável real identificado", CheckStatus.Fail,
                 "Não identificado.", "Selecione manualmente o executável real do jogo."));
 
+        // 9 — a tecla que o ReShade.ini REALMENTE gravou
+        //
+        // A tecla escolhida é lembrada entre execuções: basta ter trocado uma vez para
+        // todo jogo instalado depois usar a nova, e o sintoma vira "o Home não abre" em
+        // vários jogos ao mesmo tempo, sem nada de errado na instalação. Ler do arquivo
+        // (e não da tela) é o que transforma isso numa linha visível.
+        var ini = Path.Combine(exe, "ReShade.ini");
+        if (File.Exists(ini))
+        {
+            string textoIni;
+            try { textoIni = ReadShared(ini); } catch { textoIni = ""; }
+            var tecla = ReShadeConfigWriter.LerTeclaDoOverlay(textoIni);
+            bool ehHome = tecla is not null
+                          && tecla.Value.VirtualKey == ReShadeConfigWriter.KeyHome
+                          && !tecla.Value.Ctrl && !tecla.Value.Shift && !tecla.Value.Alt;
+            r.Add(new CheckResult(9, "Tecla que abre o painel do ReShade",
+                tecla is null ? CheckStatus.Warning : CheckStatus.Manual,
+                tecla is null
+                    ? "ReShade.ini não tem a linha KeyOverlay."
+                    : $"É {ReShadeConfigWriter.DescribeKey(tecla.Value.VirtualKey, tecla.Value.Ctrl, tecla.Value.Shift, tecla.Value.Alt)}" +
+                      (ehHome ? "." : " — NÃO é Home."),
+                ehHome
+                    ? "No jogo, aperte Home."
+                    : "É esta a tecla a apertar no jogo. Para voltar ao Home, mude na tela de " +
+                      "detecção e instale de novo — a escolha fica guardada entre execuções."));
+        }
+
         // 3 — o DLSS do jogo e o DLSS 5 disputando a mesma imagem
         if (profile.HasNativeDlss && profile.NeedsFeeder)
         {

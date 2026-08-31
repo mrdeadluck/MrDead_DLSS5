@@ -1541,3 +1541,43 @@ public class ChaveAvulsaTests
         Assert.Equal("internal3D", DgVoodooConfigurator.LerChave(voltou, "DirectX", "VideoCard"));
     }
 }
+
+public class TeclaDoOverlayTests
+{
+    [Fact]
+    public void LeDeVoltaOQueFoiGravado()
+    {
+        // A tecla fica guardada entre execuções: se mudou uma vez, vale para todo jogo
+        // instalado depois. Ler do ini é o que permite dizer isso na tela em vez de
+        // deixar o usuário achando que "o Home parou de funcionar".
+        var ini = ReShadeConfigWriter.BuildReShadeIni(
+            ReShadeConfigWriter.KeyHome, ctrl: true, shift: false, alt: true, "ReShadePreset.ini");
+
+        var tecla = ReShadeConfigWriter.LerTeclaDoOverlay(ini);
+
+        Assert.NotNull(tecla);
+        Assert.Equal(ReShadeConfigWriter.KeyHome, tecla!.Value.VirtualKey);
+        Assert.True(tecla.Value.Ctrl);
+        Assert.False(tecla.Value.Shift);
+        Assert.True(tecla.Value.Alt);
+    }
+
+    [Fact]
+    public void IniSemALinhaNaoInventaTecla()
+    {
+        Assert.Null(ReShadeConfigWriter.LerTeclaDoOverlay("[GENERAL]\nEffectSearchPaths=.\\reshade-shaders\n"));
+        Assert.Null(ReShadeConfigWriter.LerTeclaDoOverlay("KeyOverlay=nao-e-numero,0,0,0"));
+    }
+
+    [Fact]
+    public void HomePuroEhReconhecidoComoHomePuro()
+    {
+        var ini = ReShadeConfigWriter.BuildReShadeIni(
+            ReShadeConfigWriter.KeyHome, false, false, false, "ReShadePreset.ini");
+        var tecla = ReShadeConfigWriter.LerTeclaDoOverlay(ini);
+
+        Assert.NotNull(tecla);
+        Assert.Equal(ReShadeConfigWriter.KeyHome, tecla!.Value.VirtualKey);
+        Assert.False(tecla.Value.Ctrl || tecla.Value.Shift || tecla.Value.Alt);
+    }
+}
