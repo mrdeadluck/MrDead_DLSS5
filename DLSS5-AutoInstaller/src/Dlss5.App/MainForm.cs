@@ -571,7 +571,6 @@ public sealed class MainForm : Form
         _lstPlan.BackColor = Ui.Card;
         _lstPlan.ForeColor = Ui.Ink;
         _lstPlan.Font = Ui.BodyFont;
-        _lstPlan.ItemHeight = 22;
 
         _p2.Controls.Add(_lstPlan);
         _p2.Controls.Add(_txtBlockers);
