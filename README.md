@@ -7,8 +7,13 @@ documentação técnica e um programa que automatiza a instalação.
 
 ## ⬇️ Baixar o programa
 
+**[DLSS5-Pacote-Completo.zip](https://github.com/mrdeadluck/MrDead_DLSS5/releases/download/installer-latest/DLSS5-Pacote-Completo.zip)**
+— tudo junto: o programa, o kit inteiro e o `LEIA-ME.txt`. É este que você baixa
+para usar ou para mandar para alguém.
+
 **[DLSS5-AutoInstaller.exe](https://github.com/mrdeadluck/MrDead_DLSS5/releases/download/installer-latest/DLSS5-AutoInstaller.exe)**
-— executável único, não precisa instalar o .NET.
+— só o programa, quando você já tem o kit. Executável único, não precisa
+instalar o .NET.
 
 Esse link é fixo e **sempre aponta para o build mais recente**: cada mudança no
 código gera um novo executável automaticamente e substitui o anterior. Também dá
@@ -58,18 +63,24 @@ inteira o clone é bem mais prático.
 
 ## Compartilhar com alguém
 
-A pasta `DLSS 5 Files` já está enxuta (230 MB) e traz um `LEIA-ME.txt` com as
-instruções. Então:
+Mande o link do **DLSS5-Pacote-Completo.zip** lá de cima. A pessoa baixa um
+arquivo só, extrai e roda — o `LEIA-ME.txt` com as instruções vem dentro.
 
-1. Copie o `DLSS5-AutoInstaller.exe` para dentro da pasta `DLSS 5 Files`.
-2. Clique com o botão direito na pasta → **Enviar para → Pasta compactada**.
-3. Mande o `.zip` por Drive, WhatsApp ou pendrive.
+Download de Release não consome cota de LFS, então pode compartilhar à vontade.
+O que **não** convém é pedir para clonarem o repositório: aí sim o download dos
+arquivos grandes sai da cota mensal de quem é dono (1 GB/mês).
 
-Pronto — quem receber extrai, lê o `LEIA-ME.txt` e roda o executável.
+### Gerar uma versão nova do pacote
 
-> Evite pedir para a pessoa clonar o repositório: o download dos arquivos
-> grandes sai da cota mensal de LFS de quem é dono (1 GB/mês). Mandar o zip
-> direto não gasta cota nenhuma.
+O zip completo não é refeito a cada mudança de código — ele precisa baixar o kit
+do LFS, e isso consome cota. Quando quiser atualizar:
+
+1. Aba **[Actions](https://github.com/mrdeadluck/MrDead_DLSS5/actions/workflows/pacote-completo.yml)**
+2. **Run workflow** → **Run workflow**
+3. Em uns 5 minutos o zip novo substitui o antigo na Release, no mesmo link
+
+(O `DLSS5-AutoInstaller.exe` sozinho continua sendo republicado a cada push,
+esse é automático.)
 
 ---
 
