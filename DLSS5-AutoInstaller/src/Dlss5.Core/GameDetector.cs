@@ -193,17 +193,19 @@ public static class GameDetector
 
     private static void DetectNativeDlss(GameProfile profile, List<string> notes)
     {
-        var exeDir = profile.ExeFolder;
-        bool Has(string pattern)
-        {
-            try { return Directory.EnumerateFiles(exeDir, pattern, SearchOption.TopDirectoryOnly).Any(); }
-            catch { return false; }
-        }
+        // O manifesto de uma instalação anterior entra aqui para o detector saber
+        // distinguir o nvngx_dlss.dll do jogo do nvngx_dlss.dll que nós mesmos copiamos.
+        var anterior = InstallManifest.Find(profile.GameFolder, profile.ExeFolder);
+        var deteccao = NativeDlssDetector.Detect(
+            profile.GameFolder, profile.ExeFolder, profile.RealExePath, anterior);
 
-        if (Has("sl.dlss*.dll") || Has("sl.interposer.dll") || Has("nvngx_dlssg.dll") || Has("nvngx_dlss.dll"))
-        {
-            profile.HasNativeDlss = true;
-            notes.Add("DLSS nativo detectado (DLLs nvngx/Streamline na pasta do jogo): o Feeder não é necessário.");
-        }
+        profile.NativeDlss = deteccao;
+        profile.HasNativeDlss = deteccao.Present;
+        profile.NativeDlssOverridden = false;
+
+        notes.Add("DLSS nativo do jogo: " + deteccao.Resumo + ".");
+        if (deteccao.Present && profile.Api != GraphicsApi.D3D12)
+            notes.Add("Como o jogo não é D3D12, o Feeder entra assim mesmo (o RenoDX só enxerga NGX em D3D12). " +
+                      "Nas opções do jogo, deixe o DLSS/upscaling DESLIGADO.");
     }
 }

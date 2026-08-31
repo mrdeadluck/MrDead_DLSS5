@@ -32,7 +32,9 @@ public sealed class MainForm : Form
     private readonly ComboBox _cboExe = new();
     private readonly ComboBox _cboArch = new();
     private readonly ComboBox _cboApi = new();
-    private readonly CheckBox _chkNativeDlss = new();
+    private readonly Label _lblNative = new();
+    private readonly Label _lblNativeWhy = new();
+    private readonly Button _btnNativeAjustar = Ui.Secondary("Ajustar");
     private readonly TextBox _txtRenderer = new();
     private readonly Label _lblRoute = new();
     private readonly ComboBox _cboMv = new();
@@ -392,6 +394,21 @@ public sealed class MainForm : Form
         _p0.Controls.Add(_txtGame);
         _p0.Controls.Add(MakeButton("Procurar...", 48, 820, 100, (_, _) => Pick(_txtGame, "Selecione a pasta do jogo")));
 
+        // Botão de socorro, disponível ANTES de qualquer detecção: se uma instalação
+        // anterior deixou sujeira, é aqui que se resolve — sem manifesto, sem detectar
+        // nada, sem depender de o programa lembrar do que fez.
+        var limpar = MakeButton("Desfazer tudo nesta pasta", 88, 250, 220, (_, _) => FaxinaCompleta());
+        _p0.Controls.Add(limpar);
+        _p0.Controls.Add(new Label
+        {
+            Text = "Deu errado, sobrou arquivo ou o overlay continua aparecendo? Este botão procura e remove "
+                 + "tudo que este programa possa ter deixado na pasta do jogo — e devolve ao lugar os arquivos do jogo.",
+            ForeColor = Ui.Muted,
+            Font = Ui.SmallFont,
+            Bounds = new Rectangle(480, 88, 440, 34),
+            AutoSize = false,
+        });
+
         var info = new TextBox
         {
             Multiline = true,
@@ -399,10 +416,10 @@ public sealed class MainForm : Form
             ScrollBars = ScrollBars.Vertical,
             BorderStyle = BorderStyle.FixedSingle,
             BackColor = SystemColors.Window,
-            Top = 95,
+            Top = 132,
             Left = 0,
             Width = 920,
-            Height = 380,
+            Height = 343,
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
             Text =
                 "Como funciona\r\n" +
@@ -463,11 +480,24 @@ public sealed class MainForm : Form
         _p1.Controls.Add(_cboApi);
         y += 36;
 
-        _chkNativeDlss.Text = "O jogo já tem DLSS nativo (dispensa o Feeder)";
-        _chkNativeDlss.SetBounds(230, y, 400, 24);
-        _chkNativeDlss.CheckedChanged += (_, _) => SyncProfileFromUi();
-        _p1.Controls.Add(_chkNativeDlss);
-        y += 32;
+        // Isto NÃO é uma pergunta. É resultado de leitura de arquivo, e o usuário não tem
+        // como saber a resposta melhor que o programa — ele nem deveria precisar pensar
+        // nisso. Fica como veredito com a razão do lado, e só muda por decisão explícita.
+        _p1.Controls.Add(Caption("DLSS nativo do jogo:", y));
+        _lblNative.SetBounds(230, y + 3, 500, 20);
+        _lblNative.Font = Ui.BoldFont;
+        _p1.Controls.Add(_lblNative);
+
+        _btnNativeAjustar.SetBounds(740, y - 1, 90, 27);
+        _btnNativeAjustar.Click += (_, _) => AjustarDlssNativo();
+        _p1.Controls.Add(_btnNativeAjustar);
+        y += 30;
+
+        _lblNativeWhy.SetBounds(230, y, 680, 32);
+        _lblNativeWhy.ForeColor = Ui.Muted;
+        _lblNativeWhy.Font = Ui.SmallFont;
+        _p1.Controls.Add(_lblNativeWhy);
+        y += 40;
 
         _p1.Controls.Add(Caption("Pasta do renderizador:", y));
         _txtRenderer.SetBounds(230, y, 580, 25);
@@ -642,11 +672,60 @@ public sealed class MainForm : Form
         if (_profile is null) return;
         if (_cboArch.SelectedItem is PeArchitecture a) _profile.Architecture = a;
         if (_cboApi.SelectedItem is GraphicsApi g) _profile.Api = g;
-        _profile.HasNativeDlss = _chkNativeDlss.Checked;
         if (!string.IsNullOrWhiteSpace(_txtRenderer.Text)) _profile.RendererFolder = _txtRenderer.Text;
         _profile.MvProvider = _options.MvProvider;
         UpdateMvAvailability();
+        UpdateNativeLabel();
         UpdateRouteLabel();
+    }
+
+    /// <summary>Mostra o veredito do detector e a evidência que o sustenta.</summary>
+    private void UpdateNativeLabel()
+    {
+        if (_profile is null) return;
+        bool sim = _profile.HasNativeDlss;
+
+        _lblNative.Text = (sim ? "SIM" : "NÃO") +
+                          (_profile.NativeDlssOverridden ? "  (alterado por você)" : "  (detectado)");
+        _lblNative.ForeColor = _profile.NativeDlssOverridden ? Ui.Warn : (sim ? Ui.Ok : Ui.Ink);
+
+        var porque = _profile.NativeDlss?.Resumo ?? "sem detecção";
+        _lblNativeWhy.Text = porque + Environment.NewLine + ConsequenciaDoNativo();
+    }
+
+    /// <summary>
+    /// O que essa resposta muda de verdade. Sem isso ela parece um interruptor perigoso —
+    /// e ela não é: o programa não apaga arquivo de DLSS do jogo em nenhum dos dois casos.
+    /// </summary>
+    private string ConsequenciaDoNativo()
+    {
+        if (_profile is null) return string.Empty;
+        return _profile.UsesRenodxDirectPath
+            ? "Efeito: o Feeder não é instalado — em D3D12 o RenoDX se pendura no DLSS do próprio jogo."
+            : "Efeito: o Feeder é instalado (é ele quem roda o DLSS 5). Arquivos de DLSS do jogo nunca são apagados.";
+    }
+
+    /// <summary>Deixa contrariar o detector, mas só de propósito e sabendo o que muda.</summary>
+    private void AjustarDlssNativo()
+    {
+        if (_profile is null) { Warn("Faça a detecção primeiro."); return; }
+
+        bool novo = !_profile.HasNativeDlss;
+        var texto =
+            $"O programa detectou: {(_profile.HasNativeDlss ? "SIM" : "NÃO")}.\r\n" +
+            $"Motivo: {_profile.NativeDlss?.Resumo ?? "sem detecção"}.\r\n\r\n" +
+            $"Mudar para {(novo ? "SIM" : "NÃO")}?\r\n\r\n" +
+            "O que muda: apenas se o Feeder é instalado ou não. Nenhum arquivo do jogo é " +
+            "apagado em nenhum dos dois casos.\r\n\r\n" +
+            "Na dúvida, deixe como está — a detecção lê os arquivos do jogo, não chuta.";
+
+        if (MessageBox.Show(this, texto, "Ajustar DLSS nativo",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            return;
+
+        _profile.HasNativeDlss = novo;
+        _profile.NativeDlssOverridden = true;
+        SyncProfileFromUi();
     }
 
     private void UpdateRouteLabel()
@@ -778,6 +857,7 @@ public sealed class MainForm : Form
         bar.Controls.Add(MakeButton("Abrir pasta do jogo", 8, 0, 150, (_, _) => OpenFolder(_profile?.ExeFolder)));
         bar.Controls.Add(MakeButton("Abrir o jogo", 8, 0, 120, (_, _) => LaunchGame()));
         bar.Controls.Add(MakeButton("Desinstalar (reverter)", 8, 0, 170, (_, _) => RevertInstall()));
+        bar.Controls.Add(MakeButton("Desfazer tudo (forçado)", 8, 0, 170, (_, _) => FaxinaCompleta()));
 
         _p4.Controls.Add(split);
         _p4.Controls.Add(bar);
@@ -870,13 +950,14 @@ public sealed class MainForm : Form
                 // Arquivo em uso não é apagado. Sem dizer isso na cara, o usuário só
                 // descobre quando o overlay do ReShade aparece no jogo.
                 _status.Text = $"{sobras.Count} arquivo(s) não saíram — veja o log.";
-                MessageBox.Show(this,
+                var resposta = MessageBox.Show(this,
                     "A remoção não conseguiu apagar tudo:\r\n\r\n" +
                     string.Join("\r\n", sobras.Take(12)) +
                     (sobras.Count > 12 ? $"\r\n... e mais {sobras.Count - 12}" : "") +
-                    "\r\n\r\nQuase sempre é arquivo em uso. Feche o jogo E a Steam " +
-                    "(confira no Gerenciador de Tarefas) e clique em Desinstalar de novo.",
-                    "Sobraram arquivos", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    "\r\n\r\nQuase sempre é arquivo em uso — feche o jogo E a Steam.\r\n\r\n" +
+                    "Quer que eu procure e remova tudo na pasta do jogo inteira agora?",
+                    "Sobraram arquivos", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                if (resposta == DialogResult.Yes) FaxinaCompleta();
             }
             else
             {
@@ -886,6 +967,91 @@ public sealed class MainForm : Form
             }
         }
         catch (Exception ex) { Warn(ex.Message); }
+    }
+
+    /// <summary>
+    /// Desfaz a instalação varrendo a pasta do jogo, sem depender de manifesto nem de
+    /// detecção. É o botão que faltava quando a reversão normal não deu conta e a única
+    /// saída foi apagar arquivo por arquivo no Explorer.
+    /// </summary>
+    private void FaxinaCompleta()
+    {
+        var pasta = _profile?.GameFolder ?? _txtGame.Text.Trim();
+        if (string.IsNullOrWhiteSpace(pasta) || !Directory.Exists(pasta))
+        {
+            Warn("Aponte a pasta do jogo primeiro.");
+            return;
+        }
+
+        var rodando = ProcessoDoJogoRodando(_profile?.RealExePath);
+        if (rodando is not null)
+        {
+            Warn($"O jogo parece estar aberto ({rodando}.exe). Feche o jogo e a Steam antes: " +
+                 "arquivo em uso não é apagado.");
+            return;
+        }
+
+        var engine = new InstallerEngine(Log);
+
+        // Varrer a pasta de um jogo grande leva alguns segundos; sem isso a janela
+        // parece travada.
+        _status.Text = "Procurando arquivos deste programa na pasta do jogo...";
+        IReadOnlyList<string> achados;
+        UseWaitCursor = true;
+        Application.DoEvents();
+        try { achados = engine.EncontrarInstalacao(pasta); }
+        finally { UseWaitCursor = false; }
+
+        if (achados.Count == 0)
+        {
+            MessageBox.Show(this,
+                $"Não achei nada deste programa em:\r\n{pasta}\r\n\r\n" +
+                "A pasta está limpa. Se o jogo ainda se comporta como se o ReShade estivesse " +
+                "instalado, confira se você apontou a pasta certa.",
+                "Nada a remover", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var lista = string.Join("\r\n", achados.Take(20)) +
+                    (achados.Count > 20 ? $"\r\n... e mais {achados.Count - 20}" : "");
+        if (MessageBox.Show(this,
+                $"Vou devolver ao lugar os arquivos do jogo que foram substituídos e remover estes " +
+                $"{achados.Count} item(ns):\r\n\r\n{lista}\r\n\r\n" +
+                "Só sai o que é comprovadamente deste programa — arquivos do próprio jogo não são " +
+                "tocados.\r\n\r\nContinuar?",
+                "Desfazer tudo nesta pasta", MessageBoxButtons.YesNo, MessageBoxIcon.Warning)
+            != DialogResult.Yes)
+            return;
+
+        ShowStep(3);
+        _txtLog.Clear();
+        UseWaitCursor = true;
+        try
+        {
+            var sobras = engine.LimpezaTotal(pasta);
+            _manifest = null;
+            if (sobras.Count > 0)
+            {
+                _status.Text = $"{sobras.Count} item(ns) não saíram — veja o log.";
+                MessageBox.Show(this,
+                    "Ainda restaram:\r\n\r\n" + string.Join("\r\n", sobras.Take(12)) +
+                    "\r\n\r\nIsso é arquivo em uso. Feche o jogo e a Steam pelo Gerenciador de " +
+                    "Tarefas (ou reinicie o PC) e clique de novo.",
+                    "Sobraram arquivos", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            else
+            {
+                _status.Text = "Pasta limpa: não sobrou nada deste programa.";
+                MessageBox.Show(this,
+                    "Pronto — a pasta do jogo está como estava antes.\r\n\r\n" +
+                    "O override de assinatura no registro é do sistema, não da pasta, e continua " +
+                    "aplicado. Ele não atrapalha nenhum jogo; para tirar, use Desinstalar (reverter) " +
+                    "numa instalação com manifesto.",
+                    "Desfeito", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+        catch (Exception ex) { Warn(ex.Message); }
+        finally { UseWaitCursor = false; }
     }
 
     // ------------------------------------------------------------- navegação
@@ -966,7 +1132,6 @@ public sealed class MainForm : Form
         PopulateCandidates(_profile.RealExePath);
         _cboArch.SelectedItem = _profile.Architecture;
         _cboApi.SelectedItem = _profile.Api;
-        _chkNativeDlss.Checked = _profile.HasNativeDlss;
         _txtRenderer.Text = _profile.RendererFolder ?? _profile.ExeFolder;
         _cboMv.SelectedIndex = _options.MvProvider == MvProvider.Drme ? 1 : 0;
         SelectOverlayKey(_options.OverlayKey);

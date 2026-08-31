@@ -56,6 +56,43 @@ Botão **Desinstalar (reverter)** na última tela. Toda instalação grava um ma
 (`dlss5-autoinstaller-manifest.json`) na pasta do executável do jogo, com a lista do que
 foi adicionado e os backups do que foi sobrescrito — a reversão desfaz tudo a partir dele.
 
+### Deu errado? **Desfazer tudo nesta pasta**
+
+Esse botão está na **primeira tela**, ao lado das pastas, e também na tela de verificação
+(como *Desfazer tudo (forçado)*). Ele não depende de manifesto, de detecção nem de o
+programa lembrar do que fez: varre a pasta do jogo inteira, devolve ao lugar todo arquivo
+do jogo que tenha sido substituído (`.dlss5bak`) e remove o que for **comprovadamente**
+deste programa.
+
+O critério é conservador de propósito:
+
+| Arquivo | Sai? |
+|---|---|
+| `renodx-dlss5.addon64`, `dlss5-feed.*`, `nvngx_dlssnr.dll`, `ReShade.ini`/`.log`/`Preset.ini` | sempre — nenhum jogo traz isso |
+| `dxgi.dll` | só se o texto do ReShade estiver dentro dele |
+| `D3D9.dll`, `dgVoodoo.conf`, `dgVoodooCpl.exe` | só com prova **e** sinal de instalação nossa por perto (existe jogo antigo que já vem com dgVoodoo) |
+| `nvngx_dlss.dll` | só quando há um arquivo do kit na mesma pasta — senão pode ser o do jogo |
+| `sl.*.dll`, `nvngx_dlssg.dll` | **nunca**: são do jogo, e apagá-los faz o DLSS sumir do menu |
+
+Antes de apagar qualquer coisa ele mostra a lista completa e pede confirmação. Se algum
+arquivo resistir (quase sempre é arquivo em uso), ele diz **qual** — feche o jogo e a
+Steam e repita.
+
+### "O jogo tem DLSS nativo" não é uma pergunta
+
+Na tela de detecção isso aparece como **veredito com o motivo do lado**, não como uma
+caixinha para você marcar. A evidência é só a que a instalação não consegue forjar: as
+DLLs do Streamline (`sl.*.dll`) e a de frame generation, que não existem no kit, e o texto
+dentro do executável do jogo, que o programa nunca modifica.
+
+O `nvngx_dlss.dll` sozinho **não** conta: ele existe no kit e a instalação copia ele para
+a pasta do jogo — bastava instalar uma vez para o mesmo jogo passar a "ter DLSS nativo" na
+detecção seguinte.
+
+E o que essa resposta muda é pouco: **só se o Feeder é instalado**, e só em jogo D3D12.
+Fora do D3D12 o Feeder entra dos dois jeitos. Nenhum arquivo do jogo é apagado em nenhum
+dos casos. Dá para contrariar a detecção no botão **Ajustar**, que explica isso antes.
+
 ---
 
 ## O que é automatizado

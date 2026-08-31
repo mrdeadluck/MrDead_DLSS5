@@ -88,7 +88,7 @@ public sealed class InstallManifest
 }
 
 /// <summary>Executa um plano e sabe desfazê-lo.</summary>
-public sealed class InstallerEngine
+public sealed partial class InstallerEngine
 {
     private readonly Action<string> _log;
 
@@ -238,10 +238,15 @@ public sealed class InstallerEngine
         "dlss5-feed.log", "dlss5-feed.cfg", "dlss5-feed-host.log",
     };
 
-    /// <summary>Devolve ao lugar todo arquivo *.dlss5bak encontrado na pasta.</summary>
-    public void RestaurarBackupsOrfaos(string? pasta)
+    /// <summary>
+    /// Devolve ao lugar todo arquivo *.dlss5bak encontrado na pasta e diz quais voltaram.
+    /// Saber quais voltaram importa: um arquivo restaurado é do JOGO outra vez, e a
+    /// limpeza não pode apagá-lo depois só porque o nome dele também está na nossa lista.
+    /// </summary>
+    public IReadOnlyList<string> RestaurarBackupsOrfaos(string? pasta)
     {
-        if (string.IsNullOrWhiteSpace(pasta) || !Directory.Exists(pasta)) return;
+        var restaurados = new List<string>();
+        if (string.IsNullOrWhiteSpace(pasta) || !Directory.Exists(pasta)) return restaurados;
 
         List<string> backups;
         try
@@ -250,7 +255,7 @@ public sealed class InstallerEngine
         }
         catch
         {
-            return;
+            return restaurados;
         }
 
         foreach (var backup in backups)
@@ -260,6 +265,7 @@ public sealed class InstallerEngine
             {
                 if (!File.Exists(backup)) continue;
                 File.Move(backup, original, overwrite: true);
+                restaurados.Add(original);
                 _log($"Devolvido ao lugar: {original}");
             }
             catch (Exception ex)
@@ -267,6 +273,7 @@ public sealed class InstallerEngine
                 _log($"Aviso: não consegui devolver {original}: {ex.Message}");
             }
         }
+        return restaurados;
     }
 
     /// <summary>Apaga os arquivos que só aparecem depois que o jogo roda uma vez.</summary>

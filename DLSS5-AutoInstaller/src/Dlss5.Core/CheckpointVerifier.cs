@@ -53,6 +53,25 @@ public static class CheckpointVerifier
             : new CheckResult(4, "Executável real identificado", CheckStatus.Fail,
                 "Não identificado.", "Selecione manualmente o executável real do jogo."));
 
+        // 3 — o DLSS do jogo e o DLSS 5 disputando a mesma imagem
+        if (profile.HasNativeDlss && profile.NeedsFeeder)
+        {
+            r.Add(new CheckResult(3, "DLSS do jogo tem que ficar DESLIGADO", CheckStatus.Manual,
+                $"O jogo tem DLSS próprio, mas roda em {profile.Api}: quem entrega o DLSS 5 aqui é o Feeder. " +
+                "Os dois ligados ao mesmo tempo disputam a mesma imagem — é assim que o jogo trava ao ligar " +
+                "o DLSS no menu.",
+                "Opções gráficas do jogo → DLSS/upscaling em Desligado (ou Nativo/TAA). O DLSS 5 continua " +
+                "ligado pelo painel do ReShade."));
+        }
+        else if (profile.UsesRenodxDirectPath)
+        {
+            r.Add(new CheckResult(3, "DLSS do jogo tem que ficar LIGADO", CheckStatus.Manual,
+                "Aqui é o contrário: em D3D12 o RenoDX se pendura na chamada de DLSS que o próprio jogo faz. " +
+                "Sem o jogo pedir DLSS, não existe chamada para interceptar.",
+                "Opções gráficas do jogo → ligue o DLSS (qualquer modo). Sem isso o RenoDX fica em " +
+                "\"HOOKS ARMED / NO DLSS CREATE SEEN\"."));
+        }
+
         // 6 — arquitetura dos dxgi.dll instalados
         var dxgi = Path.Combine(exe, "dxgi.dll");
         if (File.Exists(dxgi))

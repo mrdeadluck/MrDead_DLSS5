@@ -31,6 +31,13 @@ public static class ManualSteps
                 "NGX num device D3D12 próprio e entrega DLAA (resolução de render = saída). Deixe o upscaling " +
                 "do jogo em desligado/nativo: os dois ligados ao mesmo tempo brigam pela mesma imagem.", true));
 
+        if (profile.UsesRenodxDirectPath)
+            steps.Add(new ManualStep(n++, "LIGAR o DLSS nas opções do jogo",
+                "Neste caso o Feeder não é instalado: em D3D12 o RenoDX se pendura na chamada de DLSS que o " +
+                "próprio jogo faz. Se o DLSS do jogo ficar desligado não existe chamada nenhuma para " +
+                "interceptar, e o RenoDX fica em \"HOOKS ARMED / NO DLSS CREATE SEEN\" sem aplicar nada. " +
+                "Ligue o DLSS no menu do jogo (qualquer modo) antes de esperar resultado.", true));
+
         steps.Add(new ManualStep(n++, "Desligar MSAA/SSAA nas opções gráficas do jogo",
             "O Generic Depth não enxerga um depth buffer multisampled, e SSAA conflita com o DLAA. " +
             "FXAA e SMAA são pós-processo e podem continuar ligados.", true));

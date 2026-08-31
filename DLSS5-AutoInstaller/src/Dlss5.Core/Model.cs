@@ -66,6 +66,12 @@ public sealed class GameProfile
     /// <summary>O jogo já tem DLSS nativo? (dispensa o Feeder)</summary>
     public bool HasNativeDlss { get; set; }
 
+    /// <summary>Como o DLSS nativo foi detectado (pistas), para mostrar na tela.</summary>
+    public NativeDlssDetection? NativeDlss { get; set; }
+
+    /// <summary>O usuário contrariou a detecção à mão (só então o palpite dele vale).</summary>
+    public bool NativeDlssOverridden { get; set; }
+
     /// <summary>Pasta onde o módulo que chama Direct3D vive (dgVoodoo vai aqui).
     /// Igual à pasta do exe, exceto engines tipo Source (bin\).</summary>
     public string? RendererFolder { get; set; }

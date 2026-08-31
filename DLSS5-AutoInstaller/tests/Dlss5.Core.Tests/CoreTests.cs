@@ -912,3 +912,224 @@ public class SymptomDiagnoserTests
         finally { if (Directory.Exists(dir)) Directory.Delete(dir, true); }
     }
 }
+
+public class NativeDlssDetectorTests
+{
+    private static string Pasta(params string[] nomes)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5nat_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        foreach (var n in nomes) File.WriteAllText(Path.Combine(dir, n), "x");
+        return dir;
+    }
+
+    [Fact]
+    public void NossoNvngxDlssSozinhoNaoContaComoDlssDoJogo()
+    {
+        // A raiz da confusão: o kit TEM um nvngx_dlss.dll e a instalação copia ele para a
+        // pasta do jogo. O detector antigo olhava só o nome do arquivo, então bastava
+        // instalar uma vez para o mesmo jogo passar a "ter DLSS nativo" na segunda vez —
+        // e o plano mudava sem que nada no jogo tivesse mudado.
+        var dir = Pasta("nvngx_dlss.dll", "jogo.exe");
+        try
+        {
+            var d = NativeDlssDetector.Detect(dir, dir, null);
+            Assert.False(d.Present);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void ArquivoListadoNoManifestoNaoViraPista()
+    {
+        var dir = Pasta("nvngx_dlss.dll", "sl.interposer.dll", "jogo.exe");
+        try
+        {
+            // Sem manifesto, os dois juntos passariam do limiar.
+            Assert.True(NativeDlssDetector.Detect(dir, dir, null).Present);
+
+            // Com o manifesto dizendo que fomos nós que pusemos o nvngx_dlss.dll ali,
+            // sobra só o Streamline — que pode estar presente só pelo Reflex.
+            var manifesto = new InstallManifest { GameFolder = dir, ExeFolder = dir };
+            manifesto.AddedFiles.Add(Path.Combine(dir, "nvngx_dlss.dll"));
+            Assert.False(NativeDlssDetector.Detect(dir, dir, null, manifesto).Present);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void ReconheceStreamlineDoJogo()
+    {
+        // sl.dlss.dll não existe no kit: se está na pasta, veio com o jogo.
+        var dir = Pasta("sl.dlss.dll", "sl.interposer.dll", "jogo.exe");
+        try
+        {
+            Assert.True(NativeDlssDetector.Detect(dir, dir, null).Present);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void ReconhecePeloTextoDoExe()
+    {
+        // O exe do jogo é a única evidência que a instalação nunca altera.
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5nat_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var exe = Path.Combine(dir, "jogo.exe");
+            var buffer = new byte[32 * 1024];
+            var marcador = System.Text.Encoding.ASCII.GetBytes("NVSDK_NGX_D3D12_Init");
+            Array.Copy(marcador, 0, buffer, 4096, marcador.Length);
+            File.WriteAllBytes(exe, buffer);
+
+            var d = NativeDlssDetector.Detect(dir, dir, exe);
+            Assert.True(d.Present);
+            Assert.Contains(d.Clues, c => c.Texto.Contains("NVSDK_NGX_D3D12_Init"));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void IgnoraOQueEstaDentroDeHost64()
+    {
+        // host64\ é pasta nossa: o nvngx_dlss.dll de lá é sempre o do kit.
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5nat_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(dir, "host64"));
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "host64", "nvngx_dlss.dll"), "x");
+            File.WriteAllText(Path.Combine(dir, "host64", "sl.dlss.dll"), "x");
+
+            Assert.False(NativeDlssDetector.Detect(dir, dir, null).Present);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}
+
+public class FaxinaTests
+{
+    private static string NovaPasta()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5faxina_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    private static void Escrever(string dir, string nome, string conteudo = "x") =>
+        File.WriteAllText(Path.Combine(dir, nome), conteudo);
+
+    [Fact]
+    public void RemoveOQueEhNossoESoOQueEhNosso()
+    {
+        // O botão de socorro: funciona sem manifesto, varrendo a pasta pelo nome dos
+        // arquivos. O critério tem que ser conservador — arquivo do jogo fica.
+        var dir = NovaPasta();
+        try
+        {
+            Escrever(dir, "renodx-dlss5.addon64");
+            Escrever(dir, "nvngx_dlssnr.dll");
+            Escrever(dir, "ReShade.ini");
+            Escrever(dir, "nvngx_dlss.dll");          // nosso: há prova do kit ao lado
+            Escrever(dir, "dxgi.dll", "...ReShade 6.8.0...");
+            Escrever(dir, "sl.dlss.dll");             // do jogo
+            Escrever(dir, "nvngx_dlssg.dll");         // do jogo
+            Escrever(dir, "jogo.exe");
+
+            var sobras = new InstallerEngine(_ => { }).LimpezaTotal(dir);
+
+            Assert.Empty(sobras);
+            Assert.False(File.Exists(Path.Combine(dir, "renodx-dlss5.addon64")));
+            Assert.False(File.Exists(Path.Combine(dir, "nvngx_dlssnr.dll")));
+            Assert.False(File.Exists(Path.Combine(dir, "ReShade.ini")));
+            Assert.False(File.Exists(Path.Combine(dir, "nvngx_dlss.dll")));
+            Assert.False(File.Exists(Path.Combine(dir, "dxgi.dll")));
+
+            Assert.True(File.Exists(Path.Combine(dir, "sl.dlss.dll")));
+            Assert.True(File.Exists(Path.Combine(dir, "nvngx_dlssg.dll")));
+            Assert.True(File.Exists(Path.Combine(dir, "jogo.exe")));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void NaoApagaDxgiQueNaoEhDoReShade()
+    {
+        // dxgi.dll é nome genérico. Sem o texto do ReShade dentro, não é nosso.
+        var dir = NovaPasta();
+        try
+        {
+            Escrever(dir, "dxgi.dll", "outra coisa qualquer");
+            Escrever(dir, "jogo.exe");
+
+            new InstallerEngine(_ => { }).LimpezaTotal(dir);
+
+            Assert.True(File.Exists(Path.Combine(dir, "dxgi.dll")));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void ArquivoDevolvidoDoBackupNaoEhApagadoEmSeguida()
+    {
+        // O jogo tinha o próprio nvngx_dlss.dll e a instalação o sobrescreveu. A faxina
+        // devolve o original — e depois não pode apagá-lo só porque o nome está na lista.
+        var dir = NovaPasta();
+        try
+        {
+            Escrever(dir, "renodx-dlss5.addon64");
+            Escrever(dir, "nvngx_dlss.dll", "copia do kit");
+            Escrever(dir, "nvngx_dlss.dll" + InstallerEngine.BackupSuffix, "original do jogo");
+
+            var sobras = new InstallerEngine(_ => { }).LimpezaTotal(dir);
+
+            Assert.Empty(sobras);
+            Assert.True(File.Exists(Path.Combine(dir, "nvngx_dlss.dll")));
+            Assert.Equal("original do jogo", File.ReadAllText(Path.Combine(dir, "nvngx_dlss.dll")));
+            Assert.False(File.Exists(Path.Combine(dir, "renodx-dlss5.addon64")));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void AchaInstalacaoEmSubpastaDoJogo()
+    {
+        // Jogo Unreal: a instalação foi para Binaries\Win64, não para a raiz.
+        var raiz = NovaPasta();
+        var alvo = Path.Combine(raiz, "Jogo", "Binaries", "Win64");
+        Directory.CreateDirectory(alvo);
+        try
+        {
+            Escrever(alvo, "dlss5-feed.addon64");
+            Escrever(alvo, "ReShade.ini");
+
+            var achados = new InstallerEngine(_ => { }).EncontrarInstalacao(raiz);
+            Assert.Equal(2, achados.Count);
+
+            new InstallerEngine(_ => { }).LimpezaTotal(raiz);
+            Assert.False(File.Exists(Path.Combine(alvo, "dlss5-feed.addon64")));
+        }
+        finally { Directory.Delete(raiz, true); }
+    }
+
+    [Fact]
+    public void RemovePastasNossasPorInteiro()
+    {
+        var dir = NovaPasta();
+        Directory.CreateDirectory(Path.Combine(dir, "host64"));
+        Directory.CreateDirectory(Path.Combine(dir, "reshade-shaders", "Shaders"));
+        try
+        {
+            Escrever(dir, "dlss5-feed.addon32");
+            File.WriteAllText(Path.Combine(dir, "host64", "dlss5-feed-host64.exe"), "x");
+            File.WriteAllText(Path.Combine(dir, "reshade-shaders", "Shaders", "DLSS5Feed.fx"), "x");
+
+            var sobras = new InstallerEngine(_ => { }).LimpezaTotal(dir);
+
+            Assert.Empty(sobras);
+            Assert.False(Directory.Exists(Path.Combine(dir, "host64")));
+            Assert.False(Directory.Exists(Path.Combine(dir, "reshade-shaders")));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}
