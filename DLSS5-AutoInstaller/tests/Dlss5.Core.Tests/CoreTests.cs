@@ -1770,6 +1770,36 @@ public class IsolamentoTests
     }
 
     [Fact]
+    public void SemRenodxDesligaSoOAddonEDeixaOResto()
+    {
+        // O teste do GTA 5: jogo abre, mas ligar o DLSS no MENU trava — o suspeito é o
+        // gancho do RenoDX na chamada de NGX do jogo. O degrau que faltava desliga SÓ
+        // ele (raiz e host64), mantendo ReShade e Feeder vivos para o teste dizer algo.
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5iso_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(dir, "host64"));
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "dxgi.dll"), "reshade");
+            File.WriteAllText(Path.Combine(dir, "dlss5-feed.addon64"), "feeder");
+            File.WriteAllText(Path.Combine(dir, "renodx-dlss5.addon64"), "renodx");
+            File.WriteAllText(Path.Combine(dir, "host64", "renodx-dlss5.addon64"), "renodx");
+
+            var iso = new Isolamento(_ => { });
+            iso.Aplicar(EstadoIsolamento.SemRenodx, dir, dir);
+
+            Assert.False(File.Exists(Path.Combine(dir, "renodx-dlss5.addon64")));
+            Assert.False(File.Exists(Path.Combine(dir, "host64", "renodx-dlss5.addon64")));
+            Assert.True(File.Exists(Path.Combine(dir, "dxgi.dll")));
+            Assert.True(File.Exists(Path.Combine(dir, "dlss5-feed.addon64")));
+
+            iso.Aplicar(EstadoIsolamento.Tudo, dir, dir);
+            Assert.Equal("renodx", File.ReadAllText(Path.Combine(dir, "renodx-dlss5.addon64")));
+            Assert.Equal("renodx", File.ReadAllText(Path.Combine(dir, "host64", "renodx-dlss5.addon64")));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
     public void DgVoodooEReShadePodemEstarEmPastasDiferentes()
     {
         // Engine Source: o dgVoodoo vai em bin\ e o ReShade fica na raiz.

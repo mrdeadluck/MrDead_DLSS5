@@ -77,6 +77,7 @@ public sealed class MainForm : Form
     private Button _btnPlaca = new();
     private Button _btnPainelDg = new();
     private Button _btnTestarConf = new();
+    private Button _btnRenodx = new();
     private readonly CheckBox _chkTnL = new()
     {
         Text = "T&&L por hardware",
@@ -910,6 +911,8 @@ public sealed class MainForm : Form
         // desinstalar e instalar tudo de novo a cada tentativa.
         var barraDg = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 40, Padding = new Padding(0, 6, 0, 0) };
         barraDg.Controls.Add(MakeButton("Isolar a causa", 4, 0, 130, (_, _) => IsolarCausa()));
+        _btnRenodx = MakeButton("Testar sem o RenoDX", 4, 0, 160, (_, _) => TestarSemRenodx());
+        barraDg.Controls.Add(_btnRenodx);
         barraDg.Controls.Add(_lblDgVoodoo);
         _lblDgVoodoo.Visible = false;
         _cboPlaca.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -953,8 +956,9 @@ public sealed class MainForm : Form
 
         // Antes de avançar, colhe o resultado do teste que estava em andamento. Sem isso o
         // usuário atravessa as etapas e chega ao fim sem conclusão nenhuma — foi o que
-        // aconteceu no primeiro uso: o teste 2 passou batido.
-        if (_isolamento != EstadoIsolamento.Tudo)
+        // aconteceu no primeiro uso: o teste 2 passou batido. O teste do RenoDX não entra
+        // aqui: ele é avulso (botão próprio) e não tem pergunta desta bisseção.
+        if (_isolamento is EstadoIsolamento.SemDgVoodoo or EstadoIsolamento.SemReShade)
         {
             var pergunta = _isolamento == EstadoIsolamento.SemDgVoodoo
                 ? "Com o dgVoodoo DESLIGADO, o jogo abriu?"
@@ -974,7 +978,8 @@ public sealed class MainForm : Form
 
         var proximo = _isolamento switch
         {
-            EstadoIsolamento.Tudo => EstadoIsolamento.SemDgVoodoo,
+            // Vindo do teste avulso do RenoDX, a bisseção começa do zero (Aplicar religa).
+            EstadoIsolamento.Tudo or EstadoIsolamento.SemRenodx => EstadoIsolamento.SemDgVoodoo,
             EstadoIsolamento.SemDgVoodoo => EstadoIsolamento.SemReShade,
             _ => EstadoIsolamento.Tudo,
         };
@@ -1012,9 +1017,56 @@ public sealed class MainForm : Form
 
             MessageBox.Show(this, texto, "Isolar a causa",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
+            AtualizarBotaoRenodx();
         }
         catch (Exception ex) { Warn(ex.Message); }
     }
+
+    /// <summary>
+    /// Teste avulso do caso "abre, mas o DLSS do MENU do jogo trava ao ligar": desliga só
+    /// o addon do RenoDX — quem se pendura na chamada de NGX que o próprio jogo faz —
+    /// mantendo ReShade e Feeder ativos. Foi o padrão do GTA 5 depois da recuperação: DLL
+    /// original de volta e o travamento continuou, o que tira o arquivo da lista de
+    /// suspeitos e deixa a interceptação dentro do processo. O mesmo botão religa.
+    /// </summary>
+    private void TestarSemRenodx()
+    {
+        if (_profile is null) { Warn("Faça a detecção primeiro."); return; }
+
+        var rodando = ProcessoDoJogoRodando(_profile.RealExePath);
+        if (rodando is not null)
+        {
+            Warn($"Feche o jogo ({rodando}.exe) antes: arquivo em uso não é renomeado.");
+            return;
+        }
+
+        var proximo = _isolamento == EstadoIsolamento.SemRenodx
+            ? EstadoIsolamento.Tudo
+            : EstadoIsolamento.SemRenodx;
+
+        ShowStep(3);
+        _txtLog.Clear();
+        try
+        {
+            new Isolamento(Log).Aplicar(proximo, _profile.ExeFolder,
+                _profile.RendererFolder ?? _profile.ExeFolder);
+            _isolamento = proximo;
+            AtualizarBotaoRenodx();
+
+            _status.Text = proximo == EstadoIsolamento.SemRenodx
+                ? "RenoDX desligado. Abra o jogo e teste o DLSS no MENU do jogo."
+                : "RenoDX religado.";
+            MessageBox.Show(this, Isolamento.Leitura(proximo), "Testar sem o RenoDX",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex) { Warn(ex.Message); }
+    }
+
+    /// <summary>O texto do botão diz o que o clique fará, não o estado atual.</summary>
+    private void AtualizarBotaoRenodx() =>
+        _btnRenodx.Text = _isolamento == EstadoIsolamento.SemRenodx
+            ? "Religar o RenoDX"
+            : "Testar sem o RenoDX";
 
     /// <summary>
     /// Descobre se o dgVoodoo está mesmo lendo o dgVoodoo.conf que geramos.
@@ -1350,6 +1402,7 @@ public sealed class MainForm : Form
             var sobras = engine.LimpezaTotal(pasta);
             _manifest = null;
             _isolamento = EstadoIsolamento.Tudo;
+            AtualizarBotaoRenodx();
             if (sobras.Count > 0)
             {
                 _status.Text = $"{sobras.Count} item(ns) não saíram — veja o log.";

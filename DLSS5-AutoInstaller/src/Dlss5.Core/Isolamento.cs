@@ -9,6 +9,13 @@ public enum EstadoIsolamento
     SemDgVoodoo,
     /// <summary>dgVoodoo ativo, ReShade desligado.</summary>
     SemReShade,
+    /// <summary>
+    /// Só o addon do RenoDX desligado; ReShade e Feeder continuam. É o teste do jogo
+    /// com DLSS nativo que abre mas trava ao ligar o DLSS no MENU: o RenoDX é quem se
+    /// pendura na chamada de NGX que o próprio jogo faz, e desligá-lo sozinho responde
+    /// se é essa interceptação que está travando.
+    /// </summary>
+    SemRenodx,
 }
 
 /// <summary>
@@ -40,6 +47,12 @@ public sealed class Isolamento
             {
                 Path.Combine(exeFolder, "dxgi.dll"),
                 Path.Combine(exeFolder, "opengl32.dll"),
+            },
+            // Só o addon: em jogo 64-bit ele está na raiz, em 32-bit dentro de host64\.
+            EstadoIsolamento.SemRenodx => new[]
+            {
+                Path.Combine(exeFolder, "renodx-dlss5.addon64"),
+                Path.Combine(exeFolder, "host64", "renodx-dlss5.addon64"),
             },
             _ => Array.Empty<string>(),
         };
@@ -158,6 +171,21 @@ public sealed class Isolamento
             "• Se o jogo ABRIR agora: o ReShade é que atrapalha a criação do device pelo " +
             "dgVoodoo. Sem ele não há DLSS 5, mas ao menos o culpado está identificado.\r\n" +
             "• Se AINDA recusar: junto com o teste anterior, isso aponta para o dgVoodoo.",
+
+        EstadoIsolamento.SemRenodx =>
+            "RenoDX DESLIGADO. ReShade e Feeder continuam ativos.\r\n\r\n" +
+            "O RenoDX é o addon que se pendura na chamada de DLSS que o PRÓPRIO jogo faz — " +
+            "e essa interceptação é a suspeita de travar o jogo ao ligar o DLSS no menu e de " +
+            "registrar \"ativo\" sem mudar nada na imagem.\r\n\r\n" +
+            "Abra o jogo e vá direto ao menu de vídeo:\r\n" +
+            "• Ligue o DLSS DO JOGO (Qualidade e depois Performance) e aplique.\r\n" +
+            "   — Se agora ele liga SEM travar (e em Performance o FPS sobe), o culpado é o " +
+            "gancho do RenoDX dentro do processo: com essa resposta o conserto vira regra no " +
+            "instalador.\r\n" +
+            "   — Se AINDA travar, o RenoDX está inocente e a causa é mais funda (driver, " +
+            "override, arquivos do jogo).\r\n\r\n" +
+            "Neste teste o Neural Rendering NÃO aplica — o Feed alimenta um addon que está " +
+            "desligado. Isso é esperado, não é sintoma. O mesmo botão religa o RenoDX.",
 
         _ => "Instalação religada por inteiro. Nenhum arquivo foi apagado em nenhum dos testes.",
     };
