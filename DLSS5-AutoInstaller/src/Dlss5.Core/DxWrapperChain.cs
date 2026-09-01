@@ -10,15 +10,35 @@ namespace Dlss5.Core;
 /// DxWrapper (a única coisa que faz o jogo abrir em CPU com mais de 10 núcleos), e a
 /// instalação copiava o dgVoodoo por cima — o conserto sumia e o jogo voltava a não abrir.
 ///
-/// A saída é encadear: o DxWrapper continua sendo o d3d9.dll, e o dxwrapper.ini dele
-/// ganha um RealDllPath apontando para o dgVoodoo, gravado ao lado com outro nome. O
-/// stub do DxWrapper lê essa chave e carrega o "d3d9 real" de lá em vez do System32; o
-/// dgVoodoo acha o dgVoodoo.conf pela pasta, não pelo nome, então funciona renomeado.
+/// A saída é encadear: o DxWrapper continua sendo o d3d9.dll, e o ini que o STUB dele
+/// lê ganha um RealDllPath apontando para o dgVoodoo, gravado ao lado com outro nome. O
+/// stub carrega o "d3d9 real" de lá em vez do System32; o dgVoodoo acha o dgVoodoo.conf
+/// pela pasta, não pelo nome, então funciona renomeado.
+///
+/// Qual ini: o do NOME DO STUB (d3d9.ini), não o dxwrapper.ini. O DllMain do stub pega o
+/// próprio caminho com GetModuleFileName e troca a extensão por ".ini"; o dxwrapper.ini
+/// é lido só pelo dxwrapper.dll. A primeira versão desta corrente gravou no arquivo
+/// errado, e o resultado foi um jogo que abria sem dgVoodoo e sem ReShade.
 /// </summary>
 public static class DxWrapperChain
 {
     public const string DxWrapperDll = "dxwrapper.dll";
-    public const string IniName = "dxwrapper.ini";
+    /// <summary>O ini que o stub lê: o nome do próprio stub com a extensão .ini.</summary>
+    public static string IniPara(string wrapper) => Path.ChangeExtension(wrapper, ".ini");
+
+    /// <summary>Onde a primeira versão gravava (errado); a faxina ainda o reconhece.</summary>
+    public const string IniLegado = "dxwrapper.ini";
+
+    /// <summary>Todo nome de ini onde um RealDllPath nosso pode estar.</summary>
+    public static readonly string[] NomesDeIni = { IniPara("D3D9.dll"), IniPara("D3D8.dll"), IniLegado };
+
+    /// <summary>O ini do stub que corresponde ao dgVoodoo encadeado (dgVoodoo_D3D9.dll → D3D9.ini).</summary>
+    public static string IniDoDgVoodoo(string caminhoDgVoodoo)
+    {
+        var nome = Path.GetFileName(caminhoDgVoodoo);
+        var wrapper = nome.StartsWith(Prefixo, StringComparison.OrdinalIgnoreCase) ? nome[Prefixo.Length..] : nome;
+        return Path.Combine(Path.GetDirectoryName(caminhoDgVoodoo) ?? "", IniPara(wrapper));
+    }
     public const string Prefixo = "dgVoodoo_";
     public const string Marca = "; Gerado pelo DLSS 5 AutoInstaller";
 
@@ -34,7 +54,7 @@ public static class DxWrapperChain
         DxWrapperPresente(pasta) && File.Exists(Path.Combine(pasta, NomeEncadeado(wrapper)));
 
     /// <summary>
-    /// Texto do dxwrapper.ini com o RealDllPath apontando para o dgVoodoo. Se já existe
+    /// Texto do ini do stub (d3d9.ini) com o RealDllPath apontando para o dgVoodoo. Se já existe
     /// um ini do usuário, só a linha do RealDllPath muda (ou é acrescentada) — o resto é
     /// dele e fica como está.
     /// </summary>

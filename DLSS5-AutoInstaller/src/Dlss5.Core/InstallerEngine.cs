@@ -157,7 +157,7 @@ public sealed partial class InstallerEngine
     }
 
     /// <param name="realDllPath">
-    /// Só para o dxwrapper.ini: o dgVoodoo encadeado que o RealDllPath deve apontar. Um
+    /// Só para o ini do stub do DxWrapper (d3d9.ini): o dgVoodoo encadeado que o RealDllPath deve apontar. Um
     /// ini que já era do usuário é preservado — só essa linha muda (o backup fica no
     /// manifesto, e a reversão devolve o arquivo dele).
     /// </param>
@@ -167,7 +167,7 @@ public sealed partial class InstallerEngine
         BackupIfExists(target, manifest);
         var name = Path.GetFileName(target);
         string content;
-        if (name.Equals(DxWrapperChain.IniName, StringComparison.OrdinalIgnoreCase))
+        if (realDllPath is not null)
         {
             var existente = File.Exists(target) ? File.ReadAllText(target) : null;
             content = DxWrapperChain.GerarIni(existente, realDllPath!);
@@ -240,9 +240,9 @@ public sealed partial class InstallerEngine
         var transplante = Path.Combine(exeFolder, "nvngx_dlss.dll");
         if (TransplanteDlss.EhDoKit(transplante, NvngxDlssDoKit)) sobras.Add(transplante);
 
-        // Um dxwrapper.ini ainda apontando para o dgVoodoo é sobra perigosa: com o
+        // Um ini do DxWrapper ainda apontando para o dgVoodoo é sobra perigosa: com o
         // dgVoodoo fora, o DxWrapper tentaria carregar um arquivo que não existe.
-        if (IniEncadeadoEm(exeFolder) is { } ini) sobras.Add(ini);
+        sobras.AddRange(InisEncadeadosEm(exeFolder));
         foreach (var pasta in new[] { "reshade-shaders", "host64" })
         {
             var caminho = Path.Combine(exeFolder, pasta);

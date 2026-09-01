@@ -130,12 +130,12 @@ public sealed class Isolamento
         Path.GetFileName(caminho).StartsWith(DxWrapperChain.Prefixo, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Mantém o dxwrapper.ini coerente com o dgVoodoo encadeado: RealDllPath em branco
+    /// Mantém o ini do stub (d3d9.ini) coerente com o dgVoodoo encadeado: RealDllPath em branco
     /// enquanto ele está desligado, de volta ao caminho dele quando religa.
     /// </summary>
     private void Encadear(string dgVoodoo, bool ligar)
     {
-        var ini = Path.Combine(Path.GetDirectoryName(dgVoodoo) ?? "", DxWrapperChain.IniName);
+        var ini = DxWrapperChain.IniDoDgVoodoo(dgVoodoo);
         if (!File.Exists(ini)) return;
         try
         {
@@ -144,8 +144,8 @@ public sealed class Isolamento
                 ? DxWrapperChain.GerarIni(texto, dgVoodoo)
                 : DxWrapperChain.Desencadear(texto));
             _log(ligar
-                ? $"dxwrapper.ini volta a apontar para {Path.GetFileName(dgVoodoo)}."
-                : "dxwrapper.ini sem RealDllPath: o DxWrapper carrega o d3d9 do Windows neste teste.");
+                ? $"{Path.GetFileName(ini)} volta a apontar para {Path.GetFileName(dgVoodoo)}."
+                : $"{Path.GetFileName(ini)} sem RealDllPath: o DxWrapper carrega o d3d9 do Windows neste teste.");
         }
         catch (Exception ex)
         {

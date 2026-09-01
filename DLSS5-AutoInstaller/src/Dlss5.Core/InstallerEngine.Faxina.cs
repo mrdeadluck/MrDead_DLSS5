@@ -98,7 +98,7 @@ public sealed partial class InstallerEngine
         foreach (var pasta in PastasParaVarrer(gameFolder))
         {
             achados.AddRange(NossosArquivosEm(pasta));
-            if (IniEncadeadoEm(pasta) is { } ini) achados.Add(ini);
+            achados.AddRange(InisEncadeadosEm(pasta));
 
             foreach (var nome in PastasNossas)
             {
@@ -149,7 +149,7 @@ public sealed partial class InstallerEngine
         foreach (var pasta in PastasParaVarrer(gameFolder).ToList())
         {
             arquivos.AddRange(NossosArquivosEm(pasta));
-            if (IniEncadeadoEm(pasta) is { } ini) inisEncadeados.Add(ini);
+            inisEncadeados.AddRange(InisEncadeadosEm(pasta));
             foreach (var nome in PastasNossas)
             {
                 var alvo = Path.Combine(pasta, nome);
@@ -175,7 +175,7 @@ public sealed partial class InstallerEngine
             }
         }
 
-        // 3b. O dxwrapper.ini que encadeava o DxWrapper ao dgVoodoo. O dgVoodoo acabou de
+        // 3b. O ini do DxWrapper que encadeava ao dgVoodoo. O dgVoodoo acabou de
         //     sair, e um RealDllPath pendurado faria o DxWrapper tentar carregar um arquivo
         //     que não existe — o jogo voltaria a não abrir, por culpa nossa. Ini nosso sai
         //     inteiro; ini do usuário só perde a linha.
@@ -235,17 +235,19 @@ public sealed partial class InstallerEngine
         }
     }
 
-    /// <summary>O dxwrapper.ini desta pasta, se o RealDllPath dele aponta para o nosso dgVoodoo.</summary>
-    private static string? IniEncadeadoEm(string pasta)
+    /// <summary>
+    /// Os inis do DxWrapper desta pasta cujo RealDllPath aponta para o nosso dgVoodoo:
+    /// o do stub (d3d9.ini / d3d8.ini) e o dxwrapper.ini que a primeira versão gravou.
+    /// </summary>
+    private static IEnumerable<string> InisEncadeadosEm(string pasta)
     {
-        var ini = Path.Combine(pasta, DxWrapperChain.IniName);
-        try
+        foreach (var nome in DxWrapperChain.NomesDeIni)
         {
-            return File.Exists(ini) && DxWrapperChain.ApontaParaODgVoodoo(File.ReadAllText(ini)) ? ini : null;
-        }
-        catch
-        {
-            return null;
+            var ini = Path.Combine(pasta, nome);
+            bool aponta;
+            try { aponta = File.Exists(ini) && DxWrapperChain.ApontaParaODgVoodoo(File.ReadAllText(ini)); }
+            catch { aponta = false; }
+            if (aponta) yield return ini;
         }
     }
 

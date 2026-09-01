@@ -555,7 +555,7 @@ public class PlanBuilderTests
         // (d3d9.dll + dxwrapper.dll) resolvia, e a instalação copiou o dgVoodoo por cima
         // em silêncio — o conserto sumiu e o jogo voltou a não abrir. O nome é o mesmo,
         // então o DxWrapper FICA e o dgVoodoo entra ao lado com outro nome, apontado pelo
-        // RealDllPath do dxwrapper.ini.
+        // RealDllPath do d3d9.ini — o ini que o STUB lê (nome do próprio stub).
         var dir = Path.Combine(Path.GetTempPath(), "dlss5dxw_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         try
@@ -574,7 +574,7 @@ public class PlanBuilderTests
                 Path.GetFileName(a.TargetPath ?? "").Equals("dgVoodoo_D3D9.dll", StringComparison.OrdinalIgnoreCase));
             var ini = Assert.Single(plan.Actions, a =>
                 a.Kind == PlanActionKind.WriteGeneratedFile &&
-                Path.GetFileName(a.TargetPath ?? "").Equals("dxwrapper.ini", StringComparison.OrdinalIgnoreCase));
+                Path.GetFileName(a.TargetPath ?? "").Equals("D3D9.ini", StringComparison.OrdinalIgnoreCase));
             Assert.EndsWith("dgVoodoo_D3D9.dll", ini.SourcePath!, StringComparison.OrdinalIgnoreCase);
             Assert.Contains(plan.Warnings, w => w.Contains("RealDllPath", StringComparison.Ordinal));
         }
@@ -2220,7 +2220,7 @@ public class DxWrapperChainTests
         File.WriteAllText(Path.Combine(dir, "dxwrapper.dll"), "DxWrapper");
         dgVoodoo = Path.Combine(dir, "dgVoodoo_D3D9.dll");
         PeFalso(dgVoodoo, PeArchitecture.X86);
-        File.WriteAllText(Path.Combine(dir, "dxwrapper.ini"), DxWrapperChain.GerarIni(null, dgVoodoo));
+        File.WriteAllText(Path.Combine(dir, "D3D9.ini"), DxWrapperChain.GerarIni(null, dgVoodoo));
         return dir;
     }
 
@@ -2272,7 +2272,7 @@ public class DxWrapperChainTests
         var dir = NovaPasta();
         try
         {
-            var ini = Path.Combine(dir, "dxwrapper.ini");
+            var ini = Path.Combine(dir, "D3D9.ini");
             File.WriteAllText(ini, "[General]\r\nRealDllPath = \r\nHandleExceptions = 1\r\n");
             var dgVoodoo = Path.Combine(dir, "dgVoodoo_D3D9.dll");
 
@@ -2313,9 +2313,41 @@ public class DxWrapperChainTests
 
             Assert.Empty(sobras);
             Assert.False(File.Exists(dgVoodoo));
-            Assert.False(File.Exists(Path.Combine(dir, "dxwrapper.ini")));   // era nosso: sai inteiro
+            Assert.False(File.Exists(Path.Combine(dir, "D3D9.ini")));   // era nosso: sai inteiro
             Assert.True(File.Exists(Path.Combine(dir, "D3D9.dll")));          // o DxWrapper fica
             Assert.True(File.Exists(Path.Combine(dir, "dxwrapper.dll")));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void IniDoStubTemONomeDoStub()
+    {
+        // O DllMain do stub troca a extensão do PRÓPRIO caminho por ".ini": d3d9.dll lê
+        // d3d9.ini. Gravar no dxwrapper.ini (erro da primeira versão) deixava a corrente
+        // aberta — o jogo abria em D3D9 puro, sem dgVoodoo e sem ReShade.
+        Assert.Equal("D3D9.ini", DxWrapperChain.IniPara("D3D9.dll"));
+        Assert.Equal("D3D8.ini", DxWrapperChain.IniPara("D3D8.dll"));
+        var dg = Path.Combine(Path.GetTempPath(), "jogo", "dgVoodoo_D3D9.dll");
+        Assert.Equal(Path.Combine(Path.GetTempPath(), "jogo", "D3D9.ini"), DxWrapperChain.IniDoDgVoodoo(dg));
+    }
+
+    [Fact]
+    public void FaxinaLimpaTambemODxwrapperIniLegado()
+    {
+        // A primeira versão gravou o RealDllPath no dxwrapper.ini; quem instalou com ela
+        // tem esse arquivo (nosso, com a marca) na pasta. A faxina o reconhece e remove.
+        var dir = PastaEncadeada(out var dgVoodoo);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, DxWrapperChain.IniLegado), DxWrapperChain.GerarIni(null, dgVoodoo));
+
+            var sobras = new InstallerEngine(_ => { }).LimpezaTotal(dir);
+
+            Assert.Empty(sobras);
+            Assert.False(File.Exists(Path.Combine(dir, DxWrapperChain.IniLegado)));
+            Assert.False(File.Exists(Path.Combine(dir, "D3D9.ini")));
+            Assert.True(File.Exists(Path.Combine(dir, "D3D9.dll")));
         }
         finally { Directory.Delete(dir, true); }
     }
@@ -2326,7 +2358,7 @@ public class DxWrapperChainTests
         var dir = PastaEncadeada(out var dgVoodoo);
         try
         {
-            var ini = Path.Combine(dir, "dxwrapper.ini");
+            var ini = Path.Combine(dir, "D3D9.ini");
             File.WriteAllText(ini, DxWrapperChain.GerarIni("[General]\r\nHandleExceptions = 1\r\n", dgVoodoo));
 
             new InstallerEngine(_ => { }).LimpezaTotal(dir);
@@ -2352,12 +2384,12 @@ public class DxWrapperChainTests
             Assert.True(File.Exists(Path.Combine(dir, "D3D9.dll")));
             Assert.False(File.Exists(dgVoodoo));
             Assert.True(File.Exists(dgVoodoo + Isolamento.Sufixo));
-            Assert.Null(DxWrapperChain.LerRealDllPath(File.ReadAllText(Path.Combine(dir, "dxwrapper.ini"))));
+            Assert.Null(DxWrapperChain.LerRealDllPath(File.ReadAllText(Path.Combine(dir, "D3D9.ini"))));
 
             iso.Aplicar(EstadoIsolamento.Tudo, dir, dir);
 
             Assert.True(File.Exists(dgVoodoo));
-            Assert.Equal(dgVoodoo, DxWrapperChain.LerRealDllPath(File.ReadAllText(Path.Combine(dir, "dxwrapper.ini"))));
+            Assert.Equal(dgVoodoo, DxWrapperChain.LerRealDllPath(File.ReadAllText(Path.Combine(dir, "D3D9.ini"))));
         }
         finally { Directory.Delete(dir, true); }
     }
@@ -2382,7 +2414,7 @@ public class DxWrapperChainTests
             Assert.Equal(CheckStatus.Pass, corrente.State);
 
             // Corrente aberta: o dgVoodoo está lá, mas o DxWrapper não aponta para ele.
-            var ini = Path.Combine(dir, "dxwrapper.ini");
+            var ini = Path.Combine(dir, "D3D9.ini");
             File.WriteAllText(ini, DxWrapperChain.Desencadear(File.ReadAllText(ini)));
             var aberta = CheckpointVerifier.Verify(perfil, null)
                 .First(c => c.Number == 5 && c.Title.Contains("RealDllPath", StringComparison.Ordinal));

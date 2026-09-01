@@ -186,7 +186,7 @@ public static class InstallPlanBuilder
 
                 case Ocupante.DxWrapper:
                     var encadeado = Path.Combine(renderer, profile.DgVoodooChainedName);
-                    var ini = Path.Combine(renderer, DxWrapperChain.IniName);
+                    var ini = Path.Combine(renderer, DxWrapperChain.IniPara(wrapper));
                     Copy(wrapperSrc, renderer, profile.DgVoodooChainedName);
                     plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
                         $"Encadear DxWrapper → dgVoodoo: RealDllPath em {Rel(profile, ini)}",
@@ -194,7 +194,8 @@ public static class InstallPlanBuilder
                     plan.Warnings.Add(
                         $"O {wrapper} desta pasta é o DxWrapper (no Dead Space 2, é o conserto que faz o jogo " +
                         "abrir em CPU com mais de 10 núcleos). Ele FICA. O dgVoodoo entra ao lado como " +
-                        $"{profile.DgVoodooChainedName}, e o dxwrapper.ini ganha um RealDllPath apontando para " +
+                        $"{profile.DgVoodooChainedName}, e o {DxWrapperChain.IniPara(wrapper)} (o ini que o stub do " +
+                        "DxWrapper lê) ganha um RealDllPath apontando para " +
                         "ele: o DxWrapper carrega o dgVoodoo em vez do d3d9 do Windows. A marca d'água do " +
                         "dgVoodoo na tela continua sendo a prova de que a corrente fechou.");
                     break;
