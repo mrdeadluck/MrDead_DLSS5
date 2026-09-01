@@ -1536,6 +1536,42 @@ public sealed class MainForm : Form
         }
     }
 
+    private bool _avisoDeReinicioDado;
+
+    /// <summary>
+    /// O reinício pendente invalida TODO o resto: o driver só lê o override no boot, e
+    /// sem ele o log diz "ativo" com a imagem inalterada. Foi assim que 30 jogos
+    /// funcionando viraram "nenhum funciona" depois de uma desinstalação (que remove o
+    /// override) — as instalações seguintes regravaram a chave, mas ninguém reiniciou.
+    /// Era a linha 2 da tabela, perdida no meio das outras; agora interrompe.
+    /// </summary>
+    private void OferecerReinicio()
+    {
+        if (_avisoDeReinicioDado) return;
+        _avisoDeReinicioDado = true;
+
+        var resposta = MessageBox.Show(this,
+            "REINICIE O PC — sem isso NADA funciona de verdade.\r\n\r\n" +
+            "O override de assinatura está gravado no registro, mas o driver da NVIDIA só lê " +
+            "essa chave quando o Windows inicia. Enquanto o reinício não acontece:\r\n" +
+            "• o jogo e o log podem dizer \"ativo\" sem NADA ser aplicado na imagem;\r\n" +
+            "• jogos que funcionavam param depois de uma desinstalação (ela remove o override, " +
+            "e a reinstalação regrava a chave que o driver ainda não leu).\r\n\r\n" +
+            "Reiniciar o PC agora? (o Windows reinicia em 60 segundos; para cancelar, " +
+            "execute: shutdown /a)",
+            "Reinício pendente", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+
+        if (resposta != DialogResult.Yes) return;
+        try
+        {
+            Process.Start(new ProcessStartInfo("shutdown",
+                "/r /t 60 /c \"DLSS 5: reinício para o driver ler o override de assinatura.\"")
+            { UseShellExecute = true, CreateNoWindow = true });
+            _status.Text = "Reinício agendado para 60 segundos (cancelar: shutdown /a).";
+        }
+        catch (Exception ex) { Warn("Não consegui agendar o reinício: " + ex.Message); }
+    }
+
     private void RunVerification()
     {
         if (_profile is null) return;
@@ -1548,7 +1584,8 @@ public sealed class MainForm : Form
         _btnTestarConf.Visible = _profile.NeedsDgVoodoo;
 
         _grid.Rows.Clear();
-        foreach (var c in CheckpointVerifier.Verify(_profile, _manifest))
+        var resultados = CheckpointVerifier.Verify(_profile, _manifest).ToList();
+        foreach (var c in resultados)
         {
             int i = _grid.Rows.Add(StateText(c.State), $"{c.Number}. {c.Title}",
                 c.Detail, c.FixHint ?? "");
@@ -1575,6 +1612,9 @@ public sealed class MainForm : Form
             if (c.State == CheckStatus.Pass)
                 row.Cells[2].Style.ForeColor = Ui.Muted;
         }
+
+        if (resultados.Any(c => c.Number == 2 && c.State == CheckStatus.Fail))
+            OferecerReinicio();
 
         var sb = new System.Text.StringBuilder();
         sb.AppendLine("PASSOS MANUAIS — o que o programa não consegue fazer por você");

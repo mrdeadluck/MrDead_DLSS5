@@ -1809,3 +1809,79 @@ public class CaminhoDiretoNaoAcusaFalsoAlarmeTests
         finally { Directory.Delete(dir, true); }
     }
 }
+
+public class ReinicioPendenteTests
+{
+    [Fact]
+    public void AtivoNoLogNaoValeEnquantoOReinicioEstaPendente()
+    {
+        // O padrão que enganou a sessão inteira: 30 jogos funcionando, uma desinstalação
+        // removeu o override, o reboot seguinte o desativou no driver, e as instalações
+        // seguintes regravaram a chave que o driver nunca mais leu. Resultado: log
+        // dizendo "ativo" e imagem inalterada, em todos os jogos ao mesmo tempo. Um OK
+        // do checkpoint 14 nesse estado é mentira.
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5reboot_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "ReShade.log"), new string('x', 2000) +
+                "\n[DLSS 5 Neural Rendering] DLSS5 Generic: inline feature 18 evaluation succeeded (count=99)\n");
+
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "jogo.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D12,
+            };
+
+            // Override gravado agora, e o último boot é anterior a "agora": pendente.
+            var manifesto = new InstallManifest
+            {
+                GameFolder = dir,
+                ExeFolder = dir,
+                RegistryOverrideApplied = true,
+                RegistryOverrideAppliedUtc = DateTime.UtcNow,
+            };
+
+            var c14 = CheckpointVerifier.Verify(perfil, manifesto).First(c => c.Number == 14);
+
+            Assert.Equal(CheckStatus.Warning, c14.State);
+            Assert.Contains("não foi reiniciado", c14.Detail);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void DepoisDoReinicioOAtivoVolta_ASerOk()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5reboot_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "ReShade.log"), new string('x', 2000) +
+                "\n[DLSS 5 Neural Rendering] DLSS5 Generic: inline feature 18 evaluation succeeded (count=99)\n");
+
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "jogo.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D12,
+            };
+
+            // Override gravado bem antes do último boot: reinício já aconteceu.
+            var manifesto = new InstallManifest
+            {
+                GameFolder = dir,
+                ExeFolder = dir,
+                RegistryOverrideApplied = true,
+                RegistryOverrideAppliedUtc = DateTime.UtcNow - TimeSpan.FromDays(365),
+            };
+
+            var c14 = CheckpointVerifier.Verify(perfil, manifesto).First(c => c.Number == 14);
+            Assert.Equal(CheckStatus.Pass, c14.State);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}

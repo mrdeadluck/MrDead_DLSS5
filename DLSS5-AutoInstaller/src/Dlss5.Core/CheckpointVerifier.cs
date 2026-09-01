@@ -26,9 +26,11 @@ public static class CheckpointVerifier
             status.AllSet ? null : "Rode o programa como administrador e aplique o override."));
 
         // 2 — reiniciou depois do override
+        bool reinicioPendente = false;
         if (manifest?.RegistryOverrideAppliedUtc is { } appliedUtc)
         {
             bool rebooted = SignatureOverride.RebootedSinceEnable(appliedUtc);
+            reinicioPendente = !rebooted;
             r.Add(new CheckResult(2, "Reinício após aplicar o override",
                 rebooted ? CheckStatus.Pass : CheckStatus.Fail,
                 rebooted
@@ -247,7 +249,7 @@ public static class CheckpointVerifier
         }
 
         // 7/8 — ReShade carregou e viu o swapchain (lê o log se já existir)
-        r.AddRange(VerifyReShadeLog(exe, profile.GameFolder));
+        r.AddRange(VerifyReShadeLog(exe, profile.GameFolder, reinicioPendente));
 
         // 14/15/16 — dependem do jogo rodando
         r.AddRange(VerifyFeedLogs(exe, route, profile.NeedsFeeder));
@@ -288,7 +290,8 @@ public static class CheckpointVerifier
         }
     }
 
-    private static IEnumerable<CheckResult> VerifyReShadeLog(string exeFolder, string? gameFolder = null)
+    private static IEnumerable<CheckResult> VerifyReShadeLog(
+        string exeFolder, string? gameFolder = null, bool reinicioPendente = false)
     {
         var log = Path.Combine(exeFolder, "ReShade.log");
         if (!File.Exists(log))
@@ -335,6 +338,18 @@ public static class CheckpointVerifier
                        : renodx.HooksSemUso ? CheckStatus.Fail
                        : CheckStatus.Warning;
 
+            // O padrão que enganou todo mundo: com o override gravado mas o PC sem
+            // reiniciar, o log registra "ativo" e a imagem não muda NADA — o driver só
+            // carrega a chave no boot, e o que roda no lugar é um caminho vazio. Um
+            // "OK" aqui nesse estado é mentira; vira aviso até o reinício acontecer.
+            if (estado == CheckStatus.Pass && reinicioPendente)
+            {
+                yield return new CheckResult(14, "DLSS 5 aplicado na imagem", CheckStatus.Warning,
+                    renodx.Resumo + " PORÉM o PC não foi reiniciado desde o override: esse \"ativo\" " +
+                    "pode ser vazio — log dizendo que aplicou e imagem inalterada.",
+                    "REINICIE O PC e teste de novo. Só depois do reinício este resultado vale.");
+            }
+            else
             yield return new CheckResult(14, "DLSS 5 aplicado na imagem", estado, renodx.Resumo,
                 estado == CheckStatus.Pass
                     ? "Está funcionando. É DLAA: mesma resolução de render e de saída, então não " +
