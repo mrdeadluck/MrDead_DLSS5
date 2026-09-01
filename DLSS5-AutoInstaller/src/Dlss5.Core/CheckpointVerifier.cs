@@ -92,15 +92,24 @@ public static class CheckpointVerifier
                 ". Elas carregam o DXGI antes do ReShade e ficam com a interceptação.",
                 string.Join("  |  ", overlays.Select(o => $"{o.Nome}: {o.ComoDesligar}"))));
 
-        // 3 — o DLSS do jogo e o DLSS 5 disputando a mesma imagem
+        // 3 — o DLSS do próprio jogo: o kit não mexe nele. O que este checkpoint vigia de
+        // verdade é o nvngx_dlss.dll do jogo, que desinstalações antigas chegaram a apagar
+        // (e sem ele o menu de DLSS some e o jogo pode nem abrir).
         if (profile.HasNativeDlss && profile.NeedsFeeder)
         {
-            r.Add(new CheckResult(3, "DLSS do jogo tem que ficar DESLIGADO", CheckStatus.Manual,
-                $"O jogo tem DLSS próprio, mas roda em {profile.Api}: quem entrega o DLSS 5 aqui é o Feeder. " +
-                "Os dois ligados ao mesmo tempo disputam a mesma imagem — é assim que o jogo trava ao ligar " +
-                "o DLSS no menu.",
-                "Opções gráficas do jogo → DLSS/upscaling em Desligado (ou Nativo/TAA). O DLSS 5 continua " +
-                "ligado pelo painel do ReShade."));
+            bool dllDoJogo = File.Exists(Path.Combine(exe, "nvngx_dlss.dll"));
+            r.Add(dllDoJogo
+                ? new CheckResult(3, "DLSS do jogo: como você preferir", CheckStatus.Manual,
+                    "O jogo tem DLSS próprio e o kit NÃO mexe nele: pode deixar ligado ou desligado " +
+                    "no menu, inclusive baixando a qualidade para ganhar FPS. O Neural Rendering " +
+                    $"entra por cima, pelo Feeder (o jogo roda em {profile.Api}).")
+                : new CheckResult(3, "DLSS do jogo: nvngx_dlss.dll SUMIU da pasta", CheckStatus.Fail,
+                    "O jogo tem DLSS próprio mas o nvngx_dlss.dll não está na pasta — uma " +
+                    "desinstalação antiga apagou. Sem ele as opções de DLSS somem do menu e o " +
+                    "jogo pode travar na abertura. O kit não põe o dele no lugar: a versão do " +
+                    "kit não casa com o jogo.",
+                    "Steam → clique direito no jogo → Propriedades → Arquivos instalados → " +
+                    "Verificar integridade dos arquivos do jogo. Depois clique em Verificar de novo."));
         }
         else if (profile.UsesRenodxDirectPath)
         {

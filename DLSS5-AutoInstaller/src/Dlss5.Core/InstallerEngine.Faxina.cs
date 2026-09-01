@@ -59,12 +59,11 @@ public sealed partial class InstallerEngine
         ("D3D8.dll", "dgVoodoo"),
     };
 
-    /// <summary>
-    /// O kit tem um nvngx_dlss.dll e muitos jogos também. Este só sai quando há, na mesma
-    /// pasta, um arquivo que é inconfundivelmente nosso — senão a "limpeza" apagaria o
-    /// DLSS do próprio jogo, que é o erro que já custou caro uma vez.
-    /// </summary>
-    private const string AmbiguoDoJogo = "nvngx_dlss.dll";
+    // O nvngx_dlss.dll NUNCA sai pela faxina. Desde que o kit deixou de sobrescrever o
+    // DLSS do próprio jogo, o arquivo ao lado dos nossos addons num jogo com DLSS nativo
+    // é o do JOGO — apagá-lo faz as opções de DLSS sumirem do menu e pode travar o jogo
+    // na abertura. No pior caso (sobra do kit num jogo sem DLSS) ele é um arquivo morto e
+    // inofensivo: sem os addons ninguém o carrega. O de host64\ sai junto com a pasta.
 
     private static readonly string[] ProvasDoKit =
     {
@@ -240,11 +239,6 @@ public sealed partial class InstallerEngine
                 var caminho = Path.Combine(pasta, nome);
                 if (File.Exists(caminho)) nossos.Add(caminho);
             }
-
-        var ambiguo = Path.Combine(pasta, AmbiguoDoJogo);
-        if (File.Exists(ambiguo) &&
-            ProvasDoKit.Any(p => File.Exists(Path.Combine(pasta, p))))
-            nossos.Add(ambiguo);
 
         return nossos;
     }

@@ -115,7 +115,26 @@ public static class InstallPlanBuilder
                 Copy(kit.FeedAddon64, exe, "dlss5-feed.addon64");
             Copy(kit.RenodxAddon64, exe, "renodx-dlss5.addon64");
             Copy(kit.NvngxDlssnr, exe, "nvngx_dlssnr.dll");
-            CopySemSobrescreverDoJogo(kit.NvngxDlss, exe, "nvngx_dlss.dll");
+            if (profile.HasNativeDlss)
+            {
+                // Jogo com DLSS próprio: o único nvngx_dlss.dll que funciona aqui é o DELE,
+                // casado com o resto dos arquivos do jogo. A versão do kit nessa pasta trava
+                // o jogo na abertura (o motor carrega a DLL na inicialização e não aceita
+                // outra). Nem quando o arquivo falta o kit põe o dele: faltar significa que
+                // uma desinstalação antiga apagou o do jogo, e o conserto é a verificação de
+                // integridade da Steam, não um transplante. O Feeder usa o do jogo.
+                if (!File.Exists(Path.Combine(exe, "nvngx_dlss.dll")))
+                    plan.Warnings.Add(
+                        "O jogo tem DLSS próprio mas o nvngx_dlss.dll dele NÃO está na pasta — " +
+                        "uma desinstalação antiga apagou. O kit NÃO põe o dele no lugar: a versão " +
+                        "do kit não casa com o jogo e faz o jogo travar na abertura. Antes de jogar: " +
+                        "Steam → clique direito no jogo → Propriedades → Arquivos instalados → " +
+                        "Verificar integridade dos arquivos do jogo.");
+            }
+            else
+            {
+                CopySemSobrescreverDoJogo(kit.NvngxDlss, exe, "nvngx_dlss.dll");
+            }
         }
         else
         {
