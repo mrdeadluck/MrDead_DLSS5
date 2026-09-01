@@ -539,6 +539,84 @@ public class PlanBuilderTests
         finally { Directory.Delete(dir, true); }
     }
 
+    private static GameProfile PerfilRotaC(string dir) => new()
+    {
+        GameFolder = dir,
+        RealExePath = Path.Combine(dir, "deadspace2.exe"),
+        Architecture = PeArchitecture.X86,
+        Api = GraphicsApi.D3D9,
+        RendererFolder = dir,
+    };
+
+    [Fact]
+    public void RotaC_EncadeiaODgVoodooAtrasDoDxWrapper()
+    {
+        // Dead Space 2: o jogo não abria em CPU com mais de 10 núcleos, o DxWrapper
+        // (d3d9.dll + dxwrapper.dll) resolvia, e a instalação copiou o dgVoodoo por cima
+        // em silêncio — o conserto sumiu e o jogo voltou a não abrir. O nome é o mesmo,
+        // então o DxWrapper FICA e o dgVoodoo entra ao lado com outro nome, apontado pelo
+        // RealDllPath do dxwrapper.ini.
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5dxw_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "D3D9.dll"), "stub que carrega dxwrapper.dll");
+            File.WriteAllText(Path.Combine(dir, "dxwrapper.dll"), "DxWrapper");
+
+            var plan = InstallPlanBuilder.Build(PerfilRotaC(dir), FullKit(), new InstallOptions());
+
+            Assert.True(plan.CanRun);
+            // O D3D9.dll do DxWrapper não é alvo de nada.
+            Assert.DoesNotContain(plan.Actions, a =>
+                Path.GetFileName(a.TargetPath ?? "").Equals("D3D9.dll", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(plan.Actions, a =>
+                a.Kind == PlanActionKind.CopyFile &&
+                Path.GetFileName(a.TargetPath ?? "").Equals("dgVoodoo_D3D9.dll", StringComparison.OrdinalIgnoreCase));
+            var ini = Assert.Single(plan.Actions, a =>
+                a.Kind == PlanActionKind.WriteGeneratedFile &&
+                Path.GetFileName(a.TargetPath ?? "").Equals("dxwrapper.ini", StringComparison.OrdinalIgnoreCase));
+            Assert.EndsWith("dgVoodoo_D3D9.dll", ini.SourcePath!, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(plan.Warnings, w => w.Contains("RealDllPath", StringComparison.Ordinal));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void RotaC_DgVoodooJaInstaladoPodeSerSobrescrito()
+    {
+        // Reinstalar por cima do próprio dgVoodoo é o caso normal — e tem backup.
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5dxw_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "D3D9.dll"), "...dgVoodoo 2.8...");
+
+            var plan = InstallPlanBuilder.Build(PerfilRotaC(dir), FullKit(), new InstallOptions());
+
+            Assert.Empty(plan.Blockers);
+            Assert.True(Targets(plan, "D3D9.dll"));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void RotaC_WrapperDesconhecidoTambemBloqueia()
+    {
+        // Sem saber de onde veio, sobrescrever é apostar com o jogo do usuário.
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5dxw_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "D3D9.dll"), "ENB ou outra coisa qualquer");
+
+            var plan = InstallPlanBuilder.Build(PerfilRotaC(dir), FullKit(), new InstallOptions());
+
+            Assert.False(plan.CanRun);
+            Assert.Contains(plan.Blockers, b => b.Contains("não é o dgVoodoo", StringComparison.Ordinal));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
     [Fact]
     public void PlanoDenunciaOTransplanteAntesDeInstalar()
     {
@@ -2107,6 +2185,210 @@ public class TransplanteTests
             Assert.False(TransplanteDlss.EhDoKit(noJogo, noJogo));
         }
         finally { Directory.Delete(dir, true); Directory.Delete(kit, true); }
+    }
+}
+
+public class DxWrapperChainTests
+{
+    private static string NovaPasta()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5chain_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    /// <summary>PE mínimo com a arquitetura pedida, para o checkpoint 5 ler.</summary>
+    private static void PeFalso(string path, PeArchitecture arch)
+    {
+        var bytes = new byte[0x200];
+        bytes[0] = (byte)'M';
+        bytes[1] = (byte)'Z';
+        const int peOffset = 0x80;
+        BitConverter.GetBytes(peOffset).CopyTo(bytes, 0x3C);
+        bytes[peOffset] = (byte)'P';
+        bytes[peOffset + 1] = (byte)'E';
+        ushort machine = arch == PeArchitecture.X64 ? (ushort)0x8664 : (ushort)0x014C;
+        BitConverter.GetBytes(machine).CopyTo(bytes, peOffset + 4);
+        File.WriteAllBytes(path, bytes);
+    }
+
+    /// <summary>A pasta do Dead Space 2 depois da instalação encadeada.</summary>
+    private static string PastaEncadeada(out string dgVoodoo)
+    {
+        var dir = NovaPasta();
+        File.WriteAllText(Path.Combine(dir, "D3D9.dll"), "stub do DxWrapper");
+        File.WriteAllText(Path.Combine(dir, "dxwrapper.dll"), "DxWrapper");
+        dgVoodoo = Path.Combine(dir, "dgVoodoo_D3D9.dll");
+        PeFalso(dgVoodoo, PeArchitecture.X86);
+        File.WriteAllText(Path.Combine(dir, "dxwrapper.ini"), DxWrapperChain.GerarIni(null, dgVoodoo));
+        return dir;
+    }
+
+    [Fact]
+    public void IniNovoTemMarcaSecaoEChave()
+    {
+        var alvo = Path.Combine(Path.GetTempPath(), "jogo", "dgVoodoo_D3D9.dll");
+        var ini = DxWrapperChain.GerarIni(null, alvo);
+
+        Assert.True(DxWrapperChain.IniEhNosso(ini));
+        Assert.Contains("[General]", ini);
+        Assert.Equal(alvo, DxWrapperChain.LerRealDllPath(ini));
+        Assert.True(DxWrapperChain.ApontaParaODgVoodoo(ini));
+        // Comentário com '=' viraria "chave" para o parser do DxWrapper.
+        foreach (var linha in ini.Split("\r\n"))
+            if (linha.StartsWith(';')) Assert.DoesNotContain('=', linha);
+    }
+
+    [Fact]
+    public void IniDoUsuarioSoTemALinhaTrocada()
+    {
+        // Um dxwrapper.ini que o usuário já tinha é dele: o resto fica intacto.
+        var original = "[General]\r\nRealDllPath = \r\nHandleExceptions = 1\r\n\r\n[Compatibility]\r\nDisableGameUX = 1\r\n";
+
+        var ini = DxWrapperChain.GerarIni(original, @"C:\jogo\dgVoodoo_D3D9.dll");
+
+        Assert.False(DxWrapperChain.IniEhNosso(ini));
+        Assert.Equal(@"C:\jogo\dgVoodoo_D3D9.dll", DxWrapperChain.LerRealDllPath(ini));
+        Assert.Contains("HandleExceptions = 1", ini);
+        Assert.Contains("DisableGameUX = 1", ini);
+        Assert.Single(ini.Split("\r\n"), l => l.TrimStart().StartsWith("RealDllPath", StringComparison.OrdinalIgnoreCase));
+
+        // Sem a chave, ela entra logo abaixo de [General].
+        var semChave = DxWrapperChain.GerarIni("[General]\r\nHandleExceptions = 1\r\n", @"C:\x\dgVoodoo_D3D9.dll");
+        var linhas = semChave.Split("\r\n");
+        Assert.Equal("[General]", linhas[0]);
+        Assert.StartsWith("RealDllPath", linhas[1]);
+
+        // Desencadear devolve a linha em branco e não mexe no resto.
+        var solto = DxWrapperChain.Desencadear(ini);
+        Assert.Null(DxWrapperChain.LerRealDllPath(solto));
+        Assert.False(DxWrapperChain.ApontaParaODgVoodoo(solto));
+        Assert.Contains("DisableGameUX = 1", solto);
+    }
+
+    [Fact]
+    public void EngineGravaOIniPreservandoODoUsuario()
+    {
+        var dir = NovaPasta();
+        try
+        {
+            var ini = Path.Combine(dir, "dxwrapper.ini");
+            File.WriteAllText(ini, "[General]\r\nRealDllPath = \r\nHandleExceptions = 1\r\n");
+            var dgVoodoo = Path.Combine(dir, "dgVoodoo_D3D9.dll");
+
+            var profile = new GameProfile
+            {
+                GameFolder = dir, RealExePath = Path.Combine(dir, "deadspace2.exe"),
+                Architecture = PeArchitecture.X86, Api = GraphicsApi.D3D9, RendererFolder = dir,
+            };
+            var plan = new InstallPlan { Profile = profile, Options = new InstallOptions() };
+            plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile, "encadear", dgVoodoo, ini));
+
+            var engine = new InstallerEngine(_ => { });
+            var manifesto = engine.Execute(plan, new KitInventory { KitRoot = dir });
+
+            var texto = File.ReadAllText(ini);
+            Assert.Equal(dgVoodoo, DxWrapperChain.LerRealDllPath(texto));
+            Assert.Contains("HandleExceptions = 1", texto);
+            // Era do usuário: entra como backup, não como arquivo nosso.
+            Assert.True(manifesto.BackedUpFiles.ContainsKey(ini));
+            Assert.DoesNotContain(ini, manifesto.AddedFiles);
+
+            // Reverter devolve o ini dele, sem RealDllPath.
+            engine.Revert(manifesto, removeRegistryOverride: false);
+            Assert.Null(DxWrapperChain.LerRealDllPath(File.ReadAllText(ini)));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void FaxinaTiraODgVoodooEDesencadeiaOIni()
+    {
+        // Sem isso o DxWrapper ficaria apontando para um arquivo que sumiu — e o jogo
+        // voltaria a não abrir por culpa nossa.
+        var dir = PastaEncadeada(out var dgVoodoo);
+        try
+        {
+            var sobras = new InstallerEngine(_ => { }).LimpezaTotal(dir);
+
+            Assert.Empty(sobras);
+            Assert.False(File.Exists(dgVoodoo));
+            Assert.False(File.Exists(Path.Combine(dir, "dxwrapper.ini")));   // era nosso: sai inteiro
+            Assert.True(File.Exists(Path.Combine(dir, "D3D9.dll")));          // o DxWrapper fica
+            Assert.True(File.Exists(Path.Combine(dir, "dxwrapper.dll")));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void FaxinaNumIniDoUsuarioSoLimpaALinha()
+    {
+        var dir = PastaEncadeada(out var dgVoodoo);
+        try
+        {
+            var ini = Path.Combine(dir, "dxwrapper.ini");
+            File.WriteAllText(ini, DxWrapperChain.GerarIni("[General]\r\nHandleExceptions = 1\r\n", dgVoodoo));
+
+            new InstallerEngine(_ => { }).LimpezaTotal(dir);
+
+            Assert.True(File.Exists(ini));
+            var texto = File.ReadAllText(ini);
+            Assert.Null(DxWrapperChain.LerRealDllPath(texto));
+            Assert.Contains("HandleExceptions = 1", texto);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void IsolamentoDesligaSoODgVoodooEDeixaODxWrapper()
+    {
+        // Desligar o D3D9.dll aqui tiraria o conserto do jogo e o teste concluiria errado.
+        var dir = PastaEncadeada(out var dgVoodoo);
+        try
+        {
+            var iso = new Isolamento(_ => { });
+            iso.Aplicar(EstadoIsolamento.SemDgVoodoo, dir, dir);
+
+            Assert.True(File.Exists(Path.Combine(dir, "D3D9.dll")));
+            Assert.False(File.Exists(dgVoodoo));
+            Assert.True(File.Exists(dgVoodoo + Isolamento.Sufixo));
+            Assert.Null(DxWrapperChain.LerRealDllPath(File.ReadAllText(Path.Combine(dir, "dxwrapper.ini"))));
+
+            iso.Aplicar(EstadoIsolamento.Tudo, dir, dir);
+
+            Assert.True(File.Exists(dgVoodoo));
+            Assert.Equal(dgVoodoo, DxWrapperChain.LerRealDllPath(File.ReadAllText(Path.Combine(dir, "dxwrapper.ini"))));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void Checkpoint5ConfereACorrente()
+    {
+        var dir = PastaEncadeada(out var dgVoodoo);
+        try
+        {
+            var perfil = new GameProfile
+            {
+                GameFolder = dir, RealExePath = Path.Combine(dir, "deadspace2.exe"),
+                Architecture = PeArchitecture.X86, Api = GraphicsApi.D3D9, RendererFolder = dir,
+            };
+
+            var c5 = CheckpointVerifier.Verify(perfil, null).Where(c => c.Number == 5).ToList();
+            var dg = c5.First(c => c.Title.StartsWith("dgVoodoo2", StringComparison.Ordinal));
+            var corrente = c5.First(c => c.Title.Contains("RealDllPath", StringComparison.Ordinal));
+            Assert.Equal(CheckStatus.Pass, dg.State);
+            Assert.Contains("encadeado", dg.Detail);
+            Assert.Equal(CheckStatus.Pass, corrente.State);
+
+            // Corrente aberta: o dgVoodoo está lá, mas o DxWrapper não aponta para ele.
+            var ini = Path.Combine(dir, "dxwrapper.ini");
+            File.WriteAllText(ini, DxWrapperChain.Desencadear(File.ReadAllText(ini)));
+            var aberta = CheckpointVerifier.Verify(perfil, null)
+                .First(c => c.Number == 5 && c.Title.Contains("RealDllPath", StringComparison.Ordinal));
+            Assert.Equal(CheckStatus.Fail, aberta.State);
+        }
+        finally { Directory.Delete(dir, true); }
     }
 }
 

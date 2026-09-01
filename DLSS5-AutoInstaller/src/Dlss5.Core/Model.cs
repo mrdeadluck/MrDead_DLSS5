@@ -158,6 +158,12 @@ public sealed class GameProfile
     public string DgVoodooWrapperName => Api == GraphicsApi.D3D8 ? "D3D8.dll" : "D3D9.dll";
 
     /// <summary>
+    /// Nome do dgVoodoo quando o nome original já é de outro wrapper (DxWrapper) e os
+    /// dois são encadeados. Ver <see cref="DxWrapperChain"/>.
+    /// </summary>
+    public string DgVoodooChainedName => DxWrapperChain.NomeEncadeado(DgVoodooWrapperName);
+
+    /// <summary>
     /// API fora da matriz validada da especificação (seção 2). Instala, mas avisando:
     /// o addon do Feeder anuncia D3D11/D3D12/Vulkan, então OpenGL é tentativa.
     /// </summary>

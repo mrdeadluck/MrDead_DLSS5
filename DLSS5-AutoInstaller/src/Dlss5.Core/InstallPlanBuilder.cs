@@ -164,7 +164,45 @@ public static class InstallPlanBuilder
         {
             var renderer = profile.RendererFolder ?? exe;
             var wrapperSrc = profile.Api == GraphicsApi.D3D8 ? kit.DgVoodooD3D8X86 : kit.DgVoodooD3D9X86;
-            Copy(wrapperSrc, renderer, profile.DgVoodooWrapperName);
+
+            // O dgVoodoo só funciona com ESTE nome de arquivo — e ele pode já estar ocupado
+            // por outro wrapper que o usuário pôs ali de propósito. Foi o Dead Space 2: o
+            // jogo não abria em CPU com mais de 10 núcleos, o DxWrapper (d3d9.dll +
+            // dxwrapper.dll) resolvia, e a instalação copiou o dgVoodoo por cima em
+            // silêncio — o conserto sumiu e o jogo voltou a não abrir. Com o DxWrapper os
+            // dois convivem encadeados (ver DxWrapperChain); com um wrapper desconhecido,
+            // sobrescrever é apostar com o jogo do usuário, e o plano recusa.
+            var wrapper = profile.DgVoodooWrapperName;
+            switch (OcupanteDe(renderer, wrapper))
+            {
+                case Ocupante.Outro:
+                    plan.Blockers.Add(
+                        $"Já existe um {wrapper} nesta pasta que não é o dgVoodoo — outro wrapper, ou um " +
+                        "arquivo que veio com o jogo. O dgVoodoo precisa exatamente desse nome, e instalar " +
+                        "por cima substitui o que o jogo está usando hoje. Descubra de onde ele veio antes: " +
+                        "se for um conserto que você pôs ali, os dois não convivem; se for sobra de outra " +
+                        "ferramenta, remova-o e instale de novo.");
+                    return plan;
+
+                case Ocupante.DxWrapper:
+                    var encadeado = Path.Combine(renderer, profile.DgVoodooChainedName);
+                    var ini = Path.Combine(renderer, DxWrapperChain.IniName);
+                    Copy(wrapperSrc, renderer, profile.DgVoodooChainedName);
+                    plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
+                        $"Encadear DxWrapper → dgVoodoo: RealDllPath em {Rel(profile, ini)}",
+                        encadeado, ini));
+                    plan.Warnings.Add(
+                        $"O {wrapper} desta pasta é o DxWrapper (no Dead Space 2, é o conserto que faz o jogo " +
+                        "abrir em CPU com mais de 10 núcleos). Ele FICA. O dgVoodoo entra ao lado como " +
+                        $"{profile.DgVoodooChainedName}, e o dxwrapper.ini ganha um RealDllPath apontando para " +
+                        "ele: o DxWrapper carrega o dgVoodoo em vez do d3d9 do Windows. A marca d'água do " +
+                        "dgVoodoo na tela continua sendo a prova de que a corrente fechou.");
+                    break;
+
+                default:
+                    Copy(wrapperSrc, renderer, wrapper);
+                    break;
+            }
             Copy(kit.DgVoodooCpl, renderer, "dgVoodooCpl.exe");
             if (kit.DgVoodooConf is not null)
                 plan.Actions.Add(new PlanAction(PlanActionKind.PatchDgVoodooConf,
@@ -241,6 +279,29 @@ public static class InstallPlanBuilder
                 "Aplicar override de assinatura NGX no registro (HKLM, 3 chaves)", null, null));
 
         return plan;
+    }
+
+    private const long OrcamentoWrapper = 32L * 1024 * 1024;
+
+    /// <summary>Quem está com o nome que o dgVoodoo precisa.</summary>
+    private enum Ocupante { Ninguem, DxWrapper, Outro }
+
+    /// <summary>
+    /// Um dgVoodoo já instalado (nosso ou não) conta como ninguém: é o mesmo programa,
+    /// pode ser sobrescrito como sempre, e há backup.
+    /// </summary>
+    private static Ocupante OcupanteDe(string renderer, string wrapper)
+    {
+        var existente = Path.Combine(renderer, wrapper);
+        if (!File.Exists(existente)) return Ocupante.Ninguem;
+
+        // A varredura já cobre ASCII/UTF-16 e minúsculas: "DxWrapper" acha "dxwrapper.dll".
+        var marcas = ApiDetector.ScanForMarkers(existente, new[] { "dgVoodoo", "DxWrapper" }, OrcamentoWrapper);
+        if (marcas.Contains("dgVoodoo")) return Ocupante.Ninguem;
+
+        return marcas.Contains("DxWrapper") || DxWrapperChain.DxWrapperPresente(renderer)
+            ? Ocupante.DxWrapper
+            : Ocupante.Outro;
     }
 
     private static string DescribeUnsupported(GameProfile p)

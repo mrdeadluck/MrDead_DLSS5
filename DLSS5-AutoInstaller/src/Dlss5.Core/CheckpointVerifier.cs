@@ -255,13 +255,36 @@ public static class CheckpointVerifier
         {
             var renderer = profile.RendererFolder ?? exe;
             var wrapper = profile.DgVoodooWrapperName;
-            var d3d9 = Path.Combine(renderer, wrapper);
+            // Encadeado atrás do DxWrapper, o dgVoodoo tem outro nome — e o D3D9.dll da
+            // pasta é o DxWrapper, que passaria neste teste sem ser o que interessa.
+            bool encadeado = DxWrapperChain.Encadeado(renderer, wrapper);
+            var nomeDg = encadeado ? profile.DgVoodooChainedName : wrapper;
+            var d3d9 = Path.Combine(renderer, nomeDg);
             var conf = Path.Combine(renderer, "dgVoodoo.conf");
             bool d3d9Ok = File.Exists(d3d9) && PeFile.GetArchitecture(d3d9) == PeArchitecture.X86;
             r.Add(new CheckResult(5, "dgVoodoo2 na pasta do renderizador",
                 d3d9Ok ? CheckStatus.Pass : CheckStatus.Fail,
-                d3d9Ok ? $"{wrapper} (x86) em {renderer}" : $"{wrapper} x86 ausente em {renderer}",
+                d3d9Ok
+                    ? $"{nomeDg} (x86) em {renderer}" + (encadeado ? " — encadeado atrás do DxWrapper." : "")
+                    : $"{nomeDg} x86 ausente em {renderer}",
                 d3d9Ok ? null : $"No Source o {wrapper} vai em bin\\, não na raiz."));
+
+            if (encadeado)
+            {
+                var iniDxw = Path.Combine(renderer, DxWrapperChain.IniName);
+                string? real = null;
+                try { if (File.Exists(iniDxw)) real = DxWrapperChain.LerRealDllPath(ReadShared(iniDxw)); } catch { }
+                bool fechada = real is not null && Path.GetFileName(real)
+                    .Equals(nomeDg, StringComparison.OrdinalIgnoreCase);
+                r.Add(new CheckResult(5, "DxWrapper encadeado ao dgVoodoo (RealDllPath)",
+                    fechada ? CheckStatus.Pass : CheckStatus.Fail,
+                    fechada
+                        ? $"dxwrapper.ini aponta para {nomeDg}: o DxWrapper carrega o dgVoodoo, não o d3d9 do Windows."
+                        : real is null
+                            ? "dxwrapper.ini sem RealDllPath: o DxWrapper carrega o d3d9 do Windows e o dgVoodoo fica fora."
+                            : $"RealDllPath aponta para {real}, não para {nomeDg}.",
+                    fechada ? null : "Rode a instalação de novo — ela grava o RealDllPath no dxwrapper.ini."));
+            }
 
             if (File.Exists(conf))
             {

@@ -135,7 +135,7 @@ public sealed partial class InstallerEngine
                     break;
 
                 case PlanActionKind.WriteGeneratedFile:
-                    WriteGenerated(action.TargetPath!, plan, manifest);
+                    WriteGenerated(action.TargetPath!, plan, manifest, action.SourcePath);
                     break;
 
                 case PlanActionKind.PatchDgVoodooConf:
@@ -156,20 +156,36 @@ public sealed partial class InstallerEngine
         return manifest;
     }
 
-    private void WriteGenerated(string target, InstallPlan plan, InstallManifest manifest)
+    /// <param name="realDllPath">
+    /// Só para o dxwrapper.ini: o dgVoodoo encadeado que o RealDllPath deve apontar. Um
+    /// ini que já era do usuário é preservado — só essa linha muda (o backup fica no
+    /// manifesto, e a reversão devolve o arquivo dele).
+    /// </param>
+    private void WriteGenerated(string target, InstallPlan plan, InstallManifest manifest, string? realDllPath = null)
     {
         EnsureDirFor(target, manifest);
         BackupIfExists(target, manifest);
         var name = Path.GetFileName(target);
-        string content = name.Equals("ReShade.ini", StringComparison.OrdinalIgnoreCase)
-            ? ReShadeConfigWriter.BuildReShadeIni(
+        string content;
+        if (name.Equals(DxWrapperChain.IniName, StringComparison.OrdinalIgnoreCase))
+        {
+            var existente = File.Exists(target) ? File.ReadAllText(target) : null;
+            content = DxWrapperChain.GerarIni(existente, realDllPath!);
+        }
+        else if (name.Equals("ReShade.ini", StringComparison.OrdinalIgnoreCase))
+        {
+            content = ReShadeConfigWriter.BuildReShadeIni(
                 plan.Options.OverlayKey,
                 plan.Options.OverlayCtrl,
                 plan.Options.OverlayShift,
-                plan.Options.OverlayAlt)
-            : ReShadeConfigWriter.BuildPresetIni(
+                plan.Options.OverlayAlt);
+        }
+        else
+        {
+            content = ReShadeConfigWriter.BuildPresetIni(
                 plan.Options.MvProvider,
                 feederUsed: plan.Profile.NeedsFeeder);
+        }
         File.WriteAllText(target, content);
         Track(manifest, target);
         _log($"Gerado: {target}");
@@ -201,6 +217,7 @@ public sealed partial class InstallerEngine
         "renodx-dlss5.addon64", "nvngx_dlssnr.dll",
         "dlss5-feed.addon64", "dlss5-feed.addon32", "dlss5-feed.cfg", "dlss5-feed.log",
         "D3D9.dll", "D3D8.dll", "dgVoodoo.conf", "dgVoodooCpl.exe",
+        "dgVoodoo_D3D9.dll", "dgVoodoo_D3D8.dll",
     };
 
     /// <summary>
@@ -222,6 +239,10 @@ public sealed partial class InstallerEngine
         // listado aqui, ele entra no aviso e na oferta de faxina completa.
         var transplante = Path.Combine(exeFolder, "nvngx_dlss.dll");
         if (TransplanteDlss.EhDoKit(transplante, NvngxDlssDoKit)) sobras.Add(transplante);
+
+        // Um dxwrapper.ini ainda apontando para o dgVoodoo é sobra perigosa: com o
+        // dgVoodoo fora, o DxWrapper tentaria carregar um arquivo que não existe.
+        if (IniEncadeadoEm(exeFolder) is { } ini) sobras.Add(ini);
         foreach (var pasta in new[] { "reshade-shaders", "host64" })
         {
             var caminho = Path.Combine(exeFolder, pasta);

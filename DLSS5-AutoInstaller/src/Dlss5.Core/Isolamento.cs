@@ -38,6 +38,13 @@ public sealed class Isolamento
     private static IEnumerable<string> Alvos(EstadoIsolamento estado, string exeFolder, string rendererFolder) =>
         estado switch
         {
+            // Encadeado atrás do DxWrapper, o D3D9.dll da pasta é o DxWrapper — desligá-lo
+            // tiraria o conserto do jogo e o teste concluiria errado. Sai só o dgVoodoo.
+            EstadoIsolamento.SemDgVoodoo when DxWrapperChain.DxWrapperPresente(rendererFolder) => new[]
+            {
+                Path.Combine(rendererFolder, DxWrapperChain.NomeEncadeado("D3D8.dll")),
+                Path.Combine(rendererFolder, DxWrapperChain.NomeEncadeado("D3D9.dll")),
+            },
             EstadoIsolamento.SemDgVoodoo => new[]
             {
                 Path.Combine(rendererFolder, "D3D8.dll"),
@@ -78,6 +85,8 @@ public sealed class Isolamento
                 File.Move(alvo, off);
                 desligados.Add(alvo);
                 _log($"Desligado: {alvo} → {Path.GetFileName(off)}");
+                // O DxWrapper não pode ficar apontando para um arquivo que sumiu.
+                if (EhEncadeado(alvo)) Encadear(alvo, ligar: false);
             }
             catch (Exception ex)
             {
@@ -107,6 +116,7 @@ public sealed class Isolamento
                 File.Move(off, original, overwrite: true);
                 religados.Add(original);
                 _log($"Religado: {original}");
+                if (EhEncadeado(original)) Encadear(original, ligar: true);
             }
             catch (Exception ex)
             {
@@ -114,6 +124,33 @@ public sealed class Isolamento
             }
         }
         return religados;
+    }
+
+    private static bool EhEncadeado(string caminho) =>
+        Path.GetFileName(caminho).StartsWith(DxWrapperChain.Prefixo, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Mantém o dxwrapper.ini coerente com o dgVoodoo encadeado: RealDllPath em branco
+    /// enquanto ele está desligado, de volta ao caminho dele quando religa.
+    /// </summary>
+    private void Encadear(string dgVoodoo, bool ligar)
+    {
+        var ini = Path.Combine(Path.GetDirectoryName(dgVoodoo) ?? "", DxWrapperChain.IniName);
+        if (!File.Exists(ini)) return;
+        try
+        {
+            var texto = File.ReadAllText(ini);
+            File.WriteAllText(ini, ligar
+                ? DxWrapperChain.GerarIni(texto, dgVoodoo)
+                : DxWrapperChain.Desencadear(texto));
+            _log(ligar
+                ? $"dxwrapper.ini volta a apontar para {Path.GetFileName(dgVoodoo)}."
+                : "dxwrapper.ini sem RealDllPath: o DxWrapper carrega o d3d9 do Windows neste teste.");
+        }
+        catch (Exception ex)
+        {
+            _log($"Aviso: {ini}: {ex.Message}");
+        }
     }
 
     /// <summary>

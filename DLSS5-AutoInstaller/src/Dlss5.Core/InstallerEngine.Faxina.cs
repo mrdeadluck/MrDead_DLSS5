@@ -23,6 +23,8 @@ public sealed partial class InstallerEngine
         "renodx-dlss5.addon64", "dlss5-feed.addon64", "dlss5-feed.addon32",
         "dlss5-feed-host64.exe", "dlss5-feed.cfg", "dlss5-feed.log", "dlss5-feed-host.log",
         "nvngx_dlssnr.dll",
+        // O dgVoodoo encadeado atrás do DxWrapper: nenhum jogo traz um arquivo com esse nome.
+        "dgVoodoo_D3D9.dll", "dgVoodoo_D3D8.dll",
         "ReShade.ini", "ReShade.log", "ReShadePreset.ini",
         "ReShade64.json", "ReShade32.json", "ReShade64_XR.json", "ReShade32_XR.json",
         InstallManifest.FileName,
@@ -96,6 +98,7 @@ public sealed partial class InstallerEngine
         foreach (var pasta in PastasParaVarrer(gameFolder))
         {
             achados.AddRange(NossosArquivosEm(pasta));
+            if (IniEncadeadoEm(pasta) is { } ini) achados.Add(ini);
 
             foreach (var nome in PastasNossas)
             {
@@ -142,9 +145,11 @@ public sealed partial class InstallerEngine
         //    remove; decidir depois deixaria as duas pastas para trás.
         var arquivos = new List<string>();
         var pastas = new List<string>();
+        var inisEncadeados = new List<string>();
         foreach (var pasta in PastasParaVarrer(gameFolder).ToList())
         {
             arquivos.AddRange(NossosArquivosEm(pasta));
+            if (IniEncadeadoEm(pasta) is { } ini) inisEncadeados.Add(ini);
             foreach (var nome in PastasNossas)
             {
                 var alvo = Path.Combine(pasta, nome);
@@ -169,6 +174,13 @@ public sealed partial class InstallerEngine
                          "Steam repõe o do jogo.)");
             }
         }
+
+        // 3b. O dxwrapper.ini que encadeava o DxWrapper ao dgVoodoo. O dgVoodoo acabou de
+        //     sair, e um RealDllPath pendurado faria o DxWrapper tentar carregar um arquivo
+        //     que não existe — o jogo voltaria a não abrir, por culpa nossa. Ini nosso sai
+        //     inteiro; ini do usuário só perde a linha.
+        foreach (var ini in inisEncadeados)
+            if (DesencadearDxWrapper(ini)) apagados++;
 
         // 4. Pastas nossas por inteiro, das mais fundas para as mais rasas.
         foreach (var alvo in pastas.OrderByDescending(d => d.Length))
@@ -219,6 +231,46 @@ public sealed partial class InstallerEngine
         catch (Exception ex)
         {
             _log($"Aviso: {arquivo}: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>O dxwrapper.ini desta pasta, se o RealDllPath dele aponta para o nosso dgVoodoo.</summary>
+    private static string? IniEncadeadoEm(string pasta)
+    {
+        var ini = Path.Combine(pasta, DxWrapperChain.IniName);
+        try
+        {
+            return File.Exists(ini) && DxWrapperChain.ApontaParaODgVoodoo(File.ReadAllText(ini)) ? ini : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Tira o dgVoodoo do RealDllPath: apaga o ini se é nosso, senão só limpa a linha.</summary>
+    private bool DesencadearDxWrapper(string ini)
+    {
+        try
+        {
+            var texto = File.ReadAllText(ini);
+            if (!DxWrapperChain.ApontaParaODgVoodoo(texto)) return false;
+            if (DxWrapperChain.IniEhNosso(texto))
+            {
+                File.Delete(ini);
+                _log($"Apagado: {ini}");
+            }
+            else
+            {
+                File.WriteAllText(ini, DxWrapperChain.Desencadear(texto));
+                _log($"RealDllPath limpo em {ini} (o resto do arquivo é seu e ficou).");
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _log($"Aviso: {ini}: {ex.Message}");
             return false;
         }
     }
