@@ -64,8 +64,10 @@ jobs:
           path: publish/DLSS5-AutoInstaller.exe
           retention-days: 90
 
+      # Cada sessão de desenvolvimento usa uma branch claude/... nova; o link fixo
+      # da release precisa receber o build de todas elas, não só de uma.
       - name: Publicar/atualizar a Release "latest"
-        if: github.ref_name == 'claude/upload-large-files-02562q' || github.ref_name == 'main'
+        if: startsWith(github.ref_name, 'claude/') || github.ref_name == 'main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: installer-latest
