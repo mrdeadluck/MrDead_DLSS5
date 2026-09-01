@@ -137,11 +137,10 @@ public static class InstallPlanBuilder
         if (profile.HasNativeDlss && !profile.UsesRenodxDirectPath)
         {
             plan.Warnings.Add(
-                $"O jogo tem DLSS nativo, mas roda em {profile.Api} — e o RenoDX só enxerga NGX em D3D12. " +
-                "Sozinho ele ficaria em \"HOOKS ARMED / NO DLSS CREATE SEEN\", sem nunca aplicar nada. " +
-                "Por isso o Feeder (dlss5-feed.addon64) entra mesmo assim: ele roda o NGX num device D3D12 " +
-                "próprio. Nas opções do jogo, DESLIGUE o DLSS/upscaling — o Feeder faz DLAA (resolução de " +
-                "render = saída), então os dois juntos só atrapalham.");
+                "O jogo tem DLSS próprio e quem entra é o Feeder — o caminho comprovado. " +
+                "Duas regras para não travar: DESLIGUE o DLSS/upscaling no menu do jogo ANTES de abrir, " +
+                "e NUNCA mexa nessa opção do menu com o Feeder instalado (é isso que trava o jogo — " +
+                "Forza, GTA 5). Para mexer no menu, desinstale antes.");
         }
 
         if (profile.UsesRenodxDirectPath)
@@ -155,19 +154,6 @@ public static class InstallPlanBuilder
                 "NUNCA mexa no DLSS do menu: é isso que trava o jogo.");
         }
 
-        // O erro que custa caro: Feeder num jogo D3D12 que na verdade TEM DLSS próprio.
-        // Os dois brigam pela mesma chamada de NGX e mexer no DLSS do menu trava o jogo.
-        if (profile.Api == GraphicsApi.D3D12 && profile.NeedsFeeder &&
-            profile.NativeDlss?.Clues.Any(c =>
-                c.Texto.Contains("nvngx_dlss.dll", StringComparison.OrdinalIgnoreCase)) == true)
-        {
-            plan.Warnings.Add(
-                "Há um nvngx_dlss.dll na pasta e a detecção não conseguiu afirmar se ele é do jogo. " +
-                "Se este jogo TEM opção de DLSS no menu dele, NÃO instale assim: volte à Detecção, " +
-                "clique em Ajustar e mude \"DLSS nativo\" para SIM. Instalar o Feeder num jogo D3D12 " +
-                "com DLSS próprio faz o jogo TRAVAR ao mexer no DLSS do menu — foi o que aconteceu " +
-                "em Forza e em GTA 5.");
-        }
 
         if (profile.Api == GraphicsApi.OpenGL)
         {

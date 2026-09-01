@@ -418,8 +418,12 @@ public class PlanBuilderTests
     [Fact]
     public void NativeDlss_InD3D12_SkipsTheFeeder()
     {
+        // O caminho direto agora é opt-in: em 30+ jogos o Feeder funcionou de forma
+        // visível, e o direto disse "ok" no log com a tela inalterada (Onimusha, GTA 5).
+
         var profile = Profile(PeArchitecture.X64, GraphicsApi.D3D12);
         profile.HasNativeDlss = true;
+        profile.PreferirCaminhoDireto = true;
 
         Assert.False(profile.NeedsFeeder);
         Assert.True(profile.UsesRenodxDirectPath);
@@ -427,6 +431,21 @@ public class PlanBuilderTests
         var plan = InstallPlanBuilder.Build(profile, FullKit(), new InstallOptions());
         Assert.False(Targets(plan, "dlss5-feed.addon64"));
         Assert.True(Targets(plan, "renodx-dlss5.addon64"));
+    }
+
+    [Fact]
+    public void D3D12ComDlssNativo_PorPadraoAindaUsaOFeeder()
+    {
+        // A decisão é empírica: 30+ jogos funcionando pelo Feeder contra zero sucesso
+        // visível do caminho direto. Sem pedido explícito, o Feeder entra sempre.
+        var profile = Profile(PeArchitecture.X64, GraphicsApi.D3D12);
+        profile.HasNativeDlss = true;
+
+        Assert.False(profile.UsesRenodxDirectPath);
+        Assert.True(profile.NeedsFeeder);
+
+        var plan = InstallPlanBuilder.Build(profile, FullKit(), new InstallOptions());
+        Assert.True(Targets(plan, @"\dlss5-feed.addon64"));
     }
 
     [Fact]
@@ -450,6 +469,7 @@ public class PlanBuilderTests
     {
         var profile = Profile(PeArchitecture.X64, GraphicsApi.D3D12);
         profile.HasNativeDlss = true;
+        profile.PreferirCaminhoDireto = true;
         var plan = InstallPlanBuilder.Build(profile, FullKit(), new InstallOptions());
 
         Assert.False(Targets(plan, "dlss5-feed.addon64"));
@@ -1764,6 +1784,7 @@ public class CaminhoDiretoNaoAcusaFalsoAlarmeTests
         Architecture = PeArchitecture.X64,
         Api = GraphicsApi.D3D12,
         HasNativeDlss = true,
+        PreferirCaminhoDireto = true,   // o caminho direto virou opt-in
     };
 
     [Fact]
@@ -1799,6 +1820,7 @@ public class CaminhoDiretoNaoAcusaFalsoAlarmeTests
         {
             var perfil = PerfilD3D12ComDlssNativo(dir);
             perfil.HasNativeDlss = false;       // agora o Feeder entra
+            perfil.PreferirCaminhoDireto = false;
             Assert.True(perfil.NeedsFeeder);
 
             File.WriteAllText(Path.Combine(dir, "ReShadePreset.ini"), "[jogo.exe]\nTechniques=\n");

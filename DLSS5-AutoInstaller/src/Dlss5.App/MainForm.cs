@@ -34,6 +34,14 @@ public sealed class MainForm : Form
     private readonly ComboBox _cboApi = new();
     private readonly Label _lblNative = new();
     private readonly Label _lblNativeWhy = new();
+    private readonly CheckBox _chkDireto = new()
+    {
+        Text = "Usar o caminho direto do RenoDX (sem Feeder) — experimental: só marque se já viu funcionar",
+        AutoSize = false,
+        Width = 680,
+        Height = 22,
+        Visible = false,
+    };
     private readonly Button _btnNativeAjustar = Ui.Secondary("Ajustar");
     private readonly TextBox _txtRenderer = new();
     private readonly Label _lblRoute = new();
@@ -521,7 +529,15 @@ public sealed class MainForm : Form
         _lblNativeWhy.ForeColor = Ui.Muted;
         _lblNativeWhy.Font = Ui.SmallFont;
         _p1.Controls.Add(_lblNativeWhy);
-        y += 40;
+        y += 36;
+
+        // Empírico, não teórico: o Feeder funcionou em 30+ jogos; o caminho direto
+        // registrou "ok" no log com a tela inalterada. Então o Feeder é o padrão em
+        // TODO caso, e o direto só entra por escolha consciente.
+        _chkDireto.Location = new Point(230, y);
+        _chkDireto.CheckedChanged += (_, _) => SyncProfileFromUi();
+        _p1.Controls.Add(_chkDireto);
+        y += 28;
 
         _p1.Controls.Add(Caption("Pasta do renderizador:", y));
         _txtRenderer.SetBounds(230, y, 580, 25);
@@ -698,6 +714,7 @@ public sealed class MainForm : Form
         if (_cboApi.SelectedItem is GraphicsApi g) _profile.Api = g;
         if (!string.IsNullOrWhiteSpace(_txtRenderer.Text)) _profile.RendererFolder = _txtRenderer.Text;
         _profile.MvProvider = _options.MvProvider;
+        _profile.PreferirCaminhoDireto = _chkDireto.Visible && _chkDireto.Checked;
         UpdateMvAvailability();
         UpdateNativeLabel();
         UpdateRouteLabel();
@@ -715,6 +732,8 @@ public sealed class MainForm : Form
 
         var porque = _profile.NativeDlss?.Resumo ?? "sem detecção";
         _lblNativeWhy.Text = porque + Environment.NewLine + ConsequenciaDoNativo();
+
+        _chkDireto.Visible = _profile.HasNativeDlss && _profile.Api == GraphicsApi.D3D12;
     }
 
     /// <summary>
@@ -1417,6 +1436,7 @@ public sealed class MainForm : Form
         PopulateCandidates(_profile.RealExePath);
         _cboArch.SelectedItem = _profile.Architecture;
         _cboApi.SelectedItem = _profile.Api;
+        _chkDireto.Checked = false;
         _txtRenderer.Text = _profile.RendererFolder ?? _profile.ExeFolder;
         _cboMv.SelectedIndex = _options.MvProvider == MvProvider.Drme ? 1 : 0;
         SelectOverlayKey(_options.OverlayKey);
