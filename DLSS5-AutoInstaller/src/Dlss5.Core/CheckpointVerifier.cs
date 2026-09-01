@@ -9,7 +9,8 @@ public static class CheckpointVerifier
     /// <summary>ReShade.log menor que isso = placeholder "não fui carregado" (spec 8.3).</summary>
     public const long ReShadeLogPlaceholderSize = 982;
 
-    public static IReadOnlyList<CheckResult> Verify(GameProfile profile, InstallManifest? manifest)
+    public static IReadOnlyList<CheckResult> Verify(
+        GameProfile profile, InstallManifest? manifest, string? nvngxDlssDoKit = null)
     {
         var r = new List<CheckResult>();
         var exe = profile.ExeFolder;
@@ -97,19 +98,40 @@ public static class CheckpointVerifier
         // (e sem ele o menu de DLSS some e o jogo pode nem abrir).
         if (profile.HasNativeDlss && profile.NeedsFeeder)
         {
-            bool dllDoJogo = File.Exists(Path.Combine(exe, "nvngx_dlss.dll"));
-            r.Add(dllDoJogo
-                ? new CheckResult(3, "DLSS do jogo: como você preferir", CheckStatus.Manual,
-                    "O jogo tem DLSS próprio e o kit NÃO mexe nele: pode deixar ligado ou desligado " +
-                    "no menu, inclusive baixando a qualidade para ganhar FPS. O Neural Rendering " +
-                    $"entra por cima, pelo Feeder (o jogo roda em {profile.Api}).")
-                : new CheckResult(3, "DLSS do jogo: nvngx_dlss.dll SUMIU da pasta", CheckStatus.Fail,
+            var caminhoDll = Path.Combine(exe, "nvngx_dlss.dll");
+            if (!File.Exists(caminhoDll))
+            {
+                r.Add(new CheckResult(3, "DLSS do jogo: nvngx_dlss.dll SUMIU da pasta", CheckStatus.Fail,
                     "O jogo tem DLSS próprio mas o nvngx_dlss.dll não está na pasta — uma " +
                     "desinstalação antiga apagou. Sem ele as opções de DLSS somem do menu e o " +
                     "jogo pode travar na abertura. O kit não põe o dele no lugar: a versão do " +
                     "kit não casa com o jogo.",
                     "Steam → clique direito no jogo → Propriedades → Arquivos instalados → " +
                     "Verificar integridade dos arquivos do jogo. Depois clique em Verificar de novo."));
+            }
+            else if (TransplanteDlss.EhDoKit(caminhoDll, nvngxDlssDoKit))
+            {
+                // O estágio final da saga do transplante: o arquivo EXISTE, então o
+                // checkpoint antigo dizia "tudo certo" — mas ele é byte a byte o DO KIT,
+                // posto ali por instalação antiga. É o estado que faz motor que carrega
+                // o DLL na inicialização congelar antes da janela (o demo do Onimusha
+                // nem abria), e a verificação de integridade sozinha nem sempre repõe o
+                // original — em demo o depot pode não cobrir o arquivo.
+                r.Add(new CheckResult(3, "DLSS do jogo: o nvngx_dlss.dll da pasta é o DO KIT", CheckStatus.Fail,
+                    "O arquivo é byte a byte igual ao nvngx_dlss.dll do kit: uma instalação " +
+                    "antiga o pôs no lugar do DLL do jogo. Com ele o menu de DLSS quebra e há " +
+                    "motor que trava ANTES de criar a janela — o jogo nem abre.",
+                    "Use Desinstalar (reverter) ou Desfazer tudo (forçado) — agora eles removem " +
+                    "este arquivo. Depois: Steam → Propriedades → Arquivos instalados → Verificar " +
+                    "integridade, abra o jogo sem instalar nada para confirmar, e só então reinstale."));
+            }
+            else
+            {
+                r.Add(new CheckResult(3, "DLSS do jogo: como você preferir", CheckStatus.Manual,
+                    "O jogo tem DLSS próprio e o kit NÃO mexe nele: pode deixar ligado ou desligado " +
+                    "no menu, inclusive baixando a qualidade para ganhar FPS. O Neural Rendering " +
+                    $"entra por cima, pelo Feeder (o jogo roda em {profile.Api})."));
+            }
         }
         else if (profile.UsesRenodxDirectPath)
         {

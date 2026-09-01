@@ -1171,6 +1171,21 @@ public sealed class MainForm : Form
         }
     }
 
+    /// <summary>
+    /// Caminho do nvngx_dlss.dll DO KIT — o gabarito que permite reconhecer (e remover)
+    /// o transplante que instalações antigas deixaram na pasta do jogo. A faxina e a
+    /// verificação podem rodar antes da detecção, então o kit é resolvido aqui sob
+    /// demanda a partir da pasta digitada.
+    /// </summary>
+    private string? NvngxDoKit()
+    {
+        if (_kit?.NvngxDlss is { } pronto) return pronto;
+        var pasta = _txtKit.Text.Trim();
+        if (string.IsNullOrWhiteSpace(pasta) || !Directory.Exists(pasta)) return null;
+        _kit = KitResolver.Resolve(pasta);
+        return _kit.NvngxDlss;
+    }
+
     private void RevertInstall()
     {
         if (_profile is null) return;
@@ -1208,7 +1223,7 @@ public sealed class MainForm : Form
                 MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
             return;
 
-        var engine = new InstallerEngine(Log);
+        var engine = new InstallerEngine(Log) { NvngxDlssDoKit = NvngxDoKit() };
         ShowStep(3);
         _txtLog.Clear();
         try
@@ -1294,7 +1309,7 @@ public sealed class MainForm : Form
             return;
         }
 
-        var engine = new InstallerEngine(Log);
+        var engine = new InstallerEngine(Log) { NvngxDlssDoKit = NvngxDoKit() };
 
         // Varrer a pasta de um jogo grande leva alguns segundos; sem isso a janela
         // parece travada.
@@ -1597,7 +1612,7 @@ public sealed class MainForm : Form
         _btnTestarConf.Visible = _profile.NeedsDgVoodoo;
 
         _grid.Rows.Clear();
-        var resultados = CheckpointVerifier.Verify(_profile, _manifest).ToList();
+        var resultados = CheckpointVerifier.Verify(_profile, _manifest, NvngxDoKit()).ToList();
         foreach (var c in resultados)
         {
             int i = _grid.Rows.Add(StateText(c.State), $"{c.Number}. {c.Title}",

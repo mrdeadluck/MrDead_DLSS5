@@ -123,13 +123,25 @@ public static class InstallPlanBuilder
                 // outra). Nem quando o arquivo falta o kit põe o dele: faltar significa que
                 // uma desinstalação antiga apagou o do jogo, e o conserto é a verificação de
                 // integridade da Steam, não um transplante. O Feeder usa o do jogo.
-                if (!File.Exists(Path.Combine(exe, "nvngx_dlss.dll")))
+                var dllNaPasta = Path.Combine(exe, "nvngx_dlss.dll");
+                if (!File.Exists(dllNaPasta))
                     plan.Warnings.Add(
                         "O jogo tem DLSS próprio mas o nvngx_dlss.dll dele NÃO está na pasta — " +
                         "uma desinstalação antiga apagou. O kit NÃO põe o dele no lugar: a versão " +
                         "do kit não casa com o jogo e faz o jogo travar na abertura. Antes de jogar: " +
                         "Steam → clique direito no jogo → Propriedades → Arquivos instalados → " +
                         "Verificar integridade dos arquivos do jogo.");
+                else if (TransplanteDlss.EhDoKit(dllNaPasta, kit.NvngxDlss))
+                    // Pior que faltar: o arquivo presente é o DO KIT, transplantado por
+                    // instalação antiga. Instalar por cima não conserta nada — motor que
+                    // carrega o DLL na inicialização continua travando antes da janela.
+                    plan.Warnings.Add(
+                        "O nvngx_dlss.dll desta pasta é o DO KIT (byte a byte igual): uma instalação " +
+                        "antiga o pôs no lugar do DLL do jogo, e é isso que quebra o menu de DLSS e " +
+                        "faz motor que carrega a DLL na inicialização travar antes de abrir a janela. " +
+                        "Antes de jogar: use Desinstalar (reverter) ou Desfazer tudo (forçado) — eles " +
+                        "removem este arquivo — e depois Steam → Verificar integridade para repor o " +
+                        "original do jogo.");
             }
             else
             {

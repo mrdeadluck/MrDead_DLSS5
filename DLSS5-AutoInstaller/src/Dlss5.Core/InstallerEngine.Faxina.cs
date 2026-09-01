@@ -59,11 +59,20 @@ public sealed partial class InstallerEngine
         ("D3D8.dll", "dgVoodoo"),
     };
 
-    // O nvngx_dlss.dll NUNCA sai pela faxina. Desde que o kit deixou de sobrescrever o
-    // DLSS do próprio jogo, o arquivo ao lado dos nossos addons num jogo com DLSS nativo
-    // é o do JOGO — apagá-lo faz as opções de DLSS sumirem do menu e pode travar o jogo
-    // na abertura. No pior caso (sobra do kit num jogo sem DLSS) ele é um arquivo morto e
-    // inofensivo: sem os addons ninguém o carrega. O de host64\ sai junto com a pasta.
+    // O nvngx_dlss.dll só sai da faxina com prova ABSOLUTA de que é nosso: byte a byte
+    // igual ao do kit (o transplante que versões antigas fizeram por cima do DLL do
+    // jogo). Qualquer outro conteúdo é tratado como do JOGO e fica — apagá-lo faz as
+    // opções de DLSS sumirem do menu e pode travar o jogo na abertura. Sem o caminho do
+    // kit para comparar (NvngxDlssDoKit nulo) não há prova, e aí nada sai: no pior caso
+    // a sobra do kit num jogo sem DLSS é arquivo morto — sem os addons ninguém o
+    // carrega. O de host64\ sai junto com a pasta.
+
+    /// <summary>
+    /// Caminho do nvngx_dlss.dll DO KIT, usado como gabarito para reconhecer o
+    /// transplante. Sem ele a faxina volta ao comportamento conservador: não toca
+    /// em nenhum nvngx_dlss.dll.
+    /// </summary>
+    public string? NvngxDlssDoKit { get; set; }
 
     private static readonly string[] ProvasDoKit =
     {
@@ -152,7 +161,13 @@ public sealed partial class InstallerEngine
                 _log($"Mantido (é do jogo, acabou de ser restaurado): {arquivo}");
                 continue;
             }
-            if (Apagar(arquivo)) apagados++;
+            if (Apagar(arquivo))
+            {
+                apagados++;
+                if (Path.GetFileName(arquivo).Equals("nvngx_dlss.dll", StringComparison.OrdinalIgnoreCase))
+                    _log("   (era o DO KIT — byte a byte igual. A verificação de integridade da " +
+                         "Steam repõe o do jogo.)");
+            }
         }
 
         // 4. Pastas nossas por inteiro, das mais fundas para as mais rasas.
@@ -208,8 +223,24 @@ public sealed partial class InstallerEngine
         }
     }
 
+    /// <summary>
+    /// Remove o nvngx_dlss.dll desta pasta SE ele for o transplante — byte a byte igual
+    /// ao do kit. A reversão com manifesto precisa disto em separado: o transplante é
+    /// obra de instalação antiga e não consta em manifesto nenhum.
+    /// </summary>
+    public bool RemoverTransplante(string? pasta)
+    {
+        if (string.IsNullOrWhiteSpace(pasta)) return false;
+        var alvo = Path.Combine(pasta, "nvngx_dlss.dll");
+        if (!TransplanteDlss.EhDoKit(alvo, NvngxDlssDoKit)) return false;
+        if (!Apagar(alvo)) return false;
+        _log("Este nvngx_dlss.dll era o DO KIT (transplante de instalação antiga) — removido. " +
+             "Steam → Propriedades → Arquivos instalados → Verificar integridade repõe o do jogo.");
+        return true;
+    }
+
     /// <summary>Arquivos desta pasta (só nela) que dá para afirmar que são nossos.</summary>
-    private static List<string> NossosArquivosEm(string pasta)
+    private List<string> NossosArquivosEm(string pasta)
     {
         var nossos = new List<string>();
 
@@ -218,6 +249,10 @@ public sealed partial class InstallerEngine
             var caminho = Path.Combine(pasta, nome);
             if (File.Exists(caminho)) nossos.Add(caminho);
         }
+
+        // O transplante: idêntico ao arquivo do kit, então provadamente nosso.
+        var nvngx = Path.Combine(pasta, "nvngx_dlss.dll");
+        if (TransplanteDlss.EhDoKit(nvngx, NvngxDlssDoKit)) nossos.Add(nvngx);
 
         foreach (var (nome, prova) in PrecisamDeProva)
         {

@@ -217,6 +217,11 @@ public sealed partial class InstallerEngine
             var caminho = Path.Combine(exeFolder, nome);
             if (File.Exists(caminho)) sobras.Add(caminho);
         }
+
+        // O transplante que resistiu (arquivo em uso) é sobra como qualquer outra:
+        // listado aqui, ele entra no aviso e na oferta de faxina completa.
+        var transplante = Path.Combine(exeFolder, "nvngx_dlss.dll");
+        if (TransplanteDlss.EhDoKit(transplante, NvngxDlssDoKit)) sobras.Add(transplante);
         foreach (var pasta in new[] { "reshade-shaders", "host64" })
         {
             var caminho = Path.Combine(exeFolder, pasta);
@@ -459,6 +464,12 @@ public sealed partial class InstallerEngine
         // constar no manifesto. É o que salva uma instalação antiga ou interrompida.
         RestaurarBackupsOrfaos(manifest.ExeFolder);
         RestaurarBackupsOrfaos(manifest.GameFolder);
+
+        // O transplante de instalação antiga não consta em manifesto nenhum: se o
+        // nvngx_dlss.dll que ficou é byte a byte o do kit, ele NÃO é do jogo — sai
+        // agora, para a verificação de integridade da Steam poder repor o original.
+        // Depois dos backups: um original recém-devolvido tem bytes diferentes e fica.
+        RemoverTransplante(manifest.ExeFolder);
 
         // O ReShade e o addon criam estes depois de instalar, então não estão no
         // manifesto — e sem apagá-los a "desinstalação" deixa sujeira para trás.

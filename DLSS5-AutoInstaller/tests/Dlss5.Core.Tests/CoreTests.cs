@@ -540,6 +540,46 @@ public class PlanBuilderTests
     }
 
     [Fact]
+    public void PlanoDenunciaOTransplanteAntesDeInstalar()
+    {
+        // Pior que o slot vazio: o nvngx_dlss.dll PRESENTE, mas byte a byte igual ao do
+        // kit — transplante de instalação antiga. O checkpoint antigo via o arquivo e
+        // dizia "tudo certo"; instalar por cima não conserta e o jogo segue sem abrir.
+        // O plano precisa denunciar e mandar para a rota de recuperação.
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5nat_" + Guid.NewGuid().ToString("N"));
+        var kitDir = Path.Combine(Path.GetTempPath(), "dlss5kit_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        Directory.CreateDirectory(kitDir);
+        try
+        {
+            var kitDll = Path.Combine(kitDir, "nvngx_dlss.dll");
+            File.WriteAllText(kitDll, "bytes do kit");
+            File.WriteAllText(Path.Combine(dir, "nvngx_dlss.dll"), "bytes do kit");
+
+            var profile = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "jogo.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D12,
+                RendererFolder = dir,
+                HasNativeDlss = true,
+            };
+            var kit = FullKit();
+            kit.NvngxDlss = kitDll;
+
+            var plan = InstallPlanBuilder.Build(profile, kit, new InstallOptions());
+
+            Assert.DoesNotContain(plan.Actions, a =>
+                a.Kind == PlanActionKind.CopyFile &&
+                a.TargetPath?.EndsWith("nvngx_dlss.dll", StringComparison.OrdinalIgnoreCase) == true);
+            Assert.Contains(plan.Warnings, w =>
+                w.Contains("é o DO KIT", StringComparison.Ordinal));
+        }
+        finally { Directory.Delete(dir, true); Directory.Delete(kitDir, true); }
+    }
+
+    [Fact]
     public void RouteA_PutsEverythingInExeFolder()
     {
         var plan = InstallPlanBuilder.Build(
@@ -1063,6 +1103,93 @@ public class ReversaoTests
     }
 
     [Fact]
+    public void ReversaoRemoveOTransplanteQueNaoEstaNoManifesto()
+    {
+        // O transplante é obra de instalação ANTIGA: não consta no manifesto atual, não
+        // tem backup para devolver, e ficava na pasta para sempre — o motor do Onimusha
+        // carrega esse DLL na inicialização e congela antes da janela. Com o gabarito do
+        // kit, a reversão o reconhece e remove.
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5rev_" + Guid.NewGuid().ToString("N"));
+        var kit = Path.Combine(Path.GetTempPath(), "dlss5kit_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        Directory.CreateDirectory(kit);
+        try
+        {
+            File.WriteAllText(Path.Combine(kit, "nvngx_dlss.dll"), "bytes do kit");
+            File.WriteAllText(Path.Combine(dir, "nvngx_dlss.dll"), "bytes do kit");
+
+            var engine = new InstallerEngine(_ => { })
+            {
+                NvngxDlssDoKit = Path.Combine(kit, "nvngx_dlss.dll"),
+            };
+            var manifesto = new InstallManifest { GameFolder = dir, ExeFolder = dir };
+            var sobras = engine.Revert(manifesto, removeRegistryOverride: false);
+
+            Assert.False(File.Exists(Path.Combine(dir, "nvngx_dlss.dll")));
+            Assert.Empty(sobras);
+        }
+        finally { Directory.Delete(dir, true); Directory.Delete(kit, true); }
+    }
+
+    [Fact]
+    public void ReversaoDevolveOBackupEDeixaOOriginalQuieto()
+    {
+        // Quando existe backup, a própria reversão repõe o original do jogo — e o
+        // gabarito não pode apagar o que acabou de voltar: os bytes já não são do kit.
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5rev_" + Guid.NewGuid().ToString("N"));
+        var kit = Path.Combine(Path.GetTempPath(), "dlss5kit_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        Directory.CreateDirectory(kit);
+        try
+        {
+            File.WriteAllText(Path.Combine(kit, "nvngx_dlss.dll"), "bytes do kit");
+            File.WriteAllText(Path.Combine(dir, "nvngx_dlss.dll"), "bytes do kit");
+            File.WriteAllText(Path.Combine(dir, "nvngx_dlss.dll" + InstallerEngine.BackupSuffix),
+                "original do jogo");
+
+            var engine = new InstallerEngine(_ => { })
+            {
+                NvngxDlssDoKit = Path.Combine(kit, "nvngx_dlss.dll"),
+            };
+            var manifesto = new InstallManifest { GameFolder = dir, ExeFolder = dir };
+            engine.Revert(manifesto, removeRegistryOverride: false);
+
+            Assert.True(File.Exists(Path.Combine(dir, "nvngx_dlss.dll")));
+            Assert.Equal("original do jogo", File.ReadAllText(Path.Combine(dir, "nvngx_dlss.dll")));
+        }
+        finally { Directory.Delete(dir, true); Directory.Delete(kit, true); }
+    }
+
+    [Fact]
+    public void ConferirSobrasDenunciaOTransplanteQueResistiu()
+    {
+        // Se o arquivo estava em uso e a remoção falhou, ele precisa aparecer como
+        // sobra — é o que liga o aviso e a oferta de faxina completa na interface.
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5rev_" + Guid.NewGuid().ToString("N"));
+        var kit = Path.Combine(Path.GetTempPath(), "dlss5kit_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        Directory.CreateDirectory(kit);
+        try
+        {
+            File.WriteAllText(Path.Combine(kit, "nvngx_dlss.dll"), "bytes do kit");
+            File.WriteAllText(Path.Combine(dir, "nvngx_dlss.dll"), "bytes do kit");
+
+            var engine = new InstallerEngine(_ => { })
+            {
+                NvngxDlssDoKit = Path.Combine(kit, "nvngx_dlss.dll"),
+            };
+            var sobras = engine.ConferirSobras(dir);
+
+            Assert.Contains(sobras, f => f.EndsWith("nvngx_dlss.dll", StringComparison.Ordinal));
+
+            // Sem gabarito (ou com o DLL do jogo) o mesmo arquivo não é sobra.
+            Assert.DoesNotContain(new InstallerEngine(_ => { }).ConferirSobras(dir),
+                f => f.EndsWith("nvngx_dlss.dll", StringComparison.Ordinal));
+        }
+        finally { Directory.Delete(dir, true); Directory.Delete(kit, true); }
+    }
+
+    [Fact]
     public void ApagaOsArquivosQueOReShadeCriaAoRodar()
     {
         var dir = Path.Combine(Path.GetTempPath(), "dlss5rev_" + Guid.NewGuid().ToString("N"));
@@ -1364,11 +1491,10 @@ public class FaxinaTests
     }
 
     [Fact]
-    public void FaxinaNuncaApagaONvngxDlss()
+    public void FaxinaSemGabaritoDoKitNaoApagaONvngxDlss()
     {
-        // Desde que o kit deixou de sobrescrever, o nvngx_dlss.dll ao lado dos nossos
-        // addons num jogo com DLSS nativo é o do JOGO — e não existe backup para devolver.
-        // A faxina não pode mais apagá-lo nem com prova do kit na pasta.
+        // Sem o nvngx_dlss.dll do kit para comparar não existe prova — e sem prova o
+        // arquivo é tratado como do JOGO e fica, mesmo cercado dos nossos addons.
         var dir = NovaPasta();
         try
         {
@@ -1385,6 +1511,87 @@ public class FaxinaTests
             Assert.False(File.Exists(Path.Combine(dir, "nvngx_dlssnr.dll")));
         }
         finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void FaxinaRemoveOTransplanteProvadoPeloGabarito()
+    {
+        // O beco do Onimusha: o nvngx_dlss.dll da pasta é byte a byte o DO KIT —
+        // transplante de instalação antiga — e a verificação de integridade nem sempre
+        // repõe o original (em demo o depot pode não cobrir o arquivo). Com o gabarito
+        // do kit a prova é absoluta, e aí (e só aí) a faxina o remove.
+        var dir = NovaPasta();
+        var kit = NovaPasta();
+        try
+        {
+            Escrever(kit, "nvngx_dlss.dll", "bytes do kit");
+            Escrever(dir, "nvngx_dlss.dll", "bytes do kit");
+            Escrever(dir, "renodx-dlss5.addon64");
+
+            var engine = new InstallerEngine(_ => { })
+            {
+                NvngxDlssDoKit = Path.Combine(kit, "nvngx_dlss.dll"),
+            };
+            var sobras = engine.LimpezaTotal(dir);
+
+            Assert.Empty(sobras);
+            Assert.False(File.Exists(Path.Combine(dir, "nvngx_dlss.dll")));
+            Assert.False(File.Exists(Path.Combine(dir, "renodx-dlss5.addon64")));
+        }
+        finally { Directory.Delete(dir, true); Directory.Delete(kit, true); }
+    }
+
+    [Fact]
+    public void FaxinaComGabaritoMantemODllDoJogo()
+    {
+        // Bytes diferentes do kit não provam nada: pode ser o DLL genuíno do jogo,
+        // e nele o programa não encosta.
+        var dir = NovaPasta();
+        var kit = NovaPasta();
+        try
+        {
+            Escrever(kit, "nvngx_dlss.dll", "bytes do kit");
+            Escrever(dir, "nvngx_dlss.dll", "o do jogo, outra versão");
+            Escrever(dir, "renodx-dlss5.addon64");
+
+            var engine = new InstallerEngine(_ => { })
+            {
+                NvngxDlssDoKit = Path.Combine(kit, "nvngx_dlss.dll"),
+            };
+            var sobras = engine.LimpezaTotal(dir);
+
+            Assert.Empty(sobras);
+            Assert.True(File.Exists(Path.Combine(dir, "nvngx_dlss.dll")));
+            Assert.Equal("o do jogo, outra versão", File.ReadAllText(Path.Combine(dir, "nvngx_dlss.dll")));
+        }
+        finally { Directory.Delete(dir, true); Directory.Delete(kit, true); }
+    }
+
+    [Fact]
+    public void BackupDevolvidoGanhaDoGabarito()
+    {
+        // Ordem importa: primeiro os backups voltam ao lugar, depois a prova do
+        // gabarito decide. Se o backup devolveu o original do jogo, os bytes já não
+        // batem com o kit e o arquivo fica.
+        var dir = NovaPasta();
+        var kit = NovaPasta();
+        try
+        {
+            Escrever(kit, "nvngx_dlss.dll", "bytes do kit");
+            Escrever(dir, "nvngx_dlss.dll", "bytes do kit"); // transplante por cima
+            Escrever(dir, "nvngx_dlss.dll" + InstallerEngine.BackupSuffix, "original do jogo");
+
+            var engine = new InstallerEngine(_ => { })
+            {
+                NvngxDlssDoKit = Path.Combine(kit, "nvngx_dlss.dll"),
+            };
+            var sobras = engine.LimpezaTotal(dir);
+
+            Assert.Empty(sobras);
+            Assert.True(File.Exists(Path.Combine(dir, "nvngx_dlss.dll")));
+            Assert.Equal("original do jogo", File.ReadAllText(Path.Combine(dir, "nvngx_dlss.dll")));
+        }
+        finally { Directory.Delete(dir, true); Directory.Delete(kit, true); }
     }
 
     [Fact]
@@ -1786,6 +1993,90 @@ public class LogEmOutraPastaTests
             Assert.Contains("EA App", c7.FixHint!);
         }
         finally { Directory.Delete(raiz, true); }
+    }
+}
+
+public class TransplanteTests
+{
+    private static (string Dir, string Kit) Pastas()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5tx_" + Guid.NewGuid().ToString("N"));
+        var kit = Path.Combine(Path.GetTempPath(), "dlss5tk_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        Directory.CreateDirectory(kit);
+        return (dir, kit);
+    }
+
+    private static GameProfile PerfilComDlssNativo(string dir) => new()
+    {
+        GameFolder = dir,
+        RealExePath = Path.Combine(dir, "jogo.exe"),
+        Architecture = PeArchitecture.X64,
+        Api = GraphicsApi.D3D12,
+        RendererFolder = dir,
+        HasNativeDlss = true,
+    };
+
+    [Fact]
+    public void Checkpoint3AcusaOTransplante()
+    {
+        // O estado que enganava a verificação: o arquivo EXISTE, então o checkpoint
+        // dizia "como você preferir" — mas ele é o DO KIT, e é por isso que o jogo nem
+        // abre. Byte a byte igual = FALHA, com a rota de recuperação na dica.
+        var (dir, kit) = Pastas();
+        try
+        {
+            var kitDll = Path.Combine(kit, "nvngx_dlss.dll");
+            File.WriteAllText(kitDll, "bytes do kit");
+            File.WriteAllText(Path.Combine(dir, "nvngx_dlss.dll"), "bytes do kit");
+
+            var c3 = CheckpointVerifier.Verify(PerfilComDlssNativo(dir), null, kitDll)
+                .First(c => c.Number == 3);
+
+            Assert.Equal(CheckStatus.Fail, c3.State);
+            Assert.Contains("DO KIT", c3.Title);
+            Assert.Contains("Verificar integridade", c3.FixHint!);
+        }
+        finally { Directory.Delete(dir, true); Directory.Delete(kit, true); }
+    }
+
+    [Fact]
+    public void Checkpoint3AceitaODllDoJogo()
+    {
+        // Bytes diferentes do kit: é o DLL do jogo, e vale a regra "como você preferir".
+        var (dir, kit) = Pastas();
+        try
+        {
+            var kitDll = Path.Combine(kit, "nvngx_dlss.dll");
+            File.WriteAllText(kitDll, "bytes do kit");
+            File.WriteAllText(Path.Combine(dir, "nvngx_dlss.dll"), "o do jogo");
+
+            var c3 = CheckpointVerifier.Verify(PerfilComDlssNativo(dir), null, kitDll)
+                .First(c => c.Number == 3);
+
+            Assert.Equal(CheckStatus.Manual, c3.State);
+            Assert.Contains("como você preferir", c3.Title);
+        }
+        finally { Directory.Delete(dir, true); Directory.Delete(kit, true); }
+    }
+
+    [Fact]
+    public void SemGabaritoNaoHaProva()
+    {
+        var (dir, kit) = Pastas();
+        try
+        {
+            var noJogo = Path.Combine(dir, "nvngx_dlss.dll");
+            File.WriteAllText(noJogo, "bytes do kit");
+
+            // Sem o caminho do kit, ou com o kit inexistente, nada é transplante.
+            Assert.False(TransplanteDlss.EhDoKit(noJogo, null));
+            Assert.False(TransplanteDlss.EhDoKit(noJogo, Path.Combine(kit, "nvngx_dlss.dll")));
+
+            // E o próprio arquivo do kit nunca é transplante de si mesmo.
+            Assert.False(TransplanteDlss.EhDoKit(noJogo, noJogo));
+        }
+        finally { Directory.Delete(dir, true); Directory.Delete(kit, true); }
     }
 }
 
