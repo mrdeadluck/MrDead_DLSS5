@@ -540,30 +540,6 @@ public class PlanBuilderTests
     }
 
     [Fact]
-    public void FaxinaNuncaApagaONvngxDlss()
-    {
-        // Desde que o kit deixou de sobrescrever, o nvngx_dlss.dll ao lado dos nossos
-        // addons num jogo com DLSS nativo é o do JOGO — e não existe backup para devolver.
-        // A faxina não pode mais apagá-lo nem com prova do kit na pasta.
-        var dir = NovaPasta();
-        try
-        {
-            Escrever(dir, "renodx-dlss5.addon64");
-            Escrever(dir, "nvngx_dlssnr.dll");
-            Escrever(dir, "nvngx_dlss.dll", "o do jogo");
-
-            var sobras = new InstallerEngine(_ => { }).LimpezaTotal(dir);
-
-            Assert.Empty(sobras);
-            Assert.True(File.Exists(Path.Combine(dir, "nvngx_dlss.dll")));
-            Assert.Equal("o do jogo", File.ReadAllText(Path.Combine(dir, "nvngx_dlss.dll")));
-            Assert.False(File.Exists(Path.Combine(dir, "renodx-dlss5.addon64")));
-            Assert.False(File.Exists(Path.Combine(dir, "nvngx_dlssnr.dll")));
-        }
-        finally { Directory.Delete(dir, true); }
-    }
-
-    [Fact]
     public void RouteA_PutsEverythingInExeFolder()
     {
         var plan = InstallPlanBuilder.Build(
@@ -1383,6 +1359,30 @@ public class FaxinaTests
             new InstallerEngine(_ => { }).LimpezaTotal(dir);
 
             Assert.True(File.Exists(Path.Combine(dir, "dxgi.dll")));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void FaxinaNuncaApagaONvngxDlss()
+    {
+        // Desde que o kit deixou de sobrescrever, o nvngx_dlss.dll ao lado dos nossos
+        // addons num jogo com DLSS nativo é o do JOGO — e não existe backup para devolver.
+        // A faxina não pode mais apagá-lo nem com prova do kit na pasta.
+        var dir = NovaPasta();
+        try
+        {
+            Escrever(dir, "renodx-dlss5.addon64");
+            Escrever(dir, "nvngx_dlssnr.dll");
+            Escrever(dir, "nvngx_dlss.dll", "o do jogo");
+
+            var sobras = new InstallerEngine(_ => { }).LimpezaTotal(dir);
+
+            Assert.Empty(sobras);
+            Assert.True(File.Exists(Path.Combine(dir, "nvngx_dlss.dll")));
+            Assert.Equal("o do jogo", File.ReadAllText(Path.Combine(dir, "nvngx_dlss.dll")));
+            Assert.False(File.Exists(Path.Combine(dir, "renodx-dlss5.addon64")));
+            Assert.False(File.Exists(Path.Combine(dir, "nvngx_dlssnr.dll")));
         }
         finally { Directory.Delete(dir, true); }
     }
