@@ -144,6 +144,31 @@ public static class InstallPlanBuilder
                 "render = saída), então os dois juntos só atrapalham.");
         }
 
+        if (profile.UsesRenodxDirectPath)
+        {
+            plan.Warnings.Add(
+                "Caminho direto (D3D12 + DLSS nativo): o RenoDX processa a chamada de DLSS do próprio " +
+                "jogo, com o DLSS LIGADO no menu. Se o log disser que aplicou mas a IMAGEM não mudar " +
+                "(alterne com F6 para conferir), este jogo não funciona pelo caminho direto — aí a " +
+                "receita é a do God of War: DESLIGUE o DLSS no menu do jogo, volte à Detecção, " +
+                "Ajustar → DLSS nativo = NÃO, e reinstale para usar o Feeder. Com o Feeder instalado, " +
+                "NUNCA mexa no DLSS do menu: é isso que trava o jogo.");
+        }
+
+        // O erro que custa caro: Feeder num jogo D3D12 que na verdade TEM DLSS próprio.
+        // Os dois brigam pela mesma chamada de NGX e mexer no DLSS do menu trava o jogo.
+        if (profile.Api == GraphicsApi.D3D12 && profile.NeedsFeeder &&
+            profile.NativeDlss?.Clues.Any(c =>
+                c.Texto.Contains("nvngx_dlss.dll", StringComparison.OrdinalIgnoreCase)) == true)
+        {
+            plan.Warnings.Add(
+                "Há um nvngx_dlss.dll na pasta e a detecção não conseguiu afirmar se ele é do jogo. " +
+                "Se este jogo TEM opção de DLSS no menu dele, NÃO instale assim: volte à Detecção, " +
+                "clique em Ajustar e mude \"DLSS nativo\" para SIM. Instalar o Feeder num jogo D3D12 " +
+                "com DLSS próprio faz o jogo TRAVAR ao mexer no DLSS do menu — foi o que aconteceu " +
+                "em Forza e em GTA 5.");
+        }
+
         if (profile.Api == GraphicsApi.OpenGL)
         {
             plan.Warnings.Add(

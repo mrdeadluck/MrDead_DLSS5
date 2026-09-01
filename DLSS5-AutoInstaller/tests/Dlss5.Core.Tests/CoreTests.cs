@@ -1073,17 +1073,32 @@ public class NativeDlssDetectorTests
     }
 
     [Fact]
-    public void NossoNvngxDlssSozinhoNaoContaComoDlssDoJogo()
+    public void NvngxDlssJuntoDaNossaInstalacaoSemManifestoNaoDecide()
     {
-        // A raiz da confusão: o kit TEM um nvngx_dlss.dll e a instalação copia ele para a
-        // pasta do jogo. O detector antigo olhava só o nome do arquivo, então bastava
-        // instalar uma vez para o mesmo jogo passar a "ter DLSS nativo" na segunda vez —
-        // e o plano mudava sem que nada no jogo tivesse mudado.
+        // Instalação nossa presente (ReShade.ini) e manifesto sumido: o arquivo tanto
+        // pode ser o que copiamos quanto o do jogo — peso reduzido, não decide sozinho.
+        var dir = Pasta("nvngx_dlss.dll", "ReShade.ini", "jogo.exe");
+        try
+        {
+            Assert.False(NativeDlssDetector.Detect(dir, dir, null).Present);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void NvngxDlssSozinhoSemInstalacaoNossaEhDoJogo()
+    {
+        // Caso GTA 5: nvngx_dlss.dll na pasta e NENHUM arquivo nosso por perto. O
+        // instalador nunca deixa esse arquivo sozinho para trás, então ele veio com o
+        // jogo. Errar para o lado "não tem DLSS" custa caro: o Feeder entra junto do
+        // DLSS do jogo e mexer no menu TRAVA (Forza, GTA 5). Errar para o lado "tem"
+        // só deixa o RenoDX esperando — não quebra nada.
         var dir = Pasta("nvngx_dlss.dll", "jogo.exe");
         try
         {
             var d = NativeDlssDetector.Detect(dir, dir, null);
-            Assert.False(d.Present);
+            Assert.True(d.Present);
+            Assert.Contains(d.Clues, c => c.Texto.Contains("veio com o jogo"));
         }
         finally { Directory.Delete(dir, true); }
     }

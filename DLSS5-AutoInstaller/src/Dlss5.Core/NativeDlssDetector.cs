@@ -66,9 +66,17 @@ public static class NativeDlssDetector
         ("nvngx.dll", 30),
     };
 
-    /// <summary>Ambíguo: o kit também tem esse arquivo, então só conta se não for o nosso.</summary>
+    /// <summary>Ambíguo: o kit também tem esse arquivo, então o contexto é que decide.</summary>
     private const string Ambiguo = "nvngx_dlss.dll";
     private const int PesoAmbiguo = 30;
+    private const int PesoDecisivo = 50;
+
+    /// <summary>Arquivos que provam que ESTE programa instalou nesta pasta.</summary>
+    private static readonly string[] SinaisDaNossaInstalacao =
+    {
+        "renodx-dlss5.addon64", "dlss5-feed.addon64", "dlss5-feed.addon32",
+        "nvngx_dlssnr.dll", "ReShade.ini", InstallManifest.FileName,
+    };
 
     private const int Limiar = 45;
     private const long OrcamentoExe = 192L * 1024 * 1024;
@@ -91,10 +99,36 @@ public static class NativeDlssDetector
             if (presentes.ContainsKey(nome))
                 Add(peso, nome);
 
-        // O nvngx_dlss.dll da pasta pode ser o que NÓS copiamos. Se o manifesto da
-        // instalação anterior o lista, ele não é pista de nada.
-        if (presentes.TryGetValue(Ambiguo, out var caminhoAmbiguo) && !NossoArquivo(caminhoAmbiguo, instalacaoAnterior))
-            Add(PesoAmbiguo, Ambiguo + " (não foi este programa que colocou)");
+        // O nvngx_dlss.dll é o caso ambíguo: existe no kit e em muitos jogos. A regra
+        // decide pelo contexto, e o desempate pende para "é do jogo" DE PROPÓSITO — os
+        // dois erros não custam o mesmo. Dizer "tem DLSS" num jogo que não tem deixa o
+        // RenoDX esperando uma chamada que nunca vem: não aplica nada, não quebra nada.
+        // Dizer "não tem" num jogo que tem instala o Feeder junto do DLSS do jogo, e
+        // mexer no DLSS do menu TRAVA o jogo — aconteceu em Forza e em GTA 5.
+        if (presentes.TryGetValue(Ambiguo, out var caminhoAmbiguo))
+        {
+            var pastaDele = Path.GetDirectoryName(caminhoAmbiguo) ?? exeFolder;
+            bool nossaInstalacaoAqui = SinaisDaNossaInstalacao
+                .Any(n => File.Exists(Path.Combine(pastaDele, n)));
+
+            if (instalacaoAnterior is not null)
+            {
+                // O manifesto lista tudo que copiamos: ele decide sozinho.
+                if (!NossoArquivo(caminhoAmbiguo, instalacaoAnterior))
+                    Add(PesoDecisivo, Ambiguo + " (o manifesto da instalação não o lista: veio com o jogo)");
+            }
+            else if (!nossaInstalacaoAqui)
+            {
+                // Sem manifesto e sem NENHUM arquivo nosso na pasta, não fomos nós:
+                // o instalador nunca deixa o nvngx_dlss.dll sozinho para trás.
+                Add(PesoDecisivo, Ambiguo + " (sem instalação nossa na pasta: veio com o jogo)");
+            }
+            else
+            {
+                // Instalação nossa presente e manifesto sumido: não dá para afirmar.
+                Add(PesoAmbiguo, Ambiguo + " (pode ser desta instalação; peso reduzido)");
+            }
+        }
 
         if (exePath is not null && File.Exists(exePath))
         {
