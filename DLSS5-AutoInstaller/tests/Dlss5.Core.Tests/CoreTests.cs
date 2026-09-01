@@ -1305,7 +1305,7 @@ public class FaxinaTests
             Escrever(dir, "renodx-dlss5.addon64");
             Escrever(dir, "nvngx_dlssnr.dll");
             Escrever(dir, "ReShade.ini");
-            Escrever(dir, "nvngx_dlss.dll");          // nosso: há prova do kit ao lado
+            Escrever(dir, "nvngx_dlss.dll");          // fica: pode ser do jogo (o kit não sobrescreve mais)
             Escrever(dir, "dxgi.dll", "...ReShade 6.8.0...");
             Escrever(dir, "sl.dlss.dll");             // do jogo
             Escrever(dir, "nvngx_dlssg.dll");         // do jogo
@@ -1317,9 +1317,9 @@ public class FaxinaTests
             Assert.False(File.Exists(Path.Combine(dir, "renodx-dlss5.addon64")));
             Assert.False(File.Exists(Path.Combine(dir, "nvngx_dlssnr.dll")));
             Assert.False(File.Exists(Path.Combine(dir, "ReShade.ini")));
-            Assert.False(File.Exists(Path.Combine(dir, "nvngx_dlss.dll")));
             Assert.False(File.Exists(Path.Combine(dir, "dxgi.dll")));
 
+            Assert.True(File.Exists(Path.Combine(dir, "nvngx_dlss.dll")));
             Assert.True(File.Exists(Path.Combine(dir, "sl.dlss.dll")));
             Assert.True(File.Exists(Path.Combine(dir, "nvngx_dlssg.dll")));
             Assert.True(File.Exists(Path.Combine(dir, "jogo.exe")));
