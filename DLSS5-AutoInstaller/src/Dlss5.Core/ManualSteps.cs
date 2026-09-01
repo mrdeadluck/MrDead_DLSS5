@@ -28,11 +28,11 @@ public static class ManualSteps
             "Overlays podem carregar o DXGI antes do ReShade e roubar a interceptação.", false));
 
         if (profile.HasNativeDlss && profile.NeedsFeeder)
-            steps.Add(new ManualStep(n++, "Desligar o DLSS/upscaling nas opções do jogo",
-                $"Este jogo tem DLSS nativo, mas roda em {profile.Api} — e o RenoDX só consegue se pendurar " +
-                "no DLSS do próprio jogo quando ele é D3D12. Aqui quem faz o trabalho é o Feeder, que roda o " +
-                "NGX num device D3D12 próprio e entrega DLAA (resolução de render = saída). Deixe o upscaling " +
-                "do jogo em desligado/nativo: os dois ligados ao mesmo tempo brigam pela mesma imagem.", true));
+            steps.Add(new ManualStep(n++, "DLSS do jogo: pode deixar como preferir",
+                "Este jogo tem DLSS próprio, e o kit NÃO mexe nele — o menu de DLSS do jogo continua " +
+                "funcionando, ligado ou desligado. O Feeder acrescenta o Neural Rendering por cima, num " +
+                "device D3D12 próprio. Se você gosta do DLSS do jogo ligado para ganhar FPS, deixe ligado; " +
+                "o Neural Rendering entra em cima disso.", false));
 
         if (profile.UsesRenodxDirectPath)
             steps.Add(new ManualStep(n++, "LIGAR o DLSS nas opções do jogo",

@@ -412,9 +412,9 @@ public class PlanBuilderTests
 
         var plan = InstallPlanBuilder.Build(profile, FullKit(), new InstallOptions());
         Assert.True(Targets(plan, "dlss5-feed.addon64"));
-        // O aviso virou a receita comprovada: DLSS do jogo desligado, e nunca mexer
-        // nessa opção do menu com o Feeder instalado.
-        Assert.Contains(plan.Warnings, w => w.Contains("DESLIGADO", StringComparison.Ordinal));
+        // O aviso deixou de mandar desligar o DLSS (ele pode ficar ligado) e passou a
+        // dizer que o kit não sobrescreve o DLSS do jogo.
+        Assert.Contains(plan.Warnings, w => w.Contains("NÃO sobrescreve", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -448,6 +448,63 @@ public class PlanBuilderTests
 
         var plan = InstallPlanBuilder.Build(profile, FullKit(), new InstallOptions());
         Assert.True(Targets(plan, @"\dlss5-feed.addon64"));
+    }
+
+    [Fact]
+    public void NaoSobrescreveONvngxDlssDoProprioJogo()
+    {
+        // A causa recorrente do "sumiram as opções de DLSS do jogo": o kit copiava seu
+        // nvngx_dlss.dll por cima do do jogo. O do jogo é casado com o resto do Streamline
+        // dele; trocar quebra o menu e faz o NGX recusar com 0xBAD00007. Agora fica o do jogo.
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5nat_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "nvngx_dlss.dll"), "o do jogo");
+
+            var profile = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "jogo.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D12,
+                RendererFolder = dir,
+            };
+
+            var plan = InstallPlanBuilder.Build(profile, FullKit(), new InstallOptions());
+
+            // Nenhuma ação copia por cima do nvngx_dlss.dll que já existe.
+            Assert.DoesNotContain(plan.Actions, a =>
+                a.Kind == PlanActionKind.CopyFile &&
+                a.TargetPath?.EndsWith("nvngx_dlss.dll", StringComparison.OrdinalIgnoreCase) == true);
+            Assert.Contains(plan.Warnings, w => w.Contains("é do jogo", StringComparison.Ordinal));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void SemNvngxDlssNaPastaOKitTrazODele()
+    {
+        // Jogo sem DLSS próprio: aí sim o kit traz o seu nvngx_dlss.dll.
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5nat_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var profile = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "jogo.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D11,
+                RendererFolder = dir,
+            };
+
+            var plan = InstallPlanBuilder.Build(profile, FullKit(), new InstallOptions());
+            Assert.Contains(plan.Actions, a =>
+                a.Kind == PlanActionKind.CopyFile &&
+                a.TargetPath?.EndsWith("nvngx_dlss.dll", StringComparison.OrdinalIgnoreCase) == true);
+        }
+        finally { Directory.Delete(dir, true); }
     }
 
     [Fact]

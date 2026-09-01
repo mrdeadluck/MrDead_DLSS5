@@ -51,6 +51,24 @@ public static class InstallPlanBuilder
                 $"Copiar {dstName} → {Rel(profile, dst)}", src, dst));
         }
 
+        // NUNCA por cima do arquivo do jogo. O nvngx_dlss.dll do kit é UMA versão de DLSS;
+        // o jogo que já tem DLSS traz A DELE, casada com o resto do Streamline do jogo.
+        // Sobrescrever quebra o DLSS do jogo (as opções somem do menu) e faz o NGX recusar
+        // a runtime com 0xBAD00007 — foi o estrago recorrente em Forza, GTA 5 e Onimusha.
+        // Quando o jogo já tem o arquivo, é o dele que fica.
+        void CopySemSobrescreverDoJogo(string? src, string dstFolder, string dstName)
+        {
+            if (src is null) return;
+            if (File.Exists(Path.Combine(dstFolder, dstName)))
+            {
+                plan.Warnings.Add($"{dstName} já existe na pasta (é do jogo) — mantido. " +
+                    "O kit não sobrescreve o DLSS do próprio jogo: é isso que fazia as opções de " +
+                    "DLSS sumirem do menu depois de instalar.");
+                return;
+            }
+            Copy(src, dstFolder, dstName);
+        }
+
         // Limpeza dos proibidos primeiro (spec 3.7 / prólogo).
         if (options.CleanForbidden)
         {
@@ -97,7 +115,7 @@ public static class InstallPlanBuilder
                 Copy(kit.FeedAddon64, exe, "dlss5-feed.addon64");
             Copy(kit.RenodxAddon64, exe, "renodx-dlss5.addon64");
             Copy(kit.NvngxDlssnr, exe, "nvngx_dlssnr.dll");
-            Copy(kit.NvngxDlss, exe, "nvngx_dlss.dll");
+            CopySemSobrescreverDoJogo(kit.NvngxDlss, exe, "nvngx_dlss.dll");
         }
         else
         {
@@ -107,7 +125,7 @@ public static class InstallPlanBuilder
             Copy(kit.DxgiX64, host64, "dxgi.dll");
             Copy(kit.RenodxAddon64, host64, "renodx-dlss5.addon64");
             Copy(kit.NvngxDlssnr, host64, "nvngx_dlssnr.dll");
-            Copy(kit.NvngxDlss, host64, "nvngx_dlss.dll");
+            CopySemSobrescreverDoJogo(kit.NvngxDlss, host64, "nvngx_dlss.dll");
         }
 
         // Rota C: dgVoodoo na pasta do renderizador (exe ou bin\ no Source).
@@ -137,23 +155,21 @@ public static class InstallPlanBuilder
         if (profile.HasNativeDlss && !profile.UsesRenodxDirectPath)
         {
             plan.Warnings.Add(
-                "O jogo tem DLSS próprio e quem entra é o Feeder — o caminho comprovado. " +
-                "REGRA: o DLSS do menu do jogo precisa estar DESLIGADO antes desta instalação, e não " +
-                "pode ser mexido enquanto ela existir (os dois juntos travam o jogo — Forza, GTA 5). " +
-                "Se o DLSS do jogo estiver LIGADO agora, o jogo pode travar já na abertura, antes de " +
-                "chegar ao menu. A saída é sempre a mesma: Desinstalar (reverter) → abrir o jogo → " +
-                "desligar o DLSS no menu → fechar → instalar de novo.");
+                "O jogo tem DLSS próprio, e o kit NÃO sobrescreve o DLSS dele — o DLSS do jogo continua " +
+                "funcionando no menu, ligado ou desligado, do jeito que você preferir. O que o kit " +
+                "acrescenta é o Neural Rendering por cima. Se depois da instalação as opções de DLSS " +
+                "sumirem do menu ou o jogo travar ao ligar o DLSS, é sinal de que uma instalação ANTERIOR " +
+                "trocou o nvngx_dlss.dll do jogo: use Desinstalar (reverter) e, se preciso, a verificação " +
+                "de integridade da Steam para repor os arquivos originais do jogo.");
         }
 
         if (profile.UsesRenodxDirectPath)
         {
             plan.Warnings.Add(
-                "Caminho direto (D3D12 + DLSS nativo): o RenoDX processa a chamada de DLSS do próprio " +
-                "jogo, com o DLSS LIGADO no menu. Se o log disser que aplicou mas a IMAGEM não mudar " +
-                "(alterne com F6 para conferir), este jogo não funciona pelo caminho direto — aí a " +
-                "receita é a do God of War: DESLIGUE o DLSS no menu do jogo, volte à Detecção, " +
-                "Ajustar → DLSS nativo = NÃO, e reinstale para usar o Feeder. Com o Feeder instalado, " +
-                "NUNCA mexa no DLSS do menu: é isso que trava o jogo.");
+                "Caminho direto (D3D12 + DLSS nativo): o RenoDX processa a chamada de DLSS que o próprio " +
+                "jogo faz, então o DLSS do jogo fica LIGADO no menu, no modo que você quiser. Confira o " +
+                "resultado alternando com F6 dentro do jogo. Se a imagem não mudar, marque a caixa " +
+                "experimental do caminho direto (na Detecção) para testar o Feeder em vez dele.");
         }
 
 
