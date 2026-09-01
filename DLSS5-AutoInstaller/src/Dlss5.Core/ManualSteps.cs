@@ -14,9 +14,10 @@ public static class ManualSteps
         int n = 1;
 
         if (options.ApplyRegistryOverride)
-            steps.Add(new ManualStep(n++, "Reiniciar o Windows",
-                "O override de assinatura do NGX foi gravado no registro, mas o driver da NVIDIA só lê essa " +
-                "chave na inicialização. Sem reiniciar, o DLSS 5 falha com STANDBY / 0xBAD00007.", true));
+            steps.Add(new ManualStep(n++, "Reiniciar o Windows (opcional — uma vez só)",
+                "O driver da NVIDIA lê o override de assinatura na inicialização do Windows. Só faz " +
+                "diferença na primeira vez que o override é aplicado; se o DLSS 5 já aplica nos seus " +
+                "jogos, não precisa. O programa nunca reinicia o PC sozinho.", false));
 
         steps.Add(new ManualStep(n++, "Desligar as sobreposições (overlays)",
             "Steam → clique direito no jogo → Propriedades → desmarque a sobreposição. " +

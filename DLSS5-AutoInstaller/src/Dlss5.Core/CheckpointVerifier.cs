@@ -32,11 +32,11 @@ public static class CheckpointVerifier
             bool rebooted = SignatureOverride.RebootedSinceEnable(appliedUtc);
             reinicioPendente = !rebooted;
             r.Add(new CheckResult(2, "Reinício após aplicar o override",
-                rebooted ? CheckStatus.Pass : CheckStatus.Fail,
+                rebooted ? CheckStatus.Pass : CheckStatus.Warning,
                 rebooted
                     ? "O PC foi reiniciado depois de aplicar o override."
                     : "O override foi aplicado nesta sessão e o PC ainda não foi reiniciado.",
-                rebooted ? null : "Reinicie o Windows — o driver só lê essa chave na inicialização."));
+                rebooted ? null : "Se quiser, reinicie o Windows quando for cômodo — o driver lê essa chave na inicialização. O programa nunca reinicia sozinho."));
         }
         else
         {
@@ -345,9 +345,9 @@ public static class CheckpointVerifier
             if (estado == CheckStatus.Pass && reinicioPendente)
             {
                 yield return new CheckResult(14, "DLSS 5 aplicado na imagem", CheckStatus.Warning,
-                    renodx.Resumo + " PORÉM o PC não foi reiniciado desde o override: esse \"ativo\" " +
+                    renodx.Resumo + " Porém o PC não foi reiniciado desde o override: esse \"ativo\" " +
                     "pode ser vazio — log dizendo que aplicou e imagem inalterada.",
-                    "REINICIE O PC e teste de novo. Só depois do reinício este resultado vale.");
+                    "Se a imagem não mudou, reinicie o PC quando puder e teste de novo (o programa nunca reinicia sozinho).");
             }
             else
             yield return new CheckResult(14, "DLSS 5 aplicado na imagem", estado, renodx.Resumo,
@@ -357,7 +357,7 @@ public static class CheckpointVerifier
                       "nativo) a aba Início do ReShade fica VAZIA de propósito — quem trabalha é o " +
                       "addon, na aba Complementos."
                     : renodx.AssinaturaRecusada
-                        ? "Aplique o override no registro e REINICIE o PC — o driver só lê essa chave na inicialização."
+                        ? "Aplique o override no registro e reinicie o PC quando puder — o driver só lê essa chave na inicialização."
                         : renodx.HooksSemUso
                             ? "O RenoDX só enxerga NGX em D3D12. Fora disso quem trabalha é o Feeder; " +
                               "confirme que o DLSS 5 Feed está marcado no preset."
