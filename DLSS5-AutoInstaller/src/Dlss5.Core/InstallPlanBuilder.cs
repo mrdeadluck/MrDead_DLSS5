@@ -138,9 +138,11 @@ public static class InstallPlanBuilder
         {
             plan.Warnings.Add(
                 "O jogo tem DLSS próprio e quem entra é o Feeder — o caminho comprovado. " +
-                "Duas regras para não travar: DESLIGUE o DLSS/upscaling no menu do jogo ANTES de abrir, " +
-                "e NUNCA mexa nessa opção do menu com o Feeder instalado (é isso que trava o jogo — " +
-                "Forza, GTA 5). Para mexer no menu, desinstale antes.");
+                "REGRA: o DLSS do menu do jogo precisa estar DESLIGADO antes desta instalação, e não " +
+                "pode ser mexido enquanto ela existir (os dois juntos travam o jogo — Forza, GTA 5). " +
+                "Se o DLSS do jogo estiver LIGADO agora, o jogo pode travar já na abertura, antes de " +
+                "chegar ao menu. A saída é sempre a mesma: Desinstalar (reverter) → abrir o jogo → " +
+                "desligar o DLSS no menu → fechar → instalar de novo.");
         }
 
         if (profile.UsesRenodxDirectPath)

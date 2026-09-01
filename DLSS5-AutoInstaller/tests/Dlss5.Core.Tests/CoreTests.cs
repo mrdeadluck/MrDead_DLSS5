@@ -414,7 +414,7 @@ public class PlanBuilderTests
         Assert.True(Targets(plan, "dlss5-feed.addon64"));
         // O aviso virou a receita comprovada: DLSS do jogo desligado, e nunca mexer
         // nessa opção do menu com o Feeder instalado.
-        Assert.Contains(plan.Warnings, w => w.Contains("DESLIGUE", StringComparison.Ordinal));
+        Assert.Contains(plan.Warnings, w => w.Contains("DESLIGADO", StringComparison.Ordinal));
     }
 
     [Fact]
