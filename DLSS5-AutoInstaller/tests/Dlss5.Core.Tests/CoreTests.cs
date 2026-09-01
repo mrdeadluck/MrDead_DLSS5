@@ -412,7 +412,9 @@ public class PlanBuilderTests
 
         var plan = InstallPlanBuilder.Build(profile, FullKit(), new InstallOptions());
         Assert.True(Targets(plan, "dlss5-feed.addon64"));
-        Assert.Contains(plan.Warnings, w => w.Contains("D3D12", StringComparison.Ordinal));
+        // O aviso virou a receita comprovada: DLSS do jogo desligado, e nunca mexer
+        // nessa opção do menu com o Feeder instalado.
+        Assert.Contains(plan.Warnings, w => w.Contains("DESLIGUE", StringComparison.Ordinal));
     }
 
     [Fact]
