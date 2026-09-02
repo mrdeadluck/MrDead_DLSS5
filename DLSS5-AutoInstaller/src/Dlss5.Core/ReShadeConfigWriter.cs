@@ -106,12 +106,23 @@ public static class ReShadeConfigWriter
         return string.Join("+", parts);
     }
 
+    /// <param name="feederUsed">
+    /// Com o Feeder, o Generic Depth é peça da cadeia (o Feed.fx lê o depth por ele) e
+    /// a cópia antes dos clears garante que ele veja a cena inteira. No caminho direto
+    /// nada disso serve: o RenoDX recebe depth e motion vectors do contrato NGX do
+    /// próprio jogo. E não é só inútil — a cópia antes de cada clear insere cópias e
+    /// barreiras no meio do frame, e foi o que derrubou o RE9 (crash dentro do exe um
+    /// segundo depois do runtime do ReShade subir, com ou sem RenoDX), enquanto uma
+    /// instalação manual do ReShade, que não liga isso, roda. No direto o Generic
+    /// Depth fica desligado por inteiro.
+    /// </param>
     public static string BuildReShadeIni(
         int overlayKey = KeyHome,
         bool ctrl = false,
         bool shift = false,
         bool alt = false,
-        string presetFile = "ReShadePreset.ini")
+        string presetFile = "ReShadePreset.ini",
+        bool feederUsed = true)
     {
         var sb = new StringBuilder();
         sb.AppendLine("[GENERAL]");
@@ -124,10 +135,15 @@ public static class ReShadeConfigWriter
         sb.AppendLine();
         sb.AppendLine("[ADDON]");
         sb.AppendLine(@"AddonPath=.\");
-        sb.AppendLine();
-        sb.AppendLine("[DEPTH]");
-        // Generic Depth costuma acertar sozinho; deixamos os overrides zerados e visíveis.
-        sb.AppendLine("DepthCopyBeforeClears=1");
+        if (!feederUsed)
+            sb.AppendLine("DisabledAddons=Generic Depth");
+        if (feederUsed)
+        {
+            sb.AppendLine();
+            sb.AppendLine("[DEPTH]");
+            // Generic Depth costuma acertar sozinho; deixamos os overrides zerados e visíveis.
+            sb.AppendLine("DepthCopyBeforeClears=1");
+        }
         return sb.ToString();
 
         static int Bit(bool b) => b ? 1 : 0;

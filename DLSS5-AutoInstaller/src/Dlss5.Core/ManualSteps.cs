@@ -42,9 +42,13 @@ public static class ManualSteps
                 "interceptar, e o RenoDX fica em \"HOOKS ARMED / NO DLSS CREATE SEEN\" sem aplicar nada. " +
                 "Ligue o DLSS no menu do jogo (qualquer modo) antes de esperar resultado.", true));
 
-        steps.Add(new ManualStep(n++, "Desligar MSAA/SSAA nas opções gráficas do jogo",
-            "O Generic Depth não enxerga um depth buffer multisampled, e SSAA conflita com o DLAA. " +
-            "FXAA e SMAA são pós-processo e podem continuar ligados.", true));
+        // Depth pelo Generic Depth e DLAA do Feeder: só existem no caminho do Feeder. No
+        // direto o RenoDX recebe depth e motion vectors do contrato NGX do jogo, e o
+        // Generic Depth fica desligado de propósito (a cópia antes dos clears derrubou o RE9).
+        if (profile.NeedsFeeder)
+            steps.Add(new ManualStep(n++, "Desligar MSAA/SSAA nas opções gráficas do jogo",
+                "O Generic Depth não enxerga um depth buffer multisampled, e SSAA conflita com o DLAA. " +
+                "FXAA e SMAA são pós-processo e podem continuar ligados.", true));
 
         if (profile.SuggestedLaunchOptions is { } launchOpts)
             steps.Add(new ManualStep(n++, $"Adicionar a opção de inicialização {launchOpts}",
@@ -74,16 +78,27 @@ public static class ManualSteps
                 "É o único teste confiável de que ele está interceptando o Direct3D. " +
                 "Sem ela, o D3D9.dll está na pasta errada (no Source vai em bin\\) ou o passthru continua ligado.", false));
 
-        steps.Add(new ManualStep(n++, "Abrir o jogo e conferir o painel do ReShade",
-            $"No jogo, aperte {options.OverlayKeyLabel} para abrir o ReShade. " +
-            "Na aba Início, o provedor de motion vectors e o DLSS 5 Feed já vêm marcados na ordem certa " +
-            "(o programa gerou o preset). Confirme na aba Complementos que o DLSS 5 Feed aparece listado" +
-            (profile.Route == InstallRoute.A ? " junto com o DLSS 5 Neural Rendering." : ". Em jogo 32-bit, as opções neurais ficam DENTRO do painel do DLSS 5 Feed, no grupo 'on the host', com botão Apply."), false));
+        if (profile.NeedsFeeder)
+        {
+            steps.Add(new ManualStep(n++, "Abrir o jogo e conferir o painel do ReShade",
+                $"No jogo, aperte {options.OverlayKeyLabel} para abrir o ReShade. " +
+                "Na aba Início, o provedor de motion vectors e o DLSS 5 Feed já vêm marcados na ordem certa " +
+                "(o programa gerou o preset). Confirme na aba Complementos que o DLSS 5 Feed aparece listado" +
+                (profile.Route == InstallRoute.A ? " junto com o DLSS 5 Neural Rendering." : ". Em jogo 32-bit, as opções neurais ficam DENTRO do painel do DLSS 5 Feed, no grupo 'on the host', com botão Apply."), false));
 
-        steps.Add(new ManualStep(n++, "Conferir o depth buffer",
-            "Na aba Complementos → Generic Depth, confirme que o buffer da cena está selecionado e não está " +
-            "marcado como Multisampled. Se a imagem ficar estranha, ative o DisplayDepth.fx para ver o depth: " +
-            "se estiver invertido ou de cabeça para baixo, marque RESHADE_DEPTH_INPUT_IS_REVERSED / IS_UPSIDE_DOWN.", false));
+            steps.Add(new ManualStep(n++, "Conferir o depth buffer",
+                "Na aba Complementos → Generic Depth, confirme que o buffer da cena está selecionado e não está " +
+                "marcado como Multisampled. Se a imagem ficar estranha, ative o DisplayDepth.fx para ver o depth: " +
+                "se estiver invertido ou de cabeça para baixo, marque RESHADE_DEPTH_INPUT_IS_REVERSED / IS_UPSIDE_DOWN.", false));
+        }
+        else
+        {
+            steps.Add(new ManualStep(n++, "Abrir o jogo e conferir o painel do ReShade",
+                $"No jogo, aperte {options.OverlayKeyLabel} para abrir o ReShade. A aba Início fica VAZIA de " +
+                "propósito: quem trabalha é o addon, na aba Complementos → DLSS 5 Neural Rendering. O texto de " +
+                "estado lá embaixo tem que dizer \"ACTIVE - NR INJECTED\"; \"HOOKS ARMED / NO DLSS CREATE SEEN\" " +
+                "significa que o jogo não pediu DLSS (ligue no menu). F6 liga e desliga o efeito para comparar.", false));
+        }
 
         steps.Add(new ManualStep(n++, "Voltar aqui e clicar em Verificar",
             "Com o jogo já aberto uma vez, o programa consegue ler os logs e dizer exatamente o que falta.", false));

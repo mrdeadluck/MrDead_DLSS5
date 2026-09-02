@@ -234,6 +234,34 @@ public class ReShadeConfigWriterTests
     }
 }
 
+public class ReShadeIniPorCaminhoTests
+{
+    [Fact]
+    public void ComFeederOGenericDepthCopiaAntesDosClears()
+    {
+        var ini = ReShadeConfigWriter.BuildReShadeIni(feederUsed: true);
+        Assert.Contains("[DEPTH]", ini);
+        Assert.Contains("DepthCopyBeforeClears=1", ini);
+        Assert.DoesNotContain("DisabledAddons", ini);
+    }
+
+    [Fact]
+    public void NoCaminhoDiretoOGenericDepthFicaFora()
+    {
+        // RE9: crash dentro do exe um segundo depois do runtime do ReShade subir, com ou
+        // sem RenoDX. A diferença para uma instalação manual (que roda) era a cópia do
+        // depth antes de cada clear — inútil no caminho direto, onde o RenoDX recebe
+        // depth e motion vectors do contrato NGX do jogo.
+        var ini = ReShadeConfigWriter.BuildReShadeIni(feederUsed: false);
+        Assert.DoesNotContain("DepthCopyBeforeClears", ini);
+        Assert.DoesNotContain("[DEPTH]", ini);
+        Assert.Contains("DisabledAddons=Generic Depth", ini);
+        // O resto continua igual: addons da pasta e preset no lugar.
+        Assert.Contains(@"AddonPath=.\", ini);
+        Assert.Contains("PresetPath=", ini);
+    }
+}
+
 public class ApiDetectorTests
 {
     private static string WriteFakeBinary(byte[] content)

@@ -178,7 +178,8 @@ public sealed partial class InstallerEngine
                 plan.Options.OverlayKey,
                 plan.Options.OverlayCtrl,
                 plan.Options.OverlayShift,
-                plan.Options.OverlayAlt);
+                plan.Options.OverlayAlt,
+                feederUsed: plan.Profile.NeedsFeeder);
         }
         else
         {
