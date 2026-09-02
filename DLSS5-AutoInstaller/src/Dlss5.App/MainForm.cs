@@ -776,8 +776,10 @@ public sealed class MainForm : Form
         // jogo que guarde os dados noutro lugar sumiria com a opção da tela sem explicação
         // nenhuma (foi o que aconteceu no RE9). Então a caixa aparece em todo jogo x64 com
         // o REFramework no kit; o plano é que avisa quando a pasta não parece RE Engine.
-        bool cabeReFramework = _profile.Architecture == PeArchitecture.X64
-                               && _kit?.ReFrameworkDinput8 is not null;
+        // E nem do kit: esconder a caixa porque falta um arquivo é o mesmo erro de antes,
+        // só que disfarçado — o usuário fica sem a opção E sem saber o que falta. A caixa
+        // aparece; quem cobra o arquivo é o plano, que diz onde pôr.
+        bool cabeReFramework = _profile.Architecture == PeArchitecture.X64;
         if (_chkReFramework.Visible != cabeReFramework)
         {
             _chkReFramework.Visible = cabeReFramework;
@@ -1637,6 +1639,10 @@ public sealed class MainForm : Form
         var notes = new List<string>(detection.Notes);
         if (_profile.LauncherExePath is not null)
             notes.Add($"Launcher detectado ({Path.GetFileName(_profile.LauncherExePath)}) — a instalação aponta para o exe real, não para ele.");
+        if (_kit?.ReFrameworkDinput8 is null)
+            notes.Add("REFramework NÃO está no kit. Para hospedar o ReShade nele, ponha o dinput8.dll " +
+                      "(x64) do REFramework em qualquer subpasta de " + _kit?.KitRoot + " — por exemplo " +
+                      "numa pasta REFramework\\ — e clique em Verificar de novo.");
         notes.Add("RE Engine (re_chunk_*.pak na pasta): " + (_profile.EhReEngine ? "SIM" : "NÃO") +
                   " — é a engine em que o REFramework carrega. A caixa \"Hospedar o ReShade no " +
                   "REFramework\" fica disponível em qualquer jogo x64; use-a no jogo que recusa a " +

@@ -90,8 +90,10 @@ public static class InstallPlanBuilder
             if (kit.ReFrameworkDinput8 is null)
             {
                 plan.Blockers.Add(
-                    "Falta no kit: dinput8.dll do REFramework (x64). Sem ele não há como hospedar " +
-                    "o ReShade num jogo que recusa a injeção direta.");
+                    "Falta no kit: dinput8.dll do REFramework (x64). Baixe a nightly em " +
+                    "github.com/praydog/REFramework-nightly/releases e ponha o dinput8.dll em qualquer " +
+                    "subpasta do kit (" + kit.KitRoot + ") — por exemplo numa pasta REFramework\\. " +
+                    "Sem ele não há como hospedar o ReShade num jogo que recusa a injeção direta.");
             }
             else
             {
