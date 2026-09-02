@@ -77,6 +77,16 @@ public static class InstallPlanBuilder
                 plan.Warnings.Add($"{RuntimeNr.Arquivo} do kit: {texto} {RuntimeNr.ComoTrocar}");
         }
 
+        // O Feeder do kit, pela versão gravada no arquivo (o 0.5.0 não gravava nenhuma). É o
+        // que derruba o jogo na troca de configuração; aviso, não bloqueio, porque sem
+        // mexer nas configurações com o DLSS 5 ligado ele funciona.
+        if (kit.FeedAddon64 is not null && profile.NeedsFeeder)
+        {
+            var versaoFeeder = FeederKit.VersaoDoArquivo(kit.FeedAddon64);
+            if (FeederKit.Antiga(versaoFeeder))
+                plan.Warnings.Add(FeederKit.AvisoKitAntigo(versaoFeeder));
+        }
+
         var exe = profile.ExeFolder;
         var host64 = Path.Combine(exe, "host64");
         var shadersTarget = Path.Combine(exe, "reshade-shaders");

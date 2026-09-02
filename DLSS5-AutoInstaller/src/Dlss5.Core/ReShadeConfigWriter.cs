@@ -239,6 +239,45 @@ public static class ReShadeConfigWriter
 
         sb.AppendLine($"Techniques={list}");
         sb.AppendLine($"TechniqueSorting={list}");
+
+        // O DLSS5_Feed.fx (0.12.0) escolhe de QUEM lê os vetores de movimento por uma
+        // definição de pré-processador — e o ReShade guarda essa definição POR EFEITO, na
+        // seção [DLSS5_Feed.fx] do preset (o PreprocessorDefinitions do [GENERAL] no
+        // ReShade.ini não vale para isso; o autor do Feeder conferiu num jogo vivo). Sem
+        // ela o shader lê texMotionVectors, que o Launchpad não escreve: DLSS sem vetores.
+        sb.AppendLine();
+        sb.AppendLine(SecaoDoFeed);
+        sb.AppendLine($"PreprocessorDefinitions={DefinicaoProvedor}={ProvedorNoShader(provider)}");
         return sb.ToString();
+    }
+
+    public const string SecaoDoFeed = "[DLSS5_Feed.fx]";
+    public const string DefinicaoProvedor = "DLSS5_MV_PROVIDER";
+
+    /// <summary>
+    /// O valor de DLSS5_MV_PROVIDER que o DLSS5_Feed.fx espera para cada provedor do kit:
+    /// 0 = texMotionVectors (DRME, qUINT), 1 = iMMERSE Launchpad, 2 = VORT, 3/4 = LumeniteFX.
+    /// </summary>
+    public static int ProvedorNoShader(MvProvider provider) => provider == MvProvider.Drme ? 0 : 1;
+
+    /// <summary>O DLSS5_MV_PROVIDER gravado na seção [DLSS5_Feed.fx] do preset; null se não há.</summary>
+    public static int? LerProvedorDoPreset(string? preset)
+    {
+        if (string.IsNullOrWhiteSpace(preset)) return null;
+        bool dentro = false;
+        foreach (var bruta in preset.Replace("\r\n", "\n").Split('\n'))
+        {
+            var linha = bruta.Trim();
+            if (linha.StartsWith('['))
+            {
+                dentro = linha.Equals(SecaoDoFeed, StringComparison.OrdinalIgnoreCase);
+                continue;
+            }
+            if (!dentro || !linha.StartsWith("PreprocessorDefinitions=", StringComparison.OrdinalIgnoreCase)) continue;
+            var m = System.Text.RegularExpressions.Regex.Match(linha, DefinicaoProvedor + @"\s*=\s*(\d+)",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            return m.Success && int.TryParse(m.Groups[1].Value, out var v) ? v : null;
+        }
+        return null;
     }
 }

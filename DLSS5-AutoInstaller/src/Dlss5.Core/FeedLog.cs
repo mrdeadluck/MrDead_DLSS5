@@ -10,6 +10,11 @@ namespace Dlss5.Core;
 /// <param name="ResolucaoQueFalhou">A resolução do "building:" imediatamente anterior à falha.</param>
 /// <param name="UltimaAcao">O "this add-on was last doing: ..." do registro de crash.</param>
 /// <param name="Motivo">A linha "stopped: ..." ou "failure: ...".</param>
+/// <param name="Versao">A versão do Feeder anunciada na primeira linha ("dlss5-feed 0.5.0 (built ...)").</param>
+/// <param name="Provedor">O provedor de MV que o shader foi compilado para ler (0.12.0: "DLSS5_MV_PROVIDER=1 (Launchpad) -> MartysMods_Launchpad (enabled)").</param>
+/// <param name="EstadoDoProvedor">"enabled", "DISABLED", "FAILED TO COMPILE" ou "not installed" — só o 0.12.0 registra.</param>
+/// <param name="RuntimeRecriado">O jogo recriou o device ou o ReShade recriou o runtime (troca de configuração, alt-tab).</param>
+/// <param name="ManteveFeatureAntiga">0.12.0: a recriação da feature falhou e o Feeder ficou com a anterior — sobreviveu.</param>
 public sealed record FeedStatus(
     bool FeaturePronta,
     int FramesEntregues,
@@ -17,8 +22,20 @@ public sealed record FeedStatus(
     string? ResolucaoQueFuncionou,
     string? ResolucaoQueFalhou,
     string? UltimaAcao,
-    string? Motivo)
+    string? Motivo,
+    string? Versao = null,
+    string? Provedor = null,
+    string? EstadoDoProvedor = null,
+    bool RuntimeRecriado = false,
+    bool ManteveFeatureAntiga = false)
 {
+    /// <summary>O provedor está instalado, marcado e compilou (ou o log é antigo e não diz).</summary>
+    public bool ProvedorOk => EstadoDoProvedor is null
+                              || EstadoDoProvedor.Equals("enabled", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Caiu logo depois de o jogo recriar device/runtime — a troca de configuração.</summary>
+    public bool CaiuNaRecriacao => Travou && RuntimeRecriado;
+
     /// <summary>Funcionou numa resolução e caiu ao reconstruir noutra (a janela inicial → tela cheia).</summary>
     public bool CaiuNaTrocaDeResolucao =>
         Travou && ResolucaoQueFuncionou is not null && ResolucaoQueFalhou is not null &&
@@ -38,6 +55,8 @@ public static class FeedLog
     private static readonly Regex Construindo = new(@"building:\s*(\d+x\d+)", RegexOptions.IgnoreCase);
     private static readonly Regex Ultima = new(@"last doing:\s*(.+?)\s*$", RegexOptions.IgnoreCase | RegexOptions.Multiline);
     private static readonly Regex Parou = new(@"^\S*\s+(stopped:.+?|\[feed\] failure:.+?)\s*$", RegexOptions.IgnoreCase | RegexOptions.Multiline);
+    // 0.12.0: "DLSS5_MV_PROVIDER=1 (Launchpad) -> MartysMods_Launchpad (enabled)"
+    private static readonly Regex Provedor = new(@"DLSS5_MV_PROVIDER=(\d+)\s*\(([^)]*)\)\s*->\s*(\S+)\s*\(([^)]*)\)", RegexOptions.IgnoreCase);
 
     public static FeedStatus? Ler(string? text)
     {
@@ -65,6 +84,13 @@ public static class FeedLog
         var ultima = Ultima.Match(text);
         var parou = Parou.Match(text);
 
+        // O último registro do provedor é o que vale (o shader pode ter sido recarregado).
+        var provs = Provedor.Matches(text);
+        Match? prov = provs.Count > 0 ? provs[^1] : null;
+
+        bool recriado = text.Contains("recreated its", StringComparison.OrdinalIgnoreCase)
+                        || Regex.IsMatch(text, @"effect runtime \S+ destroyed", RegexOptions.IgnoreCase);
+
         return new FeedStatus(
             FeaturePronta: prontas.Count > 0,
             FramesEntregues: frames,
@@ -72,7 +98,12 @@ public static class FeedLog
             ResolucaoQueFuncionou: funcionou,
             ResolucaoQueFalhou: falhou,
             UltimaAcao: ultima.Success ? ultima.Groups[1].Value.Trim() : null,
-            Motivo: parou.Success ? parou.Groups[1].Value.Trim() : null);
+            Motivo: parou.Success ? parou.Groups[1].Value.Trim() : null,
+            Versao: FeederKit.VersaoNoLog(text),
+            Provedor: prov is null ? null : $"{prov.Groups[2].Value.Trim()} -> {prov.Groups[3].Value.Trim()}",
+            EstadoDoProvedor: prov?.Groups[4].Value.Trim(),
+            RuntimeRecriado: recriado,
+            ManteveFeatureAntiga: text.Contains("keeping the previous feature", StringComparison.OrdinalIgnoreCase));
     }
 }
 

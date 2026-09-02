@@ -53,6 +53,12 @@ O QUE ESPERAR — leia antes, evita decepção
      de movimento são estimados por shader, não vêm do jogo.
    - Consome bastante VRAM. Se travar, teste primeiro em 1080p e em modo
      janela.
+   - Trocar resolução, tela cheia ou qualidade DENTRO do jogo recria a
+     tela e o Feeder reconstrói tudo. O Feeder deste kit (0.12.0) foi
+     feito para sobreviver a isso; o antigo (0.5.0) derrubava o jogo.
+     Se um jogo instalado com o kit antigo cair nessa hora, aponte o
+     kit novo e clique em Instalar de novo — o programa troca só o que
+     mudou. A verificação (item 15) diz qual versão rodou.
 
 AVISOS
    - NÃO use em jogos online com anti-cheat (EAC, BattlEye, Vanguard).

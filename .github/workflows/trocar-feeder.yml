@@ -1,0 +1,246 @@
+name: Trocar o Feeder do kit (dlss5-feed) e refazer o pacote
+
+# O kit trazia o dlss5-feed 0.5.0 (30/08). Ao trocar uma configuração dentro do jogo
+# (resolução, tela cheia, qualidade) a swapchain é recriada, o ReShade recria o runtime, e
+# o 0.5.0 derrubava a sessão inteira e criava a feature de novo bem quando o addon do
+# RenoDX rearma os hooks — Mafia DE, Crysis, Titanfall 2 e Metro Exodus caíam. O 0.12.0
+# mantém a feature viva nessa hora. Este job baixa a release pedida em
+# "DLSS 5 Files/feeder-desejado.txt", confere os arquivos e os commita no LFS — porque o
+# objeto do LFS não sobe a partir do ambiente de desenvolvimento (lfs.github.com
+# bloqueado) e o token do app também não dispara workflows à mão (403).
+#
+# Depois de trocar, refaz o DLSS5-Pacote-Completo.zip e publica um zip pequeno só com o
+# Feeder (DLSS5-Feeder-kit.zip), para atualizar um kit já baixado sem os 230 MB.
+on:
+  push:
+    branches: ['claude/executable-fixes-xytsgm', 'main']
+    paths:
+      - 'DLSS 5 Files/feeder-desejado.txt'
+      - '.github/workflows/trocar-feeder.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  trocar:
+    runs-on: windows-latest
+    outputs:
+      trocou: ${{ steps.commit.outputs.trocou }}
+      versao: ${{ steps.desejado.outputs.versao }}
+    steps:
+      - name: Checkout (só os ponteiros do LFS; o conteúdo antigo não interessa)
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - name: Ler o Feeder desejado
+        id: desejado
+        shell: pwsh
+        run: |
+          $linhas = Get-Content "DLSS 5 Files\feeder-desejado.txt" | Where-Object { $_ -match '^\s*[^#].*=' }
+          $mapa = @{}
+          foreach ($l in $linhas) { $k, $v = $l -split '=', 2; $mapa[$k.Trim()] = $v.Trim() }
+          if (-not $mapa['versao']) { throw "feeder-desejado.txt precisa de versao=vX.Y.Z" }
+          $tag = $mapa['versao']
+          if ($tag -notmatch '^v?(\d+\.\d+\.\d+)') { throw "versao=$tag não parece uma tag do DLSS5-Feeder (ex.: v0.12.0)" }
+          "versao=$tag" >> $env:GITHUB_OUTPUT
+          "numerica=$($Matches[1])" >> $env:GITHUB_OUTPUT
+          Write-Host "Desejado: $tag ($($Matches[1]))"
+
+      - name: Guardar o Feeder anterior (caminho de volta)
+        shell: pwsh
+        run: |
+          # Se o Feeder novo quebrar um jogo que funcionava, este zip devolve o anterior:
+          # é copiar por cima do kit e Instalar de novo.
+          git lfs install --local
+          git lfs pull -I "DLSS 5 Files/dlss5-feed.addon64,DLSS 5 Files/dlss5-feed.addon32,DLSS 5 Files/dlss5-feed-host64.exe,DLSS 5 Files/reshade-shaders/Shaders/DLSS5_Feed.fx"
+          $anterior = "${{ github.workspace }}\feeder-anterior"
+          New-Item -ItemType Directory -Path "$anterior\reshade-shaders\Shaders" -Force | Out-Null
+          foreach ($n in 'dlss5-feed.addon64', 'dlss5-feed.addon32', 'dlss5-feed-host64.exe') {
+            $f = Get-Item "DLSS 5 Files\$n"
+            if ($f.Length -lt 1024) { throw "$n ainda é ponteiro do LFS ($($f.Length) bytes): o git lfs pull não materializou" }
+            Copy-Item $f.FullName $anterior
+            Write-Host ("anterior {0}: {1} bytes, FileVersion={2}, sha256={3}" -f $n, $f.Length, $f.VersionInfo.FileVersion, (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLowerInvariant())
+          }
+          Copy-Item "DLSS 5 Files\reshade-shaders\Shaders\DLSS5_Feed.fx" "$anterior\reshade-shaders\Shaders\"
+          if (Test-Path "DLSS 5 Files\feeder-versao.txt") { Copy-Item "DLSS 5 Files\feeder-versao.txt" $anterior }
+          @(
+            "Feeder ANTERIOR do kit (o que estava antes da troca), guardado como caminho de volta.",
+            "Copie por cima da pasta 'DLSS 5 Files' (o DLSS5_Feed.fx vai em reshade-shaders\Shaders\) e clique",
+            "em Instalar de novo no jogo."
+          ) | Set-Content "$anterior\LEIA-ME.txt" -Encoding UTF8
+          Compress-Archive -Path "$anterior\*" -DestinationPath "${{ github.workspace }}\DLSS5-Feeder-anterior-kit.zip" -CompressionLevel Optimal -Force
+
+      - name: Baixar a release do DLSS5-Feeder e conferir os arquivos
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.desejado.outputs.versao }}"
+          $numerica = "${{ steps.desejado.outputs.numerica }}"
+          $repo = "jlrouzies-fr/DLSS5-Feeder"
+
+          Write-Host "Ativos da release ${tag}:"
+          gh release view $tag --repo $repo --json tagName,publishedAt,assets --jq '.publishedAt, (.assets[] | "  \(.name)  \(.size) bytes")'
+          if ($LASTEXITCODE -ne 0) { throw "gh release view falhou para $tag" }
+
+          New-Item -ItemType Directory -Path feeder-release -Force | Out-Null
+          gh release download $tag --repo $repo --dir feeder-release
+          if ($LASTEXITCODE -ne 0) { throw "gh release download falhou para $tag" }
+          Get-ChildItem feeder-release -Filter *.zip | ForEach-Object {
+            Write-Host "Extraindo $($_.Name)"
+            Expand-Archive $_.FullName -DestinationPath (Join-Path feeder-release $_.BaseName) -Force
+          }
+          Write-Host "Conteúdo baixado:"
+          Get-ChildItem feeder-release -Recurse -File | ForEach-Object { Write-Host ("  {0,10}  {1}" -f $_.Length, $_.FullName.Substring((Get-Location).Path.Length + 1)) }
+
+          function Achar($nome) {
+            Get-ChildItem feeder-release -Recurse -File -Filter $nome | Sort-Object Length -Descending | Select-Object -First 1
+          }
+          $addon64 = Achar dlss5-feed.addon64
+          $addon32 = Achar dlss5-feed.addon32
+          $host64  = Achar dlss5-feed-host64.exe
+          $fx      = Achar DLSS5_Feed.fx
+          if (-not $fx) {
+            # O shader vive no repositório; quando a release não o traz, vem da árvore da tag.
+            $url = "https://raw.githubusercontent.com/$repo/$tag/shaders/DLSS5_Feed.fx"
+            Write-Host "A release não traz DLSS5_Feed.fx; baixando de $url"
+            Invoke-WebRequest -Uri $url -OutFile feeder-release\DLSS5_Feed.fx
+            $fx = Get-Item feeder-release\DLSS5_Feed.fx
+          }
+          $faltam = @()
+          if (-not $addon64) { $faltam += 'dlss5-feed.addon64' }
+          if (-not $addon32) { $faltam += 'dlss5-feed.addon32' }
+          if (-not $host64)  { $faltam += 'dlss5-feed-host64.exe' }
+          if ($faltam) { throw "A release $tag não traz: $($faltam -join ', '). Nada foi trocado." }
+
+          foreach ($f in @($addon64, $addon32, $host64)) {
+            $bytes = [IO.File]::ReadAllBytes($f.FullName)
+            if ($bytes.Length -lt 65536 -or $bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) { throw "$($f.Name) não é um executável PE ($($bytes.Length) bytes)" }
+            $ver = (Get-Item $f.FullName).VersionInfo.FileVersion
+            $hash = (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            Write-Host "$($f.Name): $($f.Length) bytes, FileVersion=$ver, sha256=$hash"
+            if ($ver -and -not $ver.StartsWith($numerica)) { throw "$($f.Name) diz FileVersion $ver, e a tag pedida é $tag" }
+            $texto = [Text.Encoding]::ASCII.GetString($bytes)
+            if ($texto -notmatch [regex]::Escape($numerica)) { throw "$($f.Name) não carrega a string de versão $numerica" }
+          }
+          $fxTexto = Get-Content $fx.FullName -Raw
+          if ($fxTexto -notmatch 'DLSS5_MV_PROVIDER' -or $fxTexto -notmatch 'technique\s+DLSS5_Feed') { throw "DLSS5_Feed.fx não é o shader esperado (sem DLSS5_MV_PROVIDER / technique DLSS5_Feed)" }
+
+          Copy-Item $addon64.FullName "DLSS 5 Files\dlss5-feed.addon64" -Force
+          Copy-Item $addon32.FullName "DLSS 5 Files\dlss5-feed.addon32" -Force
+          Copy-Item $host64.FullName  "DLSS 5 Files\dlss5-feed-host64.exe" -Force
+          Copy-Item $fx.FullName      "DLSS 5 Files\reshade-shaders\Shaders\DLSS5_Feed.fx" -Force
+
+          $registro = @(
+            "# Gravado pelo workflow trocar-feeder.yml. Não edite: mude feeder-desejado.txt.",
+            "versao=$tag",
+            "origem=https://github.com/$repo/releases/tag/$tag"
+          )
+          foreach ($par in @(@('dlss5-feed.addon64', $addon64), @('dlss5-feed.addon32', $addon32), @('dlss5-feed-host64.exe', $host64), @('DLSS5_Feed.fx', $fx))) {
+            $h = (Get-FileHash $par[1].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            $registro += "$($par[0])=$h $($par[1].Length)"
+          }
+          [IO.File]::WriteAllLines("DLSS 5 Files\feeder-versao.txt", $registro, (New-Object Text.UTF8Encoding $false))
+          Get-Content "DLSS 5 Files\feeder-versao.txt"
+
+          New-Item -ItemType Directory -Path feeder-kit -Force | Out-Null
+          Copy-Item $addon64.FullName, $addon32.FullName, $host64.FullName feeder-kit
+          New-Item -ItemType Directory -Path feeder-kit\reshade-shaders\Shaders -Force | Out-Null
+          Copy-Item $fx.FullName feeder-kit\reshade-shaders\Shaders\
+          Copy-Item "DLSS 5 Files\feeder-versao.txt" feeder-kit
+          @(
+            "Feeder $tag para o kit do DLSS 5 AutoInstaller.",
+            "",
+            "Copie estes arquivos POR CIMA dos da sua pasta 'DLSS 5 Files' (o DLSS5_Feed.fx vai em",
+            "reshade-shaders\Shaders\). Depois abra o programa, aponte o kit e clique em Instalar de novo",
+            "em cada jogo: ele troca só o que mudou.",
+            "",
+            "Por que: o 0.5.0 derrubava o jogo ao trocar resolução/tela cheia/qualidade com o DLSS 5 ligado."
+          ) | Set-Content feeder-kit\LEIA-ME.txt -Encoding UTF8
+          Compress-Archive -Path feeder-kit\* -DestinationPath "${{ github.workspace }}\DLSS5-Feeder-kit.zip" -CompressionLevel Optimal -Force
+          $z = Get-Item "${{ github.workspace }}\DLSS5-Feeder-kit.zip"
+          Write-Host ("DLSS5-Feeder-kit.zip: {0} bytes, sha256={1}" -f $z.Length, (Get-FileHash $z.FullName -Algorithm SHA256).Hash.ToLowerInvariant())
+
+      - name: Commitar no LFS
+        id: commit
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git lfs install --local
+          git add "DLSS 5 Files/dlss5-feed.addon64" "DLSS 5 Files/dlss5-feed.addon32" "DLSS 5 Files/dlss5-feed-host64.exe" "DLSS 5 Files/reshade-shaders/Shaders/DLSS5_Feed.fx" "DLSS 5 Files/feeder-versao.txt"
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "Kit: o Feeder passa a ser o dlss5-feed ${{ steps.desejado.outputs.versao }}" -m "Baixado da release ${{ steps.desejado.outputs.versao }} de jlrouzies-fr/DLSS5-Feeder e conferido (PE, FileVersion e string de versao). Os hashes estao em feeder-versao.txt. O 0.5.0 derrubava o jogo quando a swapchain era recriada ao trocar uma configuracao; o novo mantem a feature viva nessa hora."
+            git push origin HEAD:${{ github.ref_name }}
+            "trocou=1" >> $env:GITHUB_OUTPUT
+            Write-Host "Trocado e commitado."
+          } else {
+            "trocou=0" >> $env:GITHUB_OUTPUT
+            Write-Host "Nada a commitar: o kit já tem esses arquivos."
+          }
+
+      - name: Publicar o zip só do Feeder na Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: installer-latest
+          name: DLSS 5 AutoInstaller (build mais recente)
+          prerelease: true
+          overwrite_files: true
+          files: |
+            DLSS5-Feeder-kit.zip
+            DLSS5-Feeder-anterior-kit.zip
+
+  pacote:
+    needs: trocar
+    runs-on: windows-latest
+    steps:
+      - name: Checkout com os arquivos do kit (no commit novo)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          lfs: true
+
+      - name: Instalar .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Compilar o executável
+        working-directory: DLSS5-AutoInstaller
+        run: >
+          dotnet publish src/Dlss5.App/Dlss5.App.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:DebugType=None
+          -p:SourceRevisionId=${{ github.sha }}
+          -o ${{ github.workspace }}\publish
+
+      - name: Montar o pacote
+        shell: pwsh
+        run: |
+          $dest = "${{ github.workspace }}\DLSS5-Pacote"
+          New-Item -ItemType Directory -Path $dest -Force | Out-Null
+          Copy-Item "${{ github.workspace }}\publish\DLSS5-AutoInstaller.exe" $dest
+          Copy-Item "${{ github.workspace }}\DLSS 5 Files" (Join-Path $dest 'DLSS 5 Files') -Recurse
+          Copy-Item (Join-Path $dest 'DLSS 5 Files\LEIA-ME.txt') (Join-Path $dest 'LEIA-ME.txt')
+          $ponteiros = Get-ChildItem $dest -Recurse -File |
+            Where-Object { $_.Length -lt 300 -and $_.Extension -in '.dll', '.exe', '.addon64', '.addon32', '.fx' }
+          if ($ponteiros) { $ponteiros | ForEach-Object { Write-Host "PONTEIRO LFS: $($_.FullName)" }; throw "O checkout nao materializou os arquivos do LFS." }
+          foreach ($n in 'dlss5-feed.addon64', 'dlss5-feed.addon32', 'dlss5-feed-host64.exe') {
+            $f = Get-Item (Join-Path $dest "DLSS 5 Files\$n")
+            Write-Host ("{0}: {1} bytes, FileVersion={2}" -f $n, $f.Length, $f.VersionInfo.FileVersion)
+          }
+          Compress-Archive -Path "$dest\*" -DestinationPath "${{ github.workspace }}\DLSS5-Pacote-Completo.zip" -CompressionLevel Optimal
+          $z = Get-Item "${{ github.workspace }}\DLSS5-Pacote-Completo.zip"
+          Write-Host ("Zip com {0} MB, sha256={1}" -f [math]::Round($z.Length / 1MB, 1), (Get-FileHash $z.FullName -Algorithm SHA256).Hash.ToLowerInvariant())
+
+      - name: Publicar na Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: installer-latest
+          name: DLSS 5 AutoInstaller (build mais recente)
+          prerelease: true
+          overwrite_files: true
+          files: DLSS5-Pacote-Completo.zip

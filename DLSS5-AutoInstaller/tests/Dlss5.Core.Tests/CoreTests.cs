@@ -3907,12 +3907,16 @@ public class FeedLogTests
             };
             var checagens = CheckpointVerifier.Verify(perfil, null);
 
+            // O log é do 0.5.0: o remédio que vale é o Feeder novo do kit, e a queda
+            // (janela inicial → 4K) continua descrita. A escada do work_resolution é
+            // para o 0.12.0 — o 0.5.0 nem lê a chave.
             var c15 = checagens.First(c => c.Number == 15);
             Assert.Equal(CheckStatus.Fail, c15.State);
+            Assert.Contains("Feeder 0.5.0", c15.Detail);
             Assert.Contains("1280x720", c15.Detail);
             Assert.Contains("3840x2160", c15.Detail);
-            Assert.Contains("Resolução de trabalho do Feeder", c15.FixHint!);
-            Assert.Contains("Testar sem o RenoDX", c15.FixHint!);
+            Assert.Contains("Instalar de novo", c15.FixHint!);
+            Assert.DoesNotContain("Resolução de trabalho do Feeder", c15.FixHint!);
 
             var c14 = checagens.First(c => c.Number == 14);
             Assert.Equal(CheckStatus.Warning, c14.State);
@@ -5027,6 +5031,223 @@ public class PlanoRemoveReShadeAntigoTests
             Assert.DoesNotContain(plan.Actions, a =>
                 a.Kind == PlanActionKind.DeleteForbiddenFile &&
                 a.TargetPath?.EndsWith("dxgi.dll", StringComparison.OrdinalIgnoreCase) == true);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}
+
+public class FeederKitTests
+{
+    [Fact]
+    public void LeAVersaoDoBannerDoLog()
+    {
+        Assert.Equal("0.5.0", FeederKit.VersaoNoLog("15:38:28.311  dlss5-feed 0.5.0 (built Aug 30 2026 12:38:05) attached.\n"));
+        Assert.Equal("0.12.0", FeederKit.VersaoNoLog("dlss5-feed 0.12.0 (built Sep  1 2026 10:00:00) attached."));
+        Assert.Equal("0.10.0-beta.3", FeederKit.VersaoNoLog("dlss5-feed 0.10.0-beta.3 (built Sep  1 2026 10:00:00) attached."));
+        Assert.Null(FeederKit.VersaoNoLog("[feed] building: 1280x720"));
+        Assert.Null(FeederKit.VersaoNoLog(null));
+    }
+
+    [Fact]
+    public void AbaixoDe0120EhAntigo()
+    {
+        Assert.True(FeederKit.Antiga("0.5.0"));
+        Assert.True(FeederKit.Antiga("0.10.0-beta.3"));
+        Assert.True(FeederKit.Antiga("0.11.0"));
+        Assert.True(FeederKit.Antiga(null));
+        Assert.True(FeederKit.Antiga("lixo"));
+        Assert.False(FeederKit.Antiga("0.12.0"));
+        Assert.False(FeederKit.Antiga("0.12.0.0"));
+        Assert.False(FeederKit.Antiga("v0.13.1"));
+        Assert.False(FeederKit.Antiga("1.0.0"));
+        Assert.Equal("0.12.0", FeederKit.VersaoDoKit);
+        Assert.False(FeederKit.Antiga(FeederKit.VersaoDoKit));
+    }
+
+    [Fact]
+    public void ArquivoSemVersaoEhAntigo()
+    {
+        // O 0.5.0 não gravava VERSIONINFO nenhum: sem versão = antigo.
+        var tmp = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllBytes(tmp, new byte[] { 0x4D, 0x5A, 0, 0 });
+            Assert.True(FeederKit.Antiga(FeederKit.VersaoDoArquivo(tmp)));
+        }
+        finally { File.Delete(tmp); }
+        Assert.Null(FeederKit.VersaoDoArquivo(Path.Combine(Path.GetTempPath(), "nao-existe-" + Guid.NewGuid().ToString("N"))));
+    }
+
+    [Fact]
+    public void PlanoAvisaKitComFeederAntigo()
+    {
+        // O kit de teste tem arquivos sem versão gravada: o plano tem que avisar, e só
+        // quando o Feeder vai ser usado.
+        var plan = InstallPlanBuilder.Build(
+            new GameProfile { GameFolder = @"C:\game", RealExePath = @"C:\game\jogo.exe", Architecture = PeArchitecture.X64, Api = GraphicsApi.D3D11 },
+            PlanBuilderTests.KitCompleto(), new InstallOptions());
+        Assert.Contains(plan.Warnings, w => w.Contains("dlss5-feed.addon64 do kit", StringComparison.Ordinal)
+                                          && w.Contains(FeederKit.VersaoDoKit, StringComparison.Ordinal));
+
+        var direto = InstallPlanBuilder.Build(
+            new GameProfile { GameFolder = @"C:\game", RealExePath = @"C:\game\jogo.exe", Architecture = PeArchitecture.X64, Api = GraphicsApi.D3D12, HasNativeDlss = true },
+            PlanBuilderTests.KitCompleto(), new InstallOptions());
+        Assert.DoesNotContain(direto.Warnings, w => w.Contains("dlss5-feed.addon64 do kit", StringComparison.Ordinal));
+    }
+}
+
+public class PresetComProvedorTests
+{
+    [Fact]
+    public void PresetGravaADefinicaoPorEfeito()
+    {
+        // O DLSS5_Feed.fx 0.12.0 escolhe o provedor por DLSS5_MV_PROVIDER, e o ReShade guarda
+        // a definição POR EFEITO, na seção [DLSS5_Feed.fx] do preset — não no [GENERAL].
+        var launchpad = ReShadeConfigWriter.BuildPresetIni(MvProvider.Launchpad);
+        Assert.Contains("[DLSS5_Feed.fx]\r\nPreprocessorDefinitions=DLSS5_MV_PROVIDER=1", launchpad.Replace("\n", "\r\n").Replace("\r\r", "\r"));
+        Assert.Equal(1, ReShadeConfigWriter.LerProvedorDoPreset(launchpad));
+
+        var drme = ReShadeConfigWriter.BuildPresetIni(MvProvider.Drme);
+        Assert.Equal(0, ReShadeConfigWriter.LerProvedorDoPreset(drme));
+
+        // Chaves globais ANTES da primeira seção, senão o ReShade as lê como parte dela.
+        int tech = launchpad.IndexOf("Techniques=", StringComparison.Ordinal);
+        int secao = launchpad.IndexOf("[DLSS5_Feed.fx]", StringComparison.Ordinal);
+        Assert.True(tech >= 0 && secao > tech);
+
+        // Caminho direto: preset vazio, sem seção.
+        var direto = ReShadeConfigWriter.BuildPresetIni(MvProvider.Launchpad, feederUsed: false);
+        Assert.DoesNotContain("DLSS5_MV_PROVIDER", direto);
+        Assert.Null(ReShadeConfigWriter.LerProvedorDoPreset(direto));
+    }
+
+    [Fact]
+    public void LeADefinicaoSoDaSecaoDoFeed()
+    {
+        Assert.Null(ReShadeConfigWriter.LerProvedorDoPreset("Techniques=DLSS5_Feed@DLSS5_Feed.fx\n"));
+        Assert.Null(ReShadeConfigWriter.LerProvedorDoPreset("[Outro.fx]\nPreprocessorDefinitions=DLSS5_MV_PROVIDER=3\n"));
+        Assert.Equal(3, ReShadeConfigWriter.LerProvedorDoPreset("Techniques=\n\n[DLSS5_Feed.fx]\nPreprocessorDefinitions=OUTRA=1,DLSS5_MV_PROVIDER=3\n"));
+        Assert.Null(ReShadeConfigWriter.LerProvedorDoPreset(null));
+    }
+
+    [Fact]
+    public void Checkpoint13ExigeADefinicaoNoPreset()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-cp13-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "jogo.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D11,
+                MvProvider = MvProvider.Launchpad,
+            };
+
+            // Preset da versão anterior do programa: ordem certa, sem a definição.
+            File.WriteAllText(Path.Combine(dir, "ReShadePreset.ini"),
+                "Techniques=MartysMods_Launchpad@MartysMods_LAUNCHPAD.fx,DLSS5_Feed@DLSS5_Feed.fx\n" +
+                "TechniqueSorting=MartysMods_Launchpad@MartysMods_LAUNCHPAD.fx,DLSS5_Feed@DLSS5_Feed.fx\n");
+            var c13 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 13);
+            Assert.Equal(CheckStatus.Fail, c13.State);
+            Assert.Contains("DLSS5_MV_PROVIDER", c13.Detail);
+            Assert.Contains("Instalar de novo", c13.FixHint!);
+
+            // O preset que esta versão grava passa.
+            File.WriteAllText(Path.Combine(dir, "ReShadePreset.ini"), ReShadeConfigWriter.BuildPresetIni(MvProvider.Launchpad));
+            c13 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 13);
+            Assert.Equal(CheckStatus.Pass, c13.State);
+
+            // Provedor trocado na detecção sem reinstalar: a definição não bate.
+            perfil.MvProvider = MvProvider.Drme;
+            c13 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 13);
+            Assert.Equal(CheckStatus.Fail, c13.State);
+            Assert.Contains("pede 0", c13.Detail);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}
+
+public class FeederAntigoNaVerificacaoTests
+{
+    private const string Log0120 =
+        "10:00:00.000  dlss5-feed 0.12.0 (built Sep  1 2026 10:00:00) attached.\n" +
+        "10:00:03.000  [feed] DLSS5_MV_PROVIDER=1 (Launchpad) -> MartysMods_Launchpad (enabled)\n" +
+        "10:00:04.000  [feed] building: 2560x1440 backbuffer R8G8B8A8_UNORM (mv R16G16_FLOAT, depth R32_FLOAT, depth reversed=1)\n" +
+        "10:00:04.100  [feed] feature ready: 2560x1440 DLAA, flags=74 (SDR)\n" +
+        "10:00:04.200  [feed] frame 1 delivered (2560x1440, reset=1)\n" +
+        "10:00:30.000  [feed] frame 1500 delivered (2560x1440, reset=0)\n" +
+        "10:00:31.000  [feed] effect runtime 000000003557D1B0 destroyed\n" +
+        "10:00:32.000  [feed] feature re-create crashed (caught); keeping the previous feature\n" +
+        "10:00:40.000  [feed] frame 2000 delivered (2560x1440, reset=0)\n";
+
+    [Fact]
+    public void LogNovoLeVersaoProvedorERecriacaoSobrevivida()
+    {
+        var s = FeedLog.Ler(Log0120)!;
+        Assert.Equal("0.12.0", s.Versao);
+        Assert.Equal("Launchpad -> MartysMods_Launchpad", s.Provedor);
+        Assert.Equal("enabled", s.EstadoDoProvedor);
+        Assert.True(s.ProvedorOk);
+        Assert.True(s.RuntimeRecriado);
+        Assert.True(s.ManteveFeatureAntiga);
+        Assert.False(s.Travou);
+        Assert.False(s.CaiuNaRecriacao);
+        Assert.Equal(2000, s.FramesEntregues);
+
+        var desligado = FeedLog.Ler(Log0120.Replace("(enabled)", "(DISABLED)"))!;
+        Assert.False(desligado.ProvedorOk);
+        Assert.Equal("DISABLED", desligado.EstadoDoProvedor);
+
+        // Log antigo não registra provedor: não se pode acusar nada.
+        Assert.True(FeedLog.Ler("dlss5-feed 0.5.0 (built Aug 30 2026 12:38:05) attached.\n[feed] frame 1 delivered\n")!.ProvedorOk);
+    }
+
+    [Fact]
+    public void Checkpoint15ApontaOFeederAntigoEmVezDaEscadaDeResolucao()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-feedold-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            // O log real do NFS com o 0.5.0: o remédio é o Feeder novo, não o work_resolution
+            // (que o 0.5.0 nem lê).
+            File.WriteAllText(Path.Combine(dir, "dlss5-feed.log"),
+                "15:38:28.311  dlss5-feed 0.5.0 (built Aug 30 2026 12:38:05) attached.\n" +
+                "15:38:34.523  [feed] feature ready: 1280x720 DLAA, flags=74 (SDR)\n" +
+                "15:38:35.083  [feed] frame 2 delivered (1280x720, reset=0)\n" +
+                "15:38:39.000  [feed] the game recreated its device; rebuilding the session\n" +
+                "15:38:39.644  [feed] building: 3840x2160 backbuffer R8G8B8A8_UNORM (mv R16G16_FLOAT, depth R32_FLOAT, depth reversed=1)\n" +
+                "15:38:39.703  [feed] CreateFeature raised exception 0xC0000005 (caught; nothing was submitted)\n" +
+                "15:38:39.705  ### CRASH RECORDED ###  exception 0xE06D7363 at 00007FFA6DBB3CFA in KERNELBASE.dll; this add-on was last doing: creating the DLSS feature\n");
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "Mafia.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D11,
+            };
+            var c15 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 15);
+            Assert.Equal(CheckStatus.Fail, c15.State);
+            Assert.Contains("Feeder 0.5.0", c15.Detail);
+            Assert.Contains(FeederKit.VersaoDoKit, c15.Detail);
+            Assert.Contains("recriou device/runtime", c15.Detail);
+            Assert.Contains("Instalar de novo", c15.FixHint!);
+            Assert.DoesNotContain("Resolução de trabalho", c15.FixHint!);
+
+            // Com o 0.12.0 rodando e o provedor desmarcado: aviso, com a instrução de marcar.
+            File.WriteAllText(Path.Combine(dir, "dlss5-feed.log"), Log0120.Replace("(enabled)", "(DISABLED)"));
+            c15 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 15);
+            Assert.Equal(CheckStatus.Warning, c15.State);
+            Assert.Contains("DISABLED", c15.Detail);
+            Assert.Contains("ACIMA do DLSS 5 Feed", c15.FixHint!);
+
+            // Saudável.
+            File.WriteAllText(Path.Combine(dir, "dlss5-feed.log"), Log0120);
+            c15 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 15);
+            Assert.Equal(CheckStatus.Pass, c15.State);
         }
         finally { Directory.Delete(dir, true); }
     }

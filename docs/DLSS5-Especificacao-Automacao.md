@@ -609,18 +609,34 @@ Get-FileHash $dll -Algorithm SHA256
 
 ---
 
-## 14. Chaves úteis do `dlss5-feed.cfg`
+## 14. Chaves úteis do `dlss5-feed.cfg` (Feeder 0.12.0)
+
+O kit traz o **dlss5-feed 0.12.0** (`DLSS 5 Files/feeder-versao.txt` registra a release e os
+hashes; `feeder-desejado.txt` é o que se muda para trocar). Até 02/09 o kit trazia o 0.5.0,
+que derrubava a sessão inteira quando o jogo recriava a swapchain — trocar resolução, tela
+cheia ou qualidade dentro do jogo — e criava a feature de novo bem quando o addon do RenoDX
+rearma os hooks: Mafia DE, Crysis, Titanfall 2 e Metro Exodus caíam. O 0.12.0 mantém texturas
+e feature vivas na recriação do runtime, só recria a feature (segurada pelo `create_delay`),
+tenta até três vezes e fica com a anterior se falhar.
+
+O `DLSS5_Feed.fx` 0.12.0 escolhe o provedor de MV por `DLSS5_MV_PROVIDER`, definição de
+pré-processador **por efeito** — na seção `[DLSS5_Feed.fx]` do `ReShadePreset.ini`, não no
+`[GENERAL]` do `ReShade.ini`. O instalador grava `1` (Launchpad) ou `0` (DRME/texMotionVectors);
+o checkpoint 13 confere.
 
 | Chave | Padrão | Uso |
 |---|---|---|
 | `enabled` | 1 | 0 desliga |
 | `mode` | 2 | 1 = teste de transporte sem NGX (isola Feeder de addon) |
+| `work_resolution` | 100 | **só D3D11**: 50–100% de cada eixo do backbuffer para as texturas de trabalho (custo/VRAM; a saída continua nativa). A barra da verificação grava esta chave |
+| `work_upscale` | 0 | D3D11: como o resultado volta ao tamanho nativo — 0 bilinear, 1 FSR 1 (mais nítido a 50–75%) |
 | `hdr` | -1 | auto; 0 força SDR para teste |
 | `preset` | 0 | 5/6 CNN E/F (transparências); 10/11 transformer J/K |
 | `create_delay` | 60 | não baixar — hooks assíncronos, chamar cedo trava |
-| `warmup_rebuild` | 180 | recria feature uma vez (contorna STANDBY) |
+| `warmup_rebuild` | 180 | recria feature uma vez (contorna STANDBY); pulado nos addons "v45+" |
+| `gpu_timeout_ms` | 2000 | quanto um frame espera a GPU; três seguidos estourados param o feed |
 | `mv_scale_x/y` | 1.0 | multiplicador extra |
-| `host_window` | 1 | 0 esconde a janela do auxiliar |
+| `host_window` | 0 | jogos 32-bit: 0 esconde a janela do auxiliar (o painel é projetado no jogo); 1 dá janela própria |
 
 ---
 

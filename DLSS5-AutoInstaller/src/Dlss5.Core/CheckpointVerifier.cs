@@ -450,12 +450,29 @@ public static class CheckpointVerifier
                 int feedIdx = techLine.IndexOf("DLSS5_Feed@", StringComparison.OrdinalIgnoreCase);
                 mvFirst = mvIdx >= 0 && mvIdx < feedIdx;
             }
+            // O DLSS5_Feed.fx (0.12.0) só lê o provedor certo pela definição por efeito
+            // na seção [DLSS5_Feed.fx]. Um preset da versão anterior do programa não a tem:
+            // o shader cai em texMotionVectors, que o Launchpad não escreve — DLSS sem
+            // vetores, imagem nítida parada e borrada em movimento.
+            bool ordemOk = hasFeed && hasMv && mvFirst;
+            int esperado = ReShadeConfigWriter.ProvedorNoShader(profile.MvProvider);
+            int? gravado = ReShadeConfigWriter.LerProvedorDoPreset(text);
+            bool defOk = gravado == esperado;
+            string definicao = defOk
+                ? $" · {ReShadeConfigWriter.SecaoDoFeed} {ReShadeConfigWriter.DefinicaoProvedor}={gravado}."
+                : gravado is null
+                    ? $" · Sem {ReShadeConfigWriter.DefinicaoProvedor} na seção {ReShadeConfigWriter.SecaoDoFeed}."
+                    : $" · {ReShadeConfigWriter.SecaoDoFeed} {ReShadeConfigWriter.DefinicaoProvedor}={gravado}, e o provedor escolhido pede {esperado}.";
             r.Add(new CheckResult(13, "Provedor de MV marcado ACIMA do DLSS 5 Feed",
-                hasFeed && hasMv && mvFirst ? CheckStatus.Pass : CheckStatus.Fail,
-                techLine ?? "linha Techniques= ausente",
-                hasFeed && hasMv && mvFirst
+                ordemOk && defOk ? CheckStatus.Pass : CheckStatus.Fail,
+                (techLine ?? "linha Techniques= ausente") + definicao,
+                ordemOk && defOk
                     ? null
-                    : "O preset deve listar o provedor de MV antes do DLSS5_Feed."));
+                    : !ordemOk
+                        ? "O preset deve listar o provedor de MV antes do DLSS5_Feed."
+                        : $"O DLSS5_Feed.fx {FeederKit.VersaoDoKit} escolhe de quem lê os vetores de movimento por essa " +
+                          "definição; sem ela lê texMotionVectors, que o Launchpad não escreve — o DLSS roda sem vetores " +
+                          "(nítido parado, borrado em movimento). Clique em Instalar de novo: esta versão do programa grava a definição."));
         }
         else
         {
@@ -866,11 +883,30 @@ public static class CheckpointVerifier
         try { text = ReadShared(feedLog); } catch { text = ""; }
 
         var feed = FeedLog.Ler(text);
-        if (feed is { Travou: true })
+        if (feed?.Versao is { } versaoQueRodou && FeederKit.Antiga(versaoQueRodou))
+        {
+            // Mafia DE, Crysis, Titanfall 2, Metro Exodus: abre, Home, ReShade — e cai ao
+            // trocar uma configuração. É o 0.5.0 derrubando a sessão quando o jogo recria a
+            // swapchain. Nada da escada abaixo resolve isso (o 0.5.0 nem lê work_resolution):
+            // o remédio é o Feeder novo do kit.
+            var queda = !feed.Travou ? ""
+                : feed.CaiuNaRecriacao
+                    ? " O log confirma: o jogo recriou device/runtime e o Feeder caiu logo depois."
+                    : feed.CaiuNaTrocaDeResolucao
+                        ? $" Funcionou a {feed.ResolucaoQueFuncionou} e caiu ao reconstruir em {feed.ResolucaoQueFalhou}."
+                        : $" E travou{(feed.ResolucaoQueFalhou is null ? "" : $" ao construir em {feed.ResolucaoQueFalhou}")}.";
+            yield return new CheckResult(15, "Feeder entregando frames", CheckStatus.Fail,
+                FeederKit.LeituraJogoAntigo(versaoQueRodou) + queda,
+                FeederKit.ComoAtualizar);
+        }
+        else if (feed is { Travou: true })
         {
             // O NFS: "feature ready" a 1280x720 na janela inicial, e o CreateFeature
             // estourando ao reconstruir em 3840x2160. Ler só o começo dizia OK.
-            var onde = feed.CaiuNaTrocaDeResolucao
+            var onde = feed.CaiuNaRecriacao
+                ? $"O jogo recriou device/runtime (troca de configuração, alt-tab) e o Feeder caiu ao reconstruir" +
+                  $"{(feed.ResolucaoQueFalhou is null ? "" : $" em {feed.ResolucaoQueFalhou}")}."
+                : feed.CaiuNaTrocaDeResolucao
                 ? $"O Feeder funcionou a {feed.ResolucaoQueFuncionou} (a janela inicial do jogo) e TRAVOU ao reconstruir em " +
                   $"{feed.ResolucaoQueFalhou} — é aí que o jogo congela."
                 : $"O Feeder travou{(feed.ResolucaoQueFalhou is null ? "" : $" ao construir em {feed.ResolucaoQueFalhou}")}.";
@@ -884,6 +920,20 @@ public static class CheckpointVerifier
                 "só para testar — em RTX 40 o 4K é o pior caso de VRAM, e tela cheia exclusiva recria a swapchain " +
                 "toda hora. 3) \"Testar sem o RenoDX\": se o jogo parar de travar, a queda está na criação do Neural " +
                 "Rendering nessa resolução, não no Feeder.");
+        }
+        else if (feed is { ProvedorOk: false })
+        {
+            // 0.12.0 registra o estado do provedor: marcado, desmarcado, sem compilar ou ausente.
+            // Sem vetores o DLSS roda "parado": nítido parado, borrado em movimento.
+            var estado = feed.EstadoDoProvedor ?? "";
+            yield return new CheckResult(15, "Feeder entregando frames", CheckStatus.Warning,
+                $"O Feeder roda, mas o provedor de vetores de movimento não: {feed.Provedor} ({estado}). " +
+                "Sem vetores o DLSS não tem movimento para seguir — imagem nítida parada e borrada ao mover.",
+                estado.Contains("DISABLED", StringComparison.OrdinalIgnoreCase)
+                    ? "Aperte Home e marque a technique do provedor (MartysMods Launchpad) ACIMA do DLSS 5 Feed — ou clique em Instalar de novo para regravar o preset."
+                    : estado.Contains("COMPILE", StringComparison.OrdinalIgnoreCase)
+                        ? "O shader do provedor não compilou (o ReShade.log diz a linha). O DRME não compila no ReShade 6.8: escolha Launchpad na detecção e instale de novo."
+                        : "O shader do provedor não está em reshade-shaders\\Shaders: clique em Instalar de novo (o kit traz o MartysMods_LAUNCHPAD.fx).");
         }
         else
         {

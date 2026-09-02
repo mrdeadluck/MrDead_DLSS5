@@ -637,7 +637,7 @@ public sealed partial class InstallerEngine
         "dxgi.dll", "opengl32.dll", "ReShade.ini", "ReShade.log", "ReShadePreset.ini",
         "ReShade64.json", "ReShade32.json", "ReShade64_XR.json", "ReShade32_XR.json",
         "renodx-dlss5.addon64", "nvngx_dlssnr.dll",
-        "dlss5-feed.addon64", "dlss5-feed.addon32", "dlss5-feed.cfg", "dlss5-feed.log",
+        "dlss5-feed.addon64", "dlss5-feed.addon32", "dlss5-feed.cfg", "dlss5-feed.log", "dlss5-feed-crash.dmp",
         "D3D9.dll", "D3D8.dll", "dgVoodoo.conf", "dgVoodooCpl.exe",
         "dgVoodoo_D3D9.dll", "dgVoodoo_D3D8.dll",
     };
