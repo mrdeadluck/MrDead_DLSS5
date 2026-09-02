@@ -372,7 +372,10 @@ public sealed partial class InstallerEngine
                 // Hospedado no REFramework o ini fica longe da pasta do jogo: sem caminho
                 // absoluto o ReShade procuraria shaders e addons dentro de plugins\.
                 baseDir: null,
-                renodxHooks: plan.Profile.HooksDoRenodx)
+                renodxHooks: plan.Profile.HooksDoRenodx,
+                // DLL fora da raiz (Titanfall 2): o ReShade usaria a pasta da DLL como
+                // base; o BasePath traz a base de volta para a raiz, onde está tudo.
+                basePath: plan.Profile.ReShadeForaDaRaiz ? plan.Profile.ExeFolder : null)
             : ReShadeConfigWriter.BuildPresetIni(plan.Options.MvProvider, feederUsed: plan.Profile.NeedsFeeder);
     }
 

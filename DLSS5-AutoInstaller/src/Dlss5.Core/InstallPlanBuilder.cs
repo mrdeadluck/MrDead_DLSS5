@@ -182,9 +182,24 @@ public static class InstallPlanBuilder
             var pastaDoHook = profile.PastaDoReShade;
             bool hookForaDaRaiz = !string.Equals(pastaDoHook, exe, StringComparison.OrdinalIgnoreCase);
             if (hookForaDaRaiz)
+            {
                 plan.Warnings.Add($"A DLL do ReShade ({hook}) vai para {Rel(profile, pastaDoHook)}, a pasta do " +
                                   "renderizador — na raiz ela nunca carrega neste jogo. ReShade.ini, addons e " +
-                                  "shaders ficam na raiz, ao lado do exe, que é onde o ReShade procura o ini.");
+                                  "shaders ficam na raiz, ao lado do exe, e o ReShade.ini ganha [INSTALL] " +
+                                  "BasePath apontando para a raiz: sem isso o ReShade usaria a pasta da DLL como " +
+                                  "base e não acharia efeito nem addon nenhum.");
+
+                // O que o ReShade criou ao lado da DLL numa rodada sem o BasePath (ini vazio,
+                // preset, log) sai — com backup, como tudo que o plano remove.
+                foreach (var sobra in new[] { "ReShade.ini", "ReShadePreset.ini", "ReShade.log" })
+                {
+                    var caminho = Path.Combine(pastaDoHook, sobra);
+                    if (File.Exists(caminho))
+                        plan.Actions.Add(new PlanAction(PlanActionKind.DeleteForbiddenFile,
+                            $"Remover {Rel(profile, caminho)} (criado pelo ReShade ao lado da DLL; a base é a raiz)",
+                            null, caminho));
+                }
+            }
 
             // Sobra de ReShade em qualquer das duas pastas, com qualquer nome que não seja
             // o hook no lugar certo, sai. Foi o Titanfall 2: o dxgi.dll da raiz, inerte,

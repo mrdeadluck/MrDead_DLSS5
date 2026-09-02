@@ -3715,6 +3715,109 @@ public class Titanfall2RenderizadorTests
     }
 
     [Fact]
+    public void ComADllForaDaRaizOIniGanhaBasePathENosOutrosJogosNao()
+    {
+        // O ReShade, como dxgi.dll, usa a pasta da própria DLL como base (get_base_path em
+        // dll_main.cpp). O Titanfall 2 provou: DLL em bin\x64_retail, Home abrindo, e o painel
+        // dizendo "nenhum arquivo de efeito encontrado em ...\bin\x64_retail". O desvio oficial
+        // é [INSTALL] BasePath no ReShade.ini ao lado do exe — e SÓ nesse caso.
+        var com = ReShadeConfigWriter.BuildReShadeIni(basePath: @"G:\Jogos\Titanfall2");
+        Assert.StartsWith("[INSTALL]", com);
+        Assert.Equal(@"G:\Jogos\Titanfall2", ReShadeConfigWriter.LerBasePath(com));
+        Assert.Contains("[GENERAL]", com);
+
+        var sem = ReShadeConfigWriter.BuildReShadeIni();
+        Assert.DoesNotContain("[INSTALL]", sem);
+        Assert.Null(ReShadeConfigWriter.LerBasePath(sem));
+        Assert.Null(ReShadeConfigWriter.LerBasePath(null));
+    }
+
+    [Fact]
+    public void OPlanoTiraOIniQueOReShadeCriouAoLadoDaDll()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-tf2ini-" + Guid.NewGuid().ToString("N"));
+        var retail = Path.Combine(dir, "bin", "x64_retail");
+        Directory.CreateDirectory(retail);
+        try
+        {
+            File.WriteAllText(Path.Combine(retail, "ReShade.ini"), "[GENERAL]");
+            File.WriteAllText(Path.Combine(retail, "ReShade.log"), "log");
+            var profile = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "Titanfall2.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D11,
+                RendererFolder = retail,
+            };
+            Assert.True(profile.ReShadeForaDaRaiz);
+
+            var plan = InstallPlanBuilder.Build(profile, PlanBuilderTests.KitCompleto(), new InstallOptions());
+
+            Assert.Contains(plan.Actions, a => a.Kind == PlanActionKind.DeleteForbiddenFile
+                && string.Equals(a.TargetPath, Path.Combine(retail, "ReShade.ini"), StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(plan.Actions, a => a.Kind == PlanActionKind.DeleteForbiddenFile
+                && string.Equals(a.TargetPath, Path.Combine(retail, "ReShade.log"), StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(plan.Warnings, w => w.Contains("BasePath", StringComparison.Ordinal));
+
+            // Jogo comum: nada disso.
+            var comum = new GameProfile
+            {
+                GameFolder = dir, RealExePath = Path.Combine(dir, "Titanfall2.exe"),
+                Architecture = PeArchitecture.X64, Api = GraphicsApi.D3D11, RendererFolder = dir,
+            };
+            Assert.False(comum.ReShadeForaDaRaiz);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void Checkpoint20CobraOBasePathEO7ExplicaOLogAoLadoDaDll()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-tf2cp-" + Guid.NewGuid().ToString("N"));
+        var retail = Path.Combine(dir, "bin", "x64_retail");
+        Directory.CreateDirectory(retail);
+        try
+        {
+            var profile = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "Titanfall2.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D11,
+                RendererFolder = retail,
+            };
+
+            // A rodada que o usuário viu: ini da raiz SEM BasePath, log nascido ao lado da DLL.
+            File.WriteAllText(Path.Combine(dir, "ReShade.ini"), ReShadeConfigWriter.BuildReShadeIni());
+            File.WriteAllText(Path.Combine(retail, "ReShade.log"), "INFO | Initializing crosire's ReShade" + new string(' ', 2000));
+
+            var checagens = CheckpointVerifier.Verify(profile, null);
+            var c20 = checagens.First(c => c.Number == 20);
+            Assert.Equal(CheckStatus.Fail, c20.State);
+            Assert.Contains("Nenhum arquivo de efeito", c20.Detail);
+            var c7 = checagens.First(c => c.Number == 7);
+            Assert.Equal(CheckStatus.Fail, c7.State);
+            Assert.Contains("ao lado da DLL", c7.Detail);
+            Assert.Contains("BasePath", c7.FixHint!);
+            Assert.DoesNotContain("Outro...", c7.FixHint!);
+
+            // Com o BasePath certo, o 20 passa.
+            File.WriteAllText(Path.Combine(dir, "ReShade.ini"), ReShadeConfigWriter.BuildReShadeIni(basePath: dir));
+            Assert.Equal(CheckStatus.Pass, CheckpointVerifier.Verify(profile, null).First(c => c.Number == 20).State);
+
+            // Jogo comum: o item 20 nem aparece.
+            var comum = new GameProfile
+            {
+                GameFolder = dir, RealExePath = Path.Combine(dir, "Titanfall2.exe"),
+                Architecture = PeArchitecture.X64, Api = GraphicsApi.D3D11, RendererFolder = dir,
+            };
+            Assert.DoesNotContain(CheckpointVerifier.Verify(comum, null), c => c.Number == 20);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
     public void IsolarACausaDesligaOReShadeTambemNoRenderizador()
     {
         var dir = Path.Combine(Path.GetTempPath(), "dlss5-tf2iso-" + Guid.NewGuid().ToString("N"));

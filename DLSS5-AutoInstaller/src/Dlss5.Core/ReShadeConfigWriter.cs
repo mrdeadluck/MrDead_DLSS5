@@ -70,6 +70,27 @@ public static class ReShadeConfigWriter
         return list;
     }
 
+    /// <summary>O BasePath de [INSTALL], ou nulo quando não há.</summary>
+    public static string? LerBasePath(string? ini)
+    {
+        if (string.IsNullOrWhiteSpace(ini)) return null;
+        bool dentro = false;
+        foreach (var bruta in ini.Replace("\r\n", "\n").Split('\n'))
+        {
+            var linha = bruta.Trim();
+            if (linha.StartsWith('['))
+            {
+                dentro = linha.Equals("[INSTALL]", StringComparison.OrdinalIgnoreCase);
+                continue;
+            }
+            if (!dentro) continue;
+            int eq = linha.IndexOf('=');
+            if (eq > 0 && linha[..eq].Trim().Equals("BasePath", StringComparison.OrdinalIgnoreCase))
+                return linha[(eq + 1)..].Trim();
+        }
+        return null;
+    }
+
     /// <summary>Nome legível da combinação, para instruções e para a tela.</summary>
     /// <summary>
     /// Lê a linha KeyOverlay de um ReShade.ini já gravado. O que vale para o jogo é o que
@@ -133,7 +154,8 @@ public static class ReShadeConfigWriter
         string presetFile = "ReShadePreset.ini",
         bool feederUsed = true,
         int renodxHooks = RenodxIni.Padrao,
-        string? baseDir = null)
+        string? baseDir = null,
+        string? basePath = null)
     {
         // Sem baseDir tudo continua relativo, como sempre foi.
         string Raiz(string relativo) => baseDir is null
@@ -141,6 +163,18 @@ public static class ReShadeConfigWriter
             : Path.Combine(baseDir, relativo);
 
         var sb = new StringBuilder();
+        if (!string.IsNullOrWhiteSpace(basePath))
+        {
+            // O ReShade, carregado como dxgi.dll, usa a pasta da PRÓPRIA DLL como base —
+            // ini, log, shaders e addons. Quando a DLL mora fora da raiz (Titanfall 2:
+            // bin\x64_retail), ele ignoraria tudo que está ao lado do exe e criaria um
+            // ini vazio ao lado da DLL ("nenhum arquivo de efeito encontrado"). O único
+            // desvio que o próprio ReShade oferece é este: [INSTALL] BasePath no
+            // ReShade.ini ao lado do executável (get_base_path em dll_main.cpp).
+            sb.AppendLine("[INSTALL]");
+            sb.AppendLine($"BasePath={basePath}");
+            sb.AppendLine();
+        }
         sb.AppendLine("[GENERAL]");
         sb.AppendLine($"EffectSearchPaths={Raiz(@"reshade-shaders\Shaders\**")}");
         sb.AppendLine($"TextureSearchPaths={Raiz(@"reshade-shaders\Textures\**")}");

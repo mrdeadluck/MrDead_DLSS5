@@ -516,8 +516,26 @@ public static class CheckpointVerifier
         }
 
         // 7/8 — ReShade carregou e viu o swapchain (lê o log se já existir)
+        // 20 — DLL fora da raiz: o ReShade.ini da raiz tem que redirecionar a base para a raiz.
+        if (profile.ReShadeForaDaRaiz)
+        {
+            string? basePath = null;
+            try { if (File.Exists(profile.ReShadeIniPath)) basePath = ReShadeConfigWriter.LerBasePath(ReadShared(profile.ReShadeIniPath)); }
+            catch { }
+            bool ok = basePath is not null && string.Equals(
+                Path.GetFullPath(basePath).TrimEnd('\\', '/'), Path.GetFullPath(exe).TrimEnd('\\', '/'),
+                StringComparison.OrdinalIgnoreCase);
+            r.Add(new CheckResult(20, "Base do ReShade redirecionada para a raiz ([INSTALL] BasePath)",
+                ok ? CheckStatus.Pass : CheckStatus.Fail,
+                ok ? $"ReShade.ini da raiz tem BasePath={basePath}: ini, log, shaders e addons são lidos da raiz mesmo com a DLL em {Path.GetFileName(profile.PastaDoReShade)}."
+                   : basePath is null
+                        ? "O ReShade.ini da raiz não tem [INSTALL] BasePath: com a DLL fora da raiz, o ReShade usa a pasta da DLL como base e não acha efeito nem addon nenhum (\"Nenhum arquivo de efeito encontrado\")."
+                        : $"O BasePath do ReShade.ini ({basePath}) não aponta para a raiz ({exe}).",
+                ok ? null : "Instale de novo (Atualizar): o ini é regravado com o BasePath certo."));
+        }
+
         r.AddRange(VerifyReShadeLog(exe, profile.GameFolder, reinicioPendente, profile.ReShadeLogPath,
-            profile.ReShadeHookName, profile.UsarReFramework, profile.RealExePath));
+            profile.ReShadeHookName, profile.UsarReFramework, profile.RealExePath, profile.PastaDoReShade));
 
         // 14/15/16 — dependem do jogo rodando
         r.AddRange(VerifyFeedLogs(exe, route, profile.NeedsFeeder));
@@ -561,7 +579,7 @@ public static class CheckpointVerifier
     private static IEnumerable<CheckResult> VerifyReShadeLog(
         string exeFolder, string? gameFolder = null, bool reinicioPendente = false,
         string? logPath = null, string nomeDoReShade = "dxgi.dll", bool hospedado = false,
-        string? exePath = null)
+        string? exePath = null, string? pastaDoReShade = null)
     {
         // Hospedado no REFramework, o ReShade grava o log ao lado da própria DLL.
         var log = logPath ?? Path.Combine(exeFolder, "ReShade.log");
@@ -570,10 +588,19 @@ public static class CheckpointVerifier
             var noutraPasta = LogEmOutraPasta(exeFolder, gameFolder);
             if (noutraPasta is not null)
             {
+                var pastaDoLog = Path.GetDirectoryName(noutraPasta);
+                bool aoLadoDaDll = pastaDoReShade is not null &&
+                                   string.Equals(pastaDoLog, pastaDoReShade, StringComparison.OrdinalIgnoreCase);
                 yield return new CheckResult(7, "ReShade carregou — mas em outra pasta", CheckStatus.Fail,
-                    $"ReShade.log não está na pasta do exe, e sim em {Path.GetDirectoryName(noutraPasta)}.",
-                    "É ali que o processo que renderiza roda. Volte à Detecção, aponte no botão " +
-                    "\"Outro...\" o executável dessa pasta e instale de novo.");
+                    aoLadoDaDll
+                        ? $"ReShade.log nasceu ao lado da DLL ({pastaDoLog}), não na raiz: o ReShade usou a pasta da DLL " +
+                          "como base, então não leu o ini, os shaders nem os addons da raiz."
+                        : $"ReShade.log não está na pasta do exe, e sim em {pastaDoLog}.",
+                    aoLadoDaDll
+                        ? "Instale de novo (Atualizar): o ReShade.ini da raiz é regravado com [INSTALL] BasePath " +
+                          "apontando para a raiz, e o ini/log que o ReShade deixou ao lado da DLL são removidos."
+                        : "É ali que o processo que renderiza roda. Volte à Detecção, aponte no botão " +
+                          "\"Outro...\" o executável dessa pasta e instale de novo.");
                 yield break;
             }
 

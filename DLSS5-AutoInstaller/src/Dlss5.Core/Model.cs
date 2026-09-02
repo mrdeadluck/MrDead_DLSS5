@@ -192,6 +192,9 @@ public sealed class GameProfile
         }
     }
 
+    /// <summary>A DLL do ReShade mora fora da pasta do exe (Titanfall 2): o ini precisa do BasePath.</summary>
+    public bool ReShadeForaDaRaiz => !string.Equals(PastaDoReShade, ExeFolder, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Onde fica a configuração que o ReShade lê: ao lado do executável.</summary>
     public string ReShadeIniPath => Path.Combine(ExeFolder, "ReShade.ini");
 
