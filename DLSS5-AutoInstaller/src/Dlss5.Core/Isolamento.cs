@@ -23,6 +23,13 @@ public enum EstadoIsolamento
     /// isso, a bisseção só sabia acusar o ReShade inteiro.
     /// </summary>
     SemFeeder,
+    /// <summary>
+    /// ReShade sozinho: os DOIS addons desligados. Havia degrau para o Feeder e degrau
+    /// para o RenoDX, mas nenhum para "ReShade puro" — e com dois addons na pasta os
+    /// testes um a um nunca inocentam os dois de uma vez. É o degrau que faltava para
+    /// separar "o ReShade neste jogo" de "algum addon nosso".
+    /// </summary>
+    SoOReShade,
 }
 
 /// <summary>
@@ -36,6 +43,17 @@ public enum EstadoIsolamento
 public sealed class Isolamento
 {
     public const string Sufixo = ".dlss5off";
+
+    /// <summary>
+    /// Nomes que o ReShade pode ter na pasta do jogo. O padrão é dxgi.dll, mas jogo que
+    /// recusa esse nome recebe o da própria API (ver GameProfile.NomeDeReShadePreferido),
+    /// e sobra de instalação anterior pode ter outro. Nenhum deles é arquivo de jogo:
+    /// todos são DLL do Windows que o jogo carrega pelo nome.
+    /// </summary>
+    public static readonly string[] NomesDeReShade =
+    {
+        "dxgi.dll", "d3d11.dll", "d3d12.dll", "opengl32.dll",
+    };
 
     private readonly Action<string> _log;
 
@@ -57,11 +75,14 @@ public sealed class Isolamento
                 Path.Combine(rendererFolder, "D3D8.dll"),
                 Path.Combine(rendererFolder, "D3D9.dll"),
             },
-            EstadoIsolamento.SemReShade => new[]
-            {
-                Path.Combine(exeFolder, "dxgi.dll"),
-                Path.Combine(exeFolder, "opengl32.dll"),
-            },
+            // TODOS os nomes com que o ReShade pode ter sido instalado. Enquanto isto
+            // listava só dxgi.dll e opengl32.dll, num jogo instalado como d3d11.dll (MGS V)
+            // o teste renomeava NADA e mesmo assim se apresentava como "ReShade desligado" —
+            // o usuário concluía que o ReShade estava inocente com ele ainda carregando.
+            // Um dxgi.dll de instalação anterior também precisa sair: ele carrega o ReShade
+            // por conta própria e estraga o teste do mesmo jeito.
+            EstadoIsolamento.SemReShade =>
+                NomesDeReShade.Select(n => Path.Combine(exeFolder, n)).ToArray(),
             // Só o addon: em jogo 64-bit ele está na raiz, em 32-bit dentro de host64\.
             EstadoIsolamento.SemRenodx => new[]
             {
@@ -75,6 +96,15 @@ public sealed class Isolamento
                 Path.Combine(exeFolder, "dlss5-feed.addon64"),
                 Path.Combine(exeFolder, "dlss5-feed.addon32"),
                 Path.Combine(exeFolder, "host64", "dlss5-feed-host64.exe"),
+            },
+            // Os dois addons de uma vez: o ReShade continua carregando, e nada mais.
+            EstadoIsolamento.SoOReShade => new[]
+            {
+                Path.Combine(exeFolder, "dlss5-feed.addon64"),
+                Path.Combine(exeFolder, "dlss5-feed.addon32"),
+                Path.Combine(exeFolder, "host64", "dlss5-feed-host64.exe"),
+                Path.Combine(exeFolder, "renodx-dlss5.addon64"),
+                Path.Combine(exeFolder, "host64", "renodx-dlss5.addon64"),
             },
             _ => Array.Empty<string>(),
         };
@@ -257,6 +287,18 @@ public sealed class Isolamento
             "• Se o jogo ABRIR agora: o ReShade é que atrapalha a criação do device pelo " +
             "dgVoodoo. Sem ele não há DLSS 5, mas ao menos o culpado está identificado.\r\n" +
             "• Se AINDA recusar: junto com o teste anterior, isso aponta para o dgVoodoo.",
+
+        EstadoIsolamento.SoOReShade =>
+            "OS DOIS ADDONS DESLIGADOS. Só o ReShade continua na pasta.\r\n\r\n" +
+            "É o teste que separa de vez as duas famílias de causa quando o jogo não abre: " +
+            "o ReShade em si, ou algo que NÓS carregamos dentro dele (o Feeder e o RenoDX, " +
+            "que ainda pré-carrega a runtime de Neural Rendering da NVIDIA no início do device).\r\n\r\n" +
+            "Abra o jogo:\r\n" +
+            "• Se ABRIR agora, o ReShade está inocente e a causa é um dos addons. Religue e use " +
+            "\"Testar sem o RenoDX\" e \"Testar sem o Feeder\" para saber qual.\r\n" +
+            "• Se NÃO abrir, os addons estão fora: é o ReShade dentro deste jogo. O passo " +
+            "seguinte é \"Isolar a causa\", que tira o ReShade também.\r\n\r\n" +
+            "Não há DLSS 5 neste estado — o teste serve para nomear a causa.",
 
         EstadoIsolamento.SemFeeder =>
             "FEEDER DESLIGADO. ReShade e RenoDX continuam ativos.\r\n\r\n" +

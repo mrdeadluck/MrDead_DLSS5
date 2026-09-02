@@ -21,6 +21,7 @@ public sealed partial class MainForm
     private readonly CheckBox _chkTnL = new();
     private readonly Button _btnRenodx = Ui.Secondary("Testar sem o RenoDX");
     private readonly Button _btnFeeder = Ui.Secondary("Testar sem o Feeder");
+    private readonly Button _btnSoReShade = Ui.Secondary("Testar só o ReShade");
     // Caminho direto: a chave EnableHooks do RenoDX, trocada no ReShade.ini sem reinstalar.
     private readonly FlowLayoutPanel _barraHooks = Ui.Fila();
     private readonly ComboBox _cboHooks = new();
@@ -128,6 +129,11 @@ public sealed partial class MainForm
         _btnFeeder.Margin = new Padding(0, 4, 8, 4);
         _btnFeeder.Click += (_, _) => TestarSemFeeder();
         bar.Controls.Add(_btnFeeder);
+
+        // Os dois addons de uma vez: sem este degrau, testar um a um nunca inocenta os dois.
+        _btnSoReShade.Margin = new Padding(0, 4, 8, 4);
+        _btnSoReShade.Click += (_, _) => TestarSoOReShade();
+        bar.Controls.Add(_btnSoReShade);
         bar.Controls.Add(Botao("Reiniciar o PC (opcional)…", (_, _) => ReiniciarSeOUsuarioQuiser()));
         bar.Controls.Add(Botao(Textos.BotaoAbrirLogs, (_, _) => AbrirPastaDeLogs()));
         bar.Controls.Add(Botao(Textos.BotaoExportarDiagnostico, (_, _) => ExportarDiagnostico()));
@@ -458,6 +464,35 @@ public sealed partial class MainForm
         catch (Exception ex) { Erro("Não consegui alterar os arquivos do teste", ex); }
     }
 
+    /// <summary>
+    /// Desliga os DOIS addons e deixa só o ReShade. Fecha a pergunta que os testes
+    /// separados não fecham: com dois addons na pasta, desligar um de cada vez nunca
+    /// inocenta os dois ao mesmo tempo.
+    /// </summary>
+    private void TestarSoOReShade()
+    {
+        if (_profile is null) { Aviso("Faça a detecção primeiro."); return; }
+        if (_ocupado) { Status(Textos.OperacaoEmAndamento); return; }
+        var rodando = Preflight.JogoRodando(_profile.RealExePath);
+        if (rodando is not null) { Aviso("O jogo está aberto", $"Feche o jogo ({rodando}.exe) antes: arquivo em uso não é renomeado."); return; }
+
+        var proximo = _isolamento == EstadoIsolamento.SoOReShade ? EstadoIsolamento.Tudo : EstadoIsolamento.SoOReShade;
+        try
+        {
+            using var etapa = _diario.Etapa("Testar só o ReShade");
+            new Isolamento(_diario.Info).Aplicar(proximo, _profile.ExeFolder, _profile.RendererFolder ?? _profile.ExeFolder);
+            _isolamento = proximo;
+            AtualizarBotaoRenodx();
+            Status(proximo == EstadoIsolamento.SoOReShade
+                ? "Addons desligados. Abra o jogo e veja se ele abre."
+                : "Addons religados.");
+            Dialogos.Informar(this, "Testar só o ReShade",
+                proximo == EstadoIsolamento.SoOReShade ? "Addons desligados" : "Addons religados",
+                Isolamento.Leitura(proximo, _profile.NeedsDgVoodoo));
+        }
+        catch (Exception ex) { Erro("Não consegui alterar os arquivos do teste", ex); }
+    }
+
     /// <summary>O texto do botão diz o que o clique fará, não o estado atual.</summary>
     private void AtualizarBotaoRenodx()
     {
@@ -465,6 +500,9 @@ public sealed partial class MainForm
         _btnFeeder.Text = _isolamento == EstadoIsolamento.SemFeeder ? "Religar o Feeder" : "Testar sem o Feeder";
         // Sem Feeder instalado (caminho direto) o teste não existe.
         _btnFeeder.Visible = _profile?.NeedsFeeder ?? false;
+        _btnSoReShade.Text = _isolamento == EstadoIsolamento.SoOReShade
+            ? "Religar os addons"
+            : "Testar só o ReShade";
     }
 
     /// <summary>Mostra na lista o valor que o ReShade.ini da pasta tem de fato.</summary>

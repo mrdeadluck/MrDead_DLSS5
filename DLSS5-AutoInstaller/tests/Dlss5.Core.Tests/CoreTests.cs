@@ -3693,3 +3693,157 @@ public class DeteccaoEscolheONomeDoReShadeTests
         finally { Directory.Delete(dir, true); }
     }
 }
+
+public class IsolamentoSoOReShadeTests
+{
+    [Fact]
+    public void DesligaOsDoisAddonsEDeixaOReShade()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-soreshade-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        Directory.CreateDirectory(Path.Combine(dir, "host64"));
+        try
+        {
+            foreach (var n in new[] { "d3d11.dll", "renodx-dlss5.addon64", "dlss5-feed.addon64" })
+                File.WriteAllText(Path.Combine(dir, n), "x");
+            File.WriteAllText(Path.Combine(dir, "host64", "dlss5-feed-host64.exe"), "x");
+
+            var iso = new Isolamento(_ => { });
+            iso.Aplicar(EstadoIsolamento.SoOReShade, dir, dir);
+
+            // Os dois addons saem juntos: é isso que os testes um a um não conseguem.
+            Assert.False(File.Exists(Path.Combine(dir, "renodx-dlss5.addon64")));
+            Assert.False(File.Exists(Path.Combine(dir, "dlss5-feed.addon64")));
+            Assert.False(File.Exists(Path.Combine(dir, "host64", "dlss5-feed-host64.exe")));
+            // E o ReShade fica — inclusive com nome alternativo.
+            Assert.True(File.Exists(Path.Combine(dir, "d3d11.dll")));
+
+            iso.Aplicar(EstadoIsolamento.Tudo, dir, dir);
+            Assert.True(File.Exists(Path.Combine(dir, "renodx-dlss5.addon64")));
+            Assert.True(File.Exists(Path.Combine(dir, "dlss5-feed.addon64")));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void ALeituraDizOQueCadaResultadoConclui()
+    {
+        var texto = Isolamento.Leitura(EstadoIsolamento.SoOReShade);
+        Assert.Contains("DOIS ADDONS DESLIGADOS", texto);
+        Assert.Contains("Se ABRIR agora", texto);
+        Assert.Contains("Isolar a causa", texto);
+    }
+}
+
+public class IsolarOReShadeComNomeAlternativoTests
+{
+    private static string Pasta()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-isoname-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    [Fact]
+    public void DesligaOReShadeInstaladoComoD3d11()
+    {
+        // A regressão que isto tranca: o teste listava só dxgi.dll e opengl32.dll, então
+        // num jogo instalado como d3d11.dll ele renomeava NADA e ainda assim se
+        // apresentava como "ReShade desligado" — e o usuário concluía o oposto do certo.
+        var dir = Pasta();
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "d3d11.dll"), "ReShade");
+
+            var desligados = new Isolamento(_ => { }).Aplicar(EstadoIsolamento.SemReShade, dir, dir);
+
+            Assert.Contains(desligados, d => d.EndsWith("d3d11.dll", StringComparison.Ordinal));
+            Assert.False(File.Exists(Path.Combine(dir, "d3d11.dll")));
+            Assert.True(File.Exists(Path.Combine(dir, "d3d11.dll" + Isolamento.Sufixo)));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void UmDxgiDeInstalacaoAnteriorTambemSaiDoTeste()
+    {
+        var dir = Pasta();
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "d3d11.dll"), "ReShade");
+            File.WriteAllText(Path.Combine(dir, "dxgi.dll"), "ReShade");
+
+            new Isolamento(_ => { }).Aplicar(EstadoIsolamento.SemReShade, dir, dir);
+
+            // Com um deles de pé o teste concluiria errado: os dois carregam ReShade.
+            Assert.False(File.Exists(Path.Combine(dir, "d3d11.dll")));
+            Assert.False(File.Exists(Path.Combine(dir, "dxgi.dll")));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}
+
+public class PlanoRemoveReShadeAntigoTests
+{
+    [Fact]
+    public void InstalarComNomeNovoRemoveOReShadeComONomeVelho()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-velho-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var arq = Path.Combine(dir, "kit");
+            File.WriteAllText(arq, "x");
+            // Sobra da instalação anterior, com o nome padrão e conteúdo de ReShade.
+            File.WriteAllText(Path.Combine(dir, "dxgi.dll"), "conteudo com ReShade dentro");
+
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "mgsvtpp.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D11,
+                NomeDoReShadeEscolhido = "d3d11.dll",
+            };
+            var kit = new KitInventory { KitRoot = dir, DxgiX64 = arq, RenodxAddon64 = arq, NvngxDlssnr = arq };
+
+            var plan = InstallPlanBuilder.Build(perfil, kit, new InstallOptions());
+
+            Assert.Contains(plan.Actions, a =>
+                a.Kind == PlanActionKind.DeleteForbiddenFile &&
+                a.TargetPath?.EndsWith("dxgi.dll", StringComparison.OrdinalIgnoreCase) == true);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void ArquivoComOMesmoNomeQueNaoEhReShadeNaoEhTocado()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-alheio-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var arq = Path.Combine(dir, "kit");
+            File.WriteAllText(arq, "x");
+            // Wrapper de terceiro com o mesmo nome: sem a prova, não se encosta nele.
+            File.WriteAllText(Path.Combine(dir, "dxgi.dll"), "wrapper de outra pessoa");
+
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "mgsvtpp.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D11,
+                NomeDoReShadeEscolhido = "d3d11.dll",
+            };
+            var kit = new KitInventory { KitRoot = dir, DxgiX64 = arq, RenodxAddon64 = arq, NvngxDlssnr = arq };
+
+            var plan = InstallPlanBuilder.Build(perfil, kit, new InstallOptions());
+
+            Assert.DoesNotContain(plan.Actions, a =>
+                a.Kind == PlanActionKind.DeleteForbiddenFile &&
+                a.TargetPath?.EndsWith("dxgi.dll", StringComparison.OrdinalIgnoreCase) == true);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}

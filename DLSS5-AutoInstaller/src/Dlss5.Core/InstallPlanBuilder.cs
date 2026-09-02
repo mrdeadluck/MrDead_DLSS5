@@ -174,6 +174,22 @@ public static class InstallPlanBuilder
         else
         {
             var hook = profile.ReShadeHookName;
+
+            // Sobra de instalação anterior com OUTRO nome: ela continua sendo carregada
+            // pelo jogo e continua sendo ReShade. No MGS V, instalar como d3d11.dll e
+            // deixar o dxgi.dll antigo é não consertar nada — o arquivo que impede o jogo
+            // de abrir segue na pasta. Só sai o que o conteúdo prova ser ReShade.
+            foreach (var outro in Isolamento.NomesDeReShade)
+            {
+                if (outro.Equals(hook, StringComparison.OrdinalIgnoreCase)) continue;
+                var caminho = Path.Combine(exe, outro);
+                if (!File.Exists(caminho) || !Propriedade.ContemTexto(caminho, "ReShade")) continue;
+
+                plan.Actions.Add(new PlanAction(PlanActionKind.DeleteForbiddenFile,
+                    $"Remover ReShade antigo com o nome {outro} (agora ele entra como {hook})",
+                    null, caminho));
+            }
+
             if (dxgiSrc is not null)
             {
                 Copy(dxgiSrc, exe, hook);
