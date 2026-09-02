@@ -102,7 +102,7 @@ public sealed partial class MainForm
         // RE Engine com proteção anti-adulteração: o ReShade injetado como dxgi.dll faz o
         // jogo abrir a própria tela de erro antes de criar qualquer DLSS. Hospedado no
         // REFramework ele passa — foi assim que o RE9 abriu com o painel funcionando.
-        _chkReFramework.Text = "Hospedar o ReShade no REFramework (jogo da RE Engine que recusa a injeção direta, como o RE9)";
+        _chkReFramework.Text = "Instalar o REFramework junto (jogo da RE Engine — ele desarma a checagem de integridade que derruba o ReShade)";
         _chkReFramework.AutoSize = true;
         _chkReFramework.Visible = false;
         _chkReFramework.Margin = new Padding(0, 0, 0, 6);
@@ -280,9 +280,10 @@ public sealed partial class MainForm
                       "(x64) do REFramework em qualquer subpasta de " + kit.KitRoot + " — por exemplo " +
                       "numa pasta REFramework\\ — e detecte de novo.");
         notes.Add("RE Engine (re_chunk_*.pak na pasta): " + (_profile.EhReEngine ? "SIM" : "NÃO") +
-                  " — é a engine em que o REFramework carrega. A caixa \"Hospedar o ReShade no " +
-                  "REFramework\" fica disponível em qualquer jogo x64; use-a no jogo que recusa a " +
-                  "injeção direta (o jogo abre a própria tela de erro logo depois do ReShade subir).");
+                  " — é a engine em que o REFramework carrega. A caixa \"Instalar o REFramework " +
+                  "junto\" fica disponível em qualquer jogo x64; use-a no jogo da RE Engine que abre a " +
+                  "própria tela de erro logo depois do ReShade subir. O ReShade continua sendo a DLL ao " +
+                  "lado do executável: o REFramework entra junto, para desarmar a checagem de integridade.");
         notes.Add($"Kit: {DescribeKit(kit)}");
         foreach (var p in kit.Problems) notes.Add("ATENÇÃO: " + p);
         if (_manifest is not null)
