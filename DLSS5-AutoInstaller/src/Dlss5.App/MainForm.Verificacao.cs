@@ -22,6 +22,9 @@ public sealed partial class MainForm
     private readonly Button _btnRenodx = Ui.Secondary("Testar sem o RenoDX");
     private readonly Button _btnFeeder = Ui.Secondary("Testar sem o Feeder");
     private readonly Button _btnSoReShade = Ui.Secondary("Testar só o ReShade");
+    // O runtime do DLSS 5 pelo hash: quando o do kit é remendo/original-só-RTX-50, este
+    // botão baixa o build do ShortFuse que o RHI instala e o põe no kit, conferido.
+    private readonly Button _btnRuntime = Ui.Secondary("Baixar o runtime do RHI (166 MB)");
     // Caminho direto: a chave EnableHooks do RenoDX, trocada no ReShade.ini sem reinstalar.
     private readonly FlowLayoutPanel _barraHooks = Ui.Fila();
     private readonly ComboBox _cboHooks = new();
@@ -134,6 +137,9 @@ public sealed partial class MainForm
         _btnSoReShade.Margin = new Padding(0, 4, 8, 4);
         _btnSoReShade.Click += (_, _) => TestarSoOReShade();
         bar.Controls.Add(_btnSoReShade);
+        _btnRuntime.Margin = new Padding(0, 4, 8, 4);
+        _btnRuntime.Click += (_, _) => _ = BaixarRuntimeDoRhiAsync();
+        bar.Controls.Add(_btnRuntime);
         bar.Controls.Add(Botao("Reiniciar o PC (opcional)…", (_, _) => ReiniciarSeOUsuarioQuiser()));
         bar.Controls.Add(Botao(Textos.BotaoAbrirLogs, (_, _) => AbrirPastaDeLogs()));
         bar.Controls.Add(Botao(Textos.BotaoExportarDiagnostico, (_, _) => ExportarDiagnostico()));
@@ -491,6 +497,58 @@ public sealed partial class MainForm
                 Isolamento.Leitura(proximo, _profile.NeedsDgVoodoo));
         }
         catch (Exception ex) { Erro("Não consegui alterar os arquivos do teste", ex); }
+    }
+
+    /// <summary>
+    /// Baixa o nvngx_dlssnr.dll recomendado (o que o RHI instala) para a pasta do kit,
+    /// conferindo o hash antes de trocar. Depois é só instalar de novo: o motor copia o
+    /// arquivo novo e atualiza o manifesto. Foi o que faltou no RE9 — o kit trazia um
+    /// remendo do original de RTX 50, e a RTX 4070 Ti rodava, dizia OK e não desenhava.
+    /// </summary>
+    private async Task BaixarRuntimeDoRhiAsync()
+    {
+        if (_ocupado) { Status(Textos.OperacaoEmAndamento); return; }
+        var pastaKit = _txtKit.Text.Trim();
+        if (string.IsNullOrWhiteSpace(pastaKit) || !Directory.Exists(pastaKit))
+        {
+            Aviso("Aponte a pasta do kit primeiro", "O runtime é gravado na pasta do kit (DLSS 5 Files), na tela inicial.");
+            return;
+        }
+
+        KitInventory kit;
+        try { kit = KitResolver.Resolve(pastaKit); }
+        catch (Exception ex) { Erro("Não consegui ler a pasta do kit", ex); return; }
+        var destino = kit.NvngxDlssnr ?? Path.Combine(pastaKit, RuntimeNr.Arquivo);
+
+        var atual = RuntimeNr.Identificar(destino);
+        var (falha, texto) = RuntimeNr.Avaliar(atual, null);
+        if (!Dialogos.Confirmar(this, "Baixar o runtime do RHI",
+                atual is null && !File.Exists(destino)
+                    ? "O kit não tem nvngx_dlssnr.dll"
+                    : falha ? "O runtime do kit não serve para a maioria das placas" : "O runtime do kit já é um build bom",
+                (File.Exists(destino) ? texto + "\r\n\r\n" : "") +
+                $"Baixar {RuntimeNr.Recomendado} de {RuntimeNr.UrlRecomendado} (~110 MB compactado) e gravar em:\r\n{destino}\r\n\r\n" +
+                "O arquivo atual fica guardado como .dlss5prev. O hash é conferido antes da troca. " +
+                "Depois, clique em Instalar de novo (Atualizar) para o jogo receber o arquivo novo.",
+                "Baixar"))
+            return;
+
+        SetOcupado(true);
+        try
+        {
+            using var etapa = _diario.Etapa("Baixar o runtime do RHI");
+            var progresso = new Progress<string>(Status);
+            var build = await RuntimeNr.BaixarParaOKit(destino, progresso);
+            _kit = null;   // o inventário do kit mudou: quem precisar resolve de novo
+            _diario.Info($"nvngx_dlssnr.dll do kit trocado para {build.Nome} ({build.Sha256[..12]}...)");
+            Status($"Kit atualizado: {build.Nome}. Agora instale de novo para o jogo receber o arquivo.");
+            Dialogos.Informar(this, "Runtime baixado", $"{RuntimeNr.Arquivo} do kit agora é o {build.Nome}",
+                build.Leitura + "\r\n\r\nPróximo passo: volte à tela inicial e clique em Instalar (Atualizar). " +
+                "Depois abra o jogo: no painel do addon o runtime deve aparecer como 310.8.SF.0, e o item 18 da " +
+                "verificação passa a OK.");
+        }
+        catch (Exception ex) { Erro("Não consegui baixar o runtime", ex); }
+        finally { SetOcupado(false); }
     }
 
     /// <summary>O texto do botão diz o que o clique fará, não o estado atual.</summary>

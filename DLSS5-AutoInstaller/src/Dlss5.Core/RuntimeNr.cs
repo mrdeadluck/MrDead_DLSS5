@@ -1,3 +1,5 @@
+using System.IO.Compression;
+using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 
@@ -110,6 +112,83 @@ public static class RuntimeNr
                 ? (false, build.Leitura + " A placa registrada no log é RTX 50, então ele serve aqui.")
                 : (true, build.Leitura + (serieRtx is { } s ? $" A placa registrada no log é RTX {s}xx." : ""));
         return (false, build.Leitura);
+    }
+
+    /// <summary>
+    /// Baixa o runtime recomendado do RHI e o põe no lugar do nvngx_dlssnr.dll do kit,
+    /// conferindo o hash ANTES de trocar — um download corrompido nunca vira o arquivo do
+    /// kit. O antigo fica guardado como .dlss5prev. Devolve o build instalado.
+    ///
+    /// Existe porque o objeto do LFS não sobe deste ambiente, e porque o usuário não
+    /// deveria ter que abrir zip à mão para consertar o que o programa consegue conferir.
+    /// </summary>
+    public static async Task<BuildNr> BaixarParaOKit(
+        string caminhoNoKit, IProgress<string>? progresso = null, CancellationToken ct = default)
+    {
+        var alvo = Conhecidos.First(b => b.Nome == Recomendado);
+        var pasta = Path.GetDirectoryName(caminhoNoKit) ?? throw new InvalidOperationException("Caminho do kit sem pasta.");
+        Directory.CreateDirectory(pasta);
+
+        var zipTemp = caminhoNoKit + ".zip" + Propriedade.TempSuffix;
+        var dllTemp = caminhoNoKit + Propriedade.TempSuffix;
+        try
+        {
+            progresso?.Report($"Baixando {Recomendado} do RHI (~110 MB)...");
+            using (var http = new HttpClient { Timeout = TimeSpan.FromMinutes(15) })
+            using (var resposta = await http.GetAsync(UrlRecomendado, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false))
+            {
+                resposta.EnsureSuccessStatusCode();
+                long? total = resposta.Content.Headers.ContentLength;
+                await using var origem = await resposta.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+                await using var destino = new FileStream(zipTemp, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16);
+                var buffer = new byte[1 << 16];
+                long lidos = 0, ultimoAviso = 0;
+                int n;
+                while ((n = await origem.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
+                {
+                    await destino.WriteAsync(buffer.AsMemory(0, n), ct).ConfigureAwait(false);
+                    lidos += n;
+                    if (lidos - ultimoAviso >= 8 << 20)
+                    {
+                        ultimoAviso = lidos;
+                        progresso?.Report(total is > 0
+                            ? $"Baixando... {lidos * 100 / total.Value}% ({lidos >> 20} MB)"
+                            : $"Baixando... {lidos >> 20} MB");
+                    }
+                }
+            }
+
+            progresso?.Report("Extraindo o nvngx_dlssnr.dll do zip...");
+            using (var zip = ZipFile.OpenRead(zipTemp))
+            {
+                var entrada = zip.Entries.FirstOrDefault(e =>
+                    e.Name.Equals(Arquivo, StringComparison.OrdinalIgnoreCase))
+                    ?? throw new InvalidOperationException($"O zip do RHI não traz {Arquivo}.");
+                entrada.ExtractToFile(dllTemp, overwrite: true);
+            }
+
+            progresso?.Report("Conferindo o hash...");
+            var hash = HashDe(dllTemp) ?? "?";
+            if (!alvo.Sha256.Equals(hash, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    $"O arquivo baixado não bate com o hash conhecido do {Recomendado} " +
+                    $"(esperado {alvo.Sha256[..12]}..., veio {hash[..Math.Min(12, hash.Length)]}...). Nada foi trocado.");
+
+            if (File.Exists(caminhoNoKit))
+            {
+                var anterior = caminhoNoKit + Propriedade.PrevSuffix;
+                if (File.Exists(anterior)) File.Delete(anterior);
+                File.Move(caminhoNoKit, anterior);
+            }
+            File.Move(dllTemp, caminhoNoKit);
+            progresso?.Report($"{Arquivo} do kit agora é o {Recomendado}.");
+            return alvo;
+        }
+        finally
+        {
+            try { if (File.Exists(zipTemp)) File.Delete(zipTemp); } catch { }
+            try { if (File.Exists(dllTemp)) File.Delete(dllTemp); } catch { }
+        }
     }
 
     public const string ComoTrocar =
