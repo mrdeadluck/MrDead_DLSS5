@@ -89,6 +89,11 @@ public static class GameDetector
             result.Notes.Add($"Este jogo recusa o dxgi.dll (proteção anti-adulteração): o ReShade entra como {nome}.");
         if (EaJavelin.EhJavelin(profile.ExeFolder))
             result.Notes.Add(EaJavelin.Aviso + " " + EaJavelin.ComoAbrir);
+        else if (File.Exists(Path.Combine(profile.GameFolder, "__Installer", "installerdata.xml")))
+            result.Notes.Add("Jogo do EA App (__Installer\\installerdata.xml): a sobreposição do EA App costuma pegar o " +
+                             "DXGI antes do ReShade — jogo abre, Home não faz nada, ReShade.log nem nasce. Desligue-a " +
+                             "no EA App (Configurações → Sobreposição no jogo) antes de abrir. Se mesmo assim não houver " +
+                             "log, troque \"ReShade entra como\" para o outro nome (d3d11.dll) e instale de novo.");
 
         if (MotorFox.EhFoxEngine(profile.RealExePath))
         {

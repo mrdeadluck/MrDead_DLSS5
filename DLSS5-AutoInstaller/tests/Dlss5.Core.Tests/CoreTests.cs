@@ -3843,6 +3843,56 @@ public class Titanfall2RenderizadorTests
     }
 }
 
+public class SemLogNaFrostbiteTests
+{
+    [Fact]
+    public void SemReShadeLogADicaMandaDesligarOEaAppETrocarONomeDaDll()
+    {
+        // NFS: "abre, sem Home, sem log". A escada tem que estar na dica, na ordem certa, com
+        // o OUTRO nome da DLL para a API do jogo — e não terminar em "troque de exe".
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-nfs-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "NeedForSpeedHeat.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D11,
+            };
+            var c7 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 7);
+            Assert.Equal(CheckStatus.Manual, c7.State);
+            Assert.Contains("EA App", c7.FixHint!);
+            Assert.Contains("d3d11.dll", c7.FixHint!);
+
+            perfil.Api = GraphicsApi.D3D12;
+            var c7d12 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 7);
+            Assert.Contains("d3d12.dll", c7d12.FixHint!);
+
+            perfil.NomeDoReShadeEscolhido = "d3d11.dll"; perfil.Api = GraphicsApi.D3D11;
+            var c7volta = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 7);
+            Assert.Contains("para dxgi.dll", c7volta.FixHint!);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void JogoDoEaAppGanhaANotaDaSobreposicaoNaDeteccao()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-eaapp-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(dir, "__Installer"));
+        try
+        {
+            File.WriteAllBytes(Path.Combine(dir, "NeedForSpeedHeat.exe"), DeteccaoEscolheONomeDoReShadeTests.ExeX64("D3D11CreateDevice"));
+            File.WriteAllText(Path.Combine(dir, "__Installer", "installerdata.xml"), "<x/>");
+            var r = GameDetector.Detect(dir);
+            Assert.Contains(r.Notes, n => n.Contains("EA App", StringComparison.Ordinal) && n.Contains("d3d11.dll", StringComparison.Ordinal));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}
+
 public class EaJavelinTests
 {
     private static string Pasta()

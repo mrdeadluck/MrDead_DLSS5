@@ -535,7 +535,7 @@ public static class CheckpointVerifier
         }
 
         r.AddRange(VerifyReShadeLog(exe, profile.GameFolder, reinicioPendente, profile.ReShadeLogPath,
-            profile.ReShadeHookName, profile.UsarReFramework, profile.RealExePath, profile.PastaDoReShade));
+            profile.ReShadeHookName, profile.UsarReFramework, profile.RealExePath, profile.PastaDoReShade, profile.Api));
 
         // 14/15/16 — dependem do jogo rodando
         r.AddRange(VerifyFeedLogs(exe, route, profile.NeedsFeeder));
@@ -579,7 +579,7 @@ public static class CheckpointVerifier
     private static IEnumerable<CheckResult> VerifyReShadeLog(
         string exeFolder, string? gameFolder = null, bool reinicioPendente = false,
         string? logPath = null, string nomeDoReShade = "dxgi.dll", bool hospedado = false,
-        string? exePath = null, string? pastaDoReShade = null)
+        string? exePath = null, string? pastaDoReShade = null, GraphicsApi api = GraphicsApi.Unknown)
     {
         // Hospedado no REFramework, o ReShade grava o log ao lado da própria DLL.
         var log = logPath ?? Path.Combine(exeFolder, "ReShade.log");
@@ -614,14 +614,28 @@ public static class CheckpointVerifier
                 yield break;
             }
 
+            // "Abre, sem Home, sem log" tem uma escada curta, e ela vai na ordem do que mais
+            // acontece: sobreposição (EA App na Frostbite — NFS — é o caso clássico), depois o
+            // OUTRO nome que o jogo aceita para a mesma DLL (dxgi.dll ↔ d3d11.dll / d3d12.dll),
+            // e só então "o exe não é o que renderiza".
+            string? outroNome = api switch
+            {
+                GraphicsApi.D3D11 => nomeDoReShade.Equals("dxgi.dll", StringComparison.OrdinalIgnoreCase) ? "d3d11.dll" : "dxgi.dll",
+                GraphicsApi.D3D12 => nomeDoReShade.Equals("dxgi.dll", StringComparison.OrdinalIgnoreCase) ? "d3d12.dll" : "dxgi.dll",
+                _ => null,
+            };
             yield return new CheckResult(7, "ReShade carregou", CheckStatus.Manual,
                 "ReShade.log ainda não existe — abra o jogo uma vez.",
                 "Depois de abrir o jogo, volte aqui e clique em Verificar de novo. Se você JÁ abriu " +
-                "e o arquivo continua não existindo, o ReShade não foi carregado: quase sempre é " +
-                "uma sobreposição que pegou o DXGI antes (EA App/Origin, Discord, RivaTuner/MSI " +
-                "Afterburner, Steam, NVIDIA App) — desligue todas e teste de novo. Se ainda assim " +
-                "não aparecer, o executável escolhido não é o que renderiza: procure Binaries\\Win64 " +
-                "ou um *-Shipping.exe e aponte no botão \"Outro...\" da tela de detecção.");
+                "e o arquivo continua não existindo, o ReShade não foi carregado. Na ordem: 1) uma " +
+                "sobreposição pegou o DXGI antes — na Frostbite (Need for Speed, Battlefield) é a do " +
+                "EA App/Origin: desligue-a no EA App (Configurações → Sobreposição no jogo), e também " +
+                "Steam, Discord, RivaTuner/Afterburner, NVIDIA App; teste de novo. " +
+                (outroNome is null ? "" :
+                 $"2) Volte à Detecção, troque \"ReShade entra como\" de {nomeDoReShade} para {outroNome} e instale de " +
+                 "novo — jogo que ignora um nome costuma carregar o outro. ") +
+                (outroNome is null ? "2)" : "3)") + " Se ainda assim não houver log, o executável escolhido não é o " +
+                "que renderiza: procure Binaries\\Win64 ou um *-Shipping.exe e aponte no botão \"Outro...\".");
             yield break;
         }
 
