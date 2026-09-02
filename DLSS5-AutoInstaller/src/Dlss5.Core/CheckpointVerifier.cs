@@ -541,6 +541,10 @@ public static class CheckpointVerifier
         if (renodx is not null)
         {
             var estado = renodx.AssinaturaRecusada ? CheckStatus.Fail
+                       // "Ativo" com o Streamline fora do gancho não é OK: é trabalho feito
+                       // e descartado, e foi esse OK que mandou o usuário procurar diferença
+                       // numa imagem que nunca ia mudar.
+                       : renodx.AtivoMasForaDoStreamline ? CheckStatus.Warning
                        : renodx.Ativo ? CheckStatus.Pass
                        : renodx.CaiuAntesDoDlss ? CheckStatus.Fail
                        : renodx.FechouSemJanela ? CheckStatus.Fail
@@ -585,6 +589,13 @@ public static class CheckpointVerifier
                       "estilos — Default, Natural e Cinematic — e 3 presets. O Natural é o mais " +
                       "discreto dos três: para ENXERGAR a diferença, troque para Cinematic e suba a " +
                       "intensidade; depois volte para o que você preferir."
+                    : renodx.AtivoMasForaDoStreamline
+                        ? "Na barra abaixo, em \"Hooks do RenoDX\", troque para 1 (NGX + Streamline), clique em " +
+                          "Aplicar hooks e abra o jogo. Não precisa reinstalar nada. Confira no painel do addon " +
+                          "(Home → Complementos): a linha \"Streamline: DLSS/DLSSD evaluations\" tem que sair do " +
+                          "ZERO. Enquanto ela estiver em 0, o addon está trabalhando num buffer que o jogo não " +
+                          "mostra — por isso a imagem não muda por mais que o log diga ATIVO. Se com 1 o jogo cair " +
+                          "na abertura, volte para 2 pela mesma barra."
                     : renodx.AssinaturaRecusada
                         ? "Aplique o override no registro e reinicie o PC quando puder — o driver só lê essa chave na inicialização."
                         : renodx.CaiuAntesDoDlss

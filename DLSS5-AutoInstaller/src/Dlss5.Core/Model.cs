@@ -139,6 +139,19 @@ public sealed class GameProfile
     public bool UsesRenodxDirectPath => HasNativeDlss && Api == GraphicsApi.D3D12 && !PreferirFeeder;
 
     /// <summary>
+    /// O jogo entrega o DLSS pelo Streamline da NVIDIA (sl.*.dll ao lado do exe), e não
+    /// por chamadas cruas de NGX. A diferença decide o EnableHooks do addon: em modo 2 os
+    /// módulos do Streamline ficam intocados, e num jogo desses o addon processa a imagem
+    /// e escreve num buffer que o Streamline não usa — trabalho feito e descartado, com o
+    /// log dizendo ATIVO e a tela sem mudar nada (foi o que aconteceu no RE9).
+    /// </summary>
+    public bool UsaStreamline => NativeDlss?.Clues
+        .Any(c => c.Texto.StartsWith("sl.", StringComparison.OrdinalIgnoreCase)) == true;
+
+    /// <summary>EnableHooks que este jogo pede na instalação.</summary>
+    public int HooksDoRenodx => UsaStreamline ? 1 : RenodxIni.Padrao;
+
+    /// <summary>
     /// O Feeder entra sempre que o RenoDX não consegue pegar o DLSS do próprio jogo —
     /// jogo sem DLSS (os 30+ que funcionaram) ou jogo com DLSS nativo fora do D3D12,
     /// porque ele roda o NGX num device D3D12 privado e independe da API do jogo. Em

@@ -376,6 +376,17 @@ public static class InstallPlanBuilder
                 "geforce_ti_4800 ou ati_radeon_8500 — não precisa reinstalar.");
         }
 
+        if (profile.UsaStreamline)
+        {
+            plan.Warnings.Add(
+                "Este jogo entrega o DLSS pelo Streamline da NVIDIA (sl.*.dll na pasta). O ini vai " +
+                $"com {RenodxIni.Chave}={profile.HooksDoRenodx} — ganchos no NGX E no Streamline. No modo " +
+                "padrão (2) o addon processa a imagem e escreve num buffer que o Streamline não usa " +
+                "para montar o quadro: o log diz ATIVO, conta milhares de quadros, e a tela não muda " +
+                "nada. Se com este modo o jogo cair na abertura, troque para 2 na tela de verificação " +
+                "(\"Hooks do RenoDX\") — não precisa reinstalar.");
+        }
+
         if (MotorFox.EhFoxEngine(profile.RealExePath))
         {
             // Não é aviso de rotina: aqui o jogo não trava, ele FECHA — e sem esta linha o

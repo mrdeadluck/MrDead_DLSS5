@@ -3176,7 +3176,9 @@ public class Re9AtivoMasSemDiferencaTests
     // ver diferença. O log confirma as duas coisas ao mesmo tempo.
     private const string LogRe9Ativo =
         "11:59:19:402 [45832] | INFO  | Initializing crosire's ReShade version '6.8.0.2155' (64-bit) loaded from 'dxgi.dll' into 're9.exe' ...\n" +
+        "11:59:21:883 [45832] | INFO  | Installing delayed hooks for 'd3d12.dll' (Just loaded via LoadLibrary('...\\_storage_\\/sl.common.dll')) ...\n" +
         "11:59:25:774 [45832] | INFO  | Registered add-on \"DLSS 5 Neural Rendering\" v0.2026.828.517 using ReShade API version 18.\n" +
+        "11:59:25:774 [45832] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: RenoDX DLSS5 Generic v4.1.5 loaded (hotkeys: NR toggle F6, screenshot F5) | EnableHooks=2: NGX hooks only, Streamline modules left unpatched\n" +
         "11:59:25:779 [45832] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: D3D12 NGX hooks installed across 3 module copy(ies)\n" +
         "11:59:28:706 [55796] | INFO  | Redirecting IDXGIFactory2::CreateSwapChainForHwnd(...) ...\n" +
         "11:59:33:424 [53588] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: NGX feature create intercepted: feature=13 (DLSSD/RR), slot=0\n" +
@@ -3185,13 +3187,24 @@ public class Re9AtivoMasSemDiferencaTests
         "12:00:45:110 [29968] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: skipping NR on NGX evaluate: feature 11 (DLSSG/FrameGeneration) is not DLSS/DLSSD\n";
 
     [Fact]
-    public void ComNrAtivoEGeracaoDeQuadrosADicaEnsinaAComparar()
+    public void NrAtivoNumJogoDeStreamlineNaoEhOkEnquantoOsGanchosForemSoNGX()
     {
+        // O caso que fez o usuário perder rodadas: o addon anuncia "ACTIVE — NR INJECTED",
+        // conta 7633 quadros, e a imagem não muda um fio. O painel do addon explicava o
+        // porquê e ninguém lia: "Streamline: DLSS/DLSSD evaluations 0". Com EnableHooks=2
+        // os módulos do Streamline ficam intocados, o addon escreve no buffer do NGX e o
+        // Streamline monta o quadro com o dele. Dizer OK aqui é mentir com log na mão.
         var dir = Pasta();
         try
         {
             File.WriteAllText(Path.Combine(dir, "renodx-dlss5.addon64"), "x");
             File.WriteAllText(Path.Combine(dir, "ReShade.log"), LogRe9Ativo + new string(' ', 2000));
+
+            var s = RenodxLog.Ler(LogRe9Ativo);
+            Assert.True(s!.Ativo);
+            Assert.True(s.Streamline);
+            Assert.Equal(2, s.EnableHooks);
+            Assert.True(s.AtivoMasForaDoStreamline);
 
             var perfil = new GameProfile
             {
@@ -3202,8 +3215,72 @@ public class Re9AtivoMasSemDiferencaTests
                 HasNativeDlss = true,
             };
 
-            var s = RenodxLog.Ler(LogRe9Ativo);
+            var c14 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 14);
+            Assert.Equal(CheckStatus.Warning, c14.State);
+            Assert.Contains("descartado", c14.Detail);
+            Assert.Contains("Hooks do RenoDX", c14.FixHint!);
+            Assert.Contains("1 (NGX + Streamline)", c14.FixHint!);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void JogoDeStreamlineJaInstalaComOsGanchosNoStreamline()
+    {
+        var comSl = new GameProfile
+        {
+            GameFolder = "x",
+            NativeDlss = new NativeDlssDetection
+            {
+                Present = true,
+                Clues = new[] { new NativeDlssClue("sl.dlss.dll", 60) },
+            },
+        };
+        Assert.True(comSl.UsaStreamline);
+        Assert.Equal(1, comSl.HooksDoRenodx);
+
+        var semSl = new GameProfile
+        {
+            GameFolder = "x",
+            NativeDlss = new NativeDlssDetection
+            {
+                Present = true,
+                Clues = new[] { new NativeDlssClue("nvngx_dlss.dll (veio com o jogo)", 50) },
+            },
+        };
+        Assert.False(semSl.UsaStreamline);
+        Assert.Equal(RenodxIni.Padrao, semSl.HooksDoRenodx);
+
+        // E o valor chega no ini que a instalação grava.
+        var ini = ReShadeConfigWriter.BuildReShadeIni(renodxHooks: comSl.HooksDoRenodx);
+        Assert.Equal(1, RenodxIni.Ler(ini));
+    }
+
+    [Fact]
+    public void ComNrAtivoEGeracaoDeQuadrosADicaEnsinaAComparar()
+    {
+        var dir = Pasta();
+        try
+        {
+            // Jogo que NÃO usa Streamline: aí "ativo" é ativo mesmo, e o que falta é o
+            // usuário saber comparar.
+            var semStreamline = LogRe9Ativo.Replace(
+                "11:59:21:883 [45832] | INFO  | Installing delayed hooks for 'd3d12.dll' (Just loaded via LoadLibrary('...\\_storage_\\/sl.common.dll')) ...\n", "");
+            File.WriteAllText(Path.Combine(dir, "renodx-dlss5.addon64"), "x");
+            File.WriteAllText(Path.Combine(dir, "ReShade.log"), semStreamline + new string(' ', 2000));
+
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "jogo.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D12,
+                HasNativeDlss = true,
+            };
+
+            var s = RenodxLog.Ler(semStreamline);
             Assert.True(s!.Ativo);
+            Assert.False(s.AtivoMasForaDoStreamline);
             Assert.True(s.FrameGeneration);
 
             var c14 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 14);
