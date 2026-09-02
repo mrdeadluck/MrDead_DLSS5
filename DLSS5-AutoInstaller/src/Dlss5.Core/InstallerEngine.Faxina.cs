@@ -31,6 +31,15 @@ public sealed partial class InstallerEngine
     };
 
     /// <summary>
+    /// O que a instalação deixa dentro de reframework\plugins. O ReShade hospedado e a
+    /// configuração dele: nomes que só existem ali porque nós os pusemos.
+    /// </summary>
+    private static readonly string[] NossosNoPlugins =
+    {
+        ReFramework.ReShadePlugin, ReFramework.ReShadeIni, ReFramework.ReShadeLog,
+    };
+
+    /// <summary>
     /// dgVoodoo é dele mesmo: existe jogo antigo que já vem com o dgVoodoo instalado de
     /// fábrica, e apagar a configuração dele quebraria o jogo. Estes só saem se houver
     /// instalação nossa na mesma pasta ou na pasta acima (na engine Source o dgVoodoo vai
@@ -75,6 +84,14 @@ public sealed partial class InstallerEngine
     /// em nenhum nvngx_dlss.dll.
     /// </summary>
     public string? NvngxDlssDoKit { get; set; }
+
+    /// <summary>
+    /// Caminho do dinput8.dll do REFramework no kit. Serve de gabarito, igual ao do
+    /// nvngx_dlss.dll: sem ele a faxina não encosta em nenhum dinput8.dll, porque o
+    /// arquivo pode ser um REFramework que o usuário instalou por conta própria (com
+    /// scripts e mods dele por perto) ou outro mod que usa o mesmo nome.
+    /// </summary>
+    public string? ReFrameworkDoKit { get; set; }
 
     private static readonly string[] ProvasDoKit =
     {
@@ -307,6 +324,25 @@ public sealed partial class InstallerEngine
         // O transplante: idêntico ao arquivo do kit, então provadamente nosso.
         var nvngx = Path.Combine(pasta, "nvngx_dlss.dll");
         if (TransplanteDlss.EhDoKit(nvngx, NvngxDlssDoKit)) nossos.Add(nvngx);
+
+        // REFramework: só sai se for byte a byte o do kit. Um dinput8.dll diferente é do
+        // usuário (outra versão, ou outro mod) e fica onde está.
+        var dinput = Path.Combine(pasta, ReFramework.Dinput8);
+        if (ReFramework.EhDoKit(dinput, ReFrameworkDoKit))
+        {
+            nossos.Add(dinput);
+            var revisao = Path.Combine(pasta, ReFramework.RevisionFile);
+            if (File.Exists(revisao)) nossos.Add(revisao);
+        }
+
+        // O ReShade hospedado e a configuração dele, dentro de reframework\plugins.
+        var plugins = ReFramework.PastaPlugins(pasta);
+        if (Directory.Exists(plugins))
+            foreach (var nome in NossosNoPlugins)
+            {
+                var caminho = Path.Combine(plugins, nome);
+                if (File.Exists(caminho)) nossos.Add(caminho);
+            }
 
         foreach (var (nome, prova) in PrecisamDeProva)
         {

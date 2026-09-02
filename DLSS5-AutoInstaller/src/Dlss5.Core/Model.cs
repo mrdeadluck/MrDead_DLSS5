@@ -150,6 +150,29 @@ public sealed class GameProfile
     public bool NeedsDgVoodoo => Route == InstallRoute.C;
 
     /// <summary>
+    /// Hospedar o ReShade dentro do REFramework em vez de injetá-lo como dxgi.dll.
+    /// É o caminho para jogo da RE Engine com proteção anti-adulteração (o RE9 recusa a
+    /// injeção direta e cai antes de criar qualquer DLSS). Ver <see cref="ReFramework"/>.
+    /// </summary>
+    public bool UsarReFramework { get; set; }
+
+    /// <summary>A pasta do jogo é RE Engine — só ali o REFramework tem função.</summary>
+    public bool EhReEngine => ReFramework.EhReEngine(ExeFolder);
+
+    /// <summary>
+    /// Onde fica a configuração que o ReShade REALMENTE lê. Hospedado no REFramework ele
+    /// procura o ini pelo nome do próprio módulo, dentro de reframework\plugins.
+    /// </summary>
+    public string ReShadeIniPath => UsarReFramework
+        ? ReFramework.CaminhoIni(ExeFolder)
+        : Path.Combine(ExeFolder, "ReShade.ini");
+
+    /// <summary>Onde fica o log que esse ReShade grava.</summary>
+    public string ReShadeLogPath => UsarReFramework
+        ? ReFramework.CaminhoLog(ExeFolder)
+        : Path.Combine(ExeFolder, "ReShade.log");
+
+    /// <summary>
     /// Nome com que o ReShade é instalado. O jogo carrega a DLL pelo nome da API que ele
     /// usa: um jogo OpenGL nunca vai procurar por dxgi.dll, então instalar com esse nome
     /// resulta em ReShade que jamais é carregado e num ReShade.log que nem chega a existir.

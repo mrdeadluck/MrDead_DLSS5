@@ -49,6 +49,14 @@ public sealed class MainForm : Form
         Height = 22,
         Visible = false,
     };
+    private readonly CheckBox _chkReFramework = new()
+    {
+        Text = "Hospedar o ReShade no REFramework (jogo da RE Engine que recusa a injeção direta, como o RE9)",
+        AutoSize = false,
+        Width = 680,
+        Height = 22,
+        Visible = false,
+    };
     private readonly Button _btnNativeAjustar = Ui.Secondary("Ajustar");
     private readonly TextBox _txtRenderer = new();
     private readonly Label _lblRoute = new();
@@ -558,6 +566,14 @@ public sealed class MainForm : Form
         _p1.Controls.Add(_chkDireto);
         y += 28;
 
+        // RE Engine com proteção anti-adulteração: o ReShade injetado como dxgi.dll faz o
+        // jogo abrir a própria tela de erro antes de criar qualquer DLSS. Hospedado no
+        // REFramework ele passa — foi assim que o RE9 abriu com o painel funcionando.
+        _chkReFramework.Location = new Point(230, y);
+        _chkReFramework.CheckedChanged += (_, _) => SyncProfileFromUi();
+        _p1.Controls.Add(_chkReFramework);
+        y += 28;
+
         _p1.Controls.Add(Caption("Pasta do renderizador:", y));
         _txtRenderer.SetBounds(230, y, 580, 25);
         _txtRenderer.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
@@ -734,6 +750,7 @@ public sealed class MainForm : Form
         if (!string.IsNullOrWhiteSpace(_txtRenderer.Text)) _profile.RendererFolder = _txtRenderer.Text;
         _profile.MvProvider = _options.MvProvider;
         _profile.PreferirFeeder = _chkDireto.Visible && _chkDireto.Checked;
+        _profile.UsarReFramework = _chkReFramework.Visible && _chkReFramework.Checked;
         UpdateMvAvailability();
         UpdateNativeLabel();
         UpdateRouteLabel();
@@ -753,6 +770,15 @@ public sealed class MainForm : Form
         _lblNativeWhy.Text = porque + Environment.NewLine + ConsequenciaDoNativo();
 
         _chkDireto.Visible = _profile.HasNativeDlss && _profile.Api == GraphicsApi.D3D12;
+
+        // O REFramework só carrega em RE Engine, e só faz sentido em jogo x64.
+        bool cabeReFramework = _profile.EhReEngine && _profile.Architecture == PeArchitecture.X64;
+        if (_chkReFramework.Visible != cabeReFramework)
+        {
+            _chkReFramework.Visible = cabeReFramework;
+            if (!cabeReFramework) _chkReFramework.Checked = false;
+        }
+        _profile.UsarReFramework = _chkReFramework.Visible && _chkReFramework.Checked;
     }
 
     /// <summary>
@@ -1314,6 +1340,16 @@ public sealed class MainForm : Form
         return _kit.NvngxDlss;
     }
 
+    /// <summary>Gabarito do REFramework do kit: sem ele a faxina não encosta em dinput8.dll.</summary>
+    private string? ReFrameworkDoKit()
+    {
+        if (_kit?.ReFrameworkDinput8 is { } pronto) return pronto;
+        var pasta = _txtKit.Text.Trim();
+        if (string.IsNullOrWhiteSpace(pasta) || !Directory.Exists(pasta)) return null;
+        _kit = KitResolver.Resolve(pasta);
+        return _kit.ReFrameworkDinput8;
+    }
+
     private void RevertInstall()
     {
         if (_profile is null) return;
@@ -1351,7 +1387,7 @@ public sealed class MainForm : Form
                 MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
             return;
 
-        var engine = new InstallerEngine(Log) { NvngxDlssDoKit = NvngxDoKit() };
+        var engine = new InstallerEngine(Log) { NvngxDlssDoKit = NvngxDoKit(), ReFrameworkDoKit = ReFrameworkDoKit() };
         ShowStep(3);
         _txtLog.Clear();
         try
@@ -1437,7 +1473,7 @@ public sealed class MainForm : Form
             return;
         }
 
-        var engine = new InstallerEngine(Log) { NvngxDlssDoKit = NvngxDoKit() };
+        var engine = new InstallerEngine(Log) { NvngxDlssDoKit = NvngxDoKit(), ReFrameworkDoKit = ReFrameworkDoKit() };
 
         // Varrer a pasta de um jogo grande leva alguns segundos; sem isso a janela
         // parece travada.

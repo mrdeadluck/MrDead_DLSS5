@@ -120,6 +120,11 @@ public static class ReShadeConfigWriter
     /// EnableHooks do addon do RenoDX, gravado explícito na seção [RenoDX.DLSS5] para a
     /// tela de verificação poder trocá-lo depois (ver <see cref="RenodxIni"/>).
     /// </param>
+    /// <param name="baseDir">
+    /// Pasta do jogo, quando o ReShade NÃO mora nela. Hospedado no REFramework ele fica em
+    /// reframework\plugins e resolve caminho relativo a partir dali, não da pasta do jogo —
+    /// os caminhos do ini precisam ser absolutos ou nada é encontrado.
+    /// </param>
     public static string BuildReShadeIni(
         int overlayKey = KeyHome,
         bool ctrl = false,
@@ -127,13 +132,19 @@ public static class ReShadeConfigWriter
         bool alt = false,
         string presetFile = "ReShadePreset.ini",
         bool feederUsed = true,
-        int renodxHooks = RenodxIni.Padrao)
+        int renodxHooks = RenodxIni.Padrao,
+        string? baseDir = null)
     {
+        // Sem baseDir tudo continua relativo, como sempre foi.
+        string Raiz(string relativo) => baseDir is null
+            ? @".\" + relativo
+            : Path.Combine(baseDir, relativo);
+
         var sb = new StringBuilder();
         sb.AppendLine("[GENERAL]");
-        sb.AppendLine(@"EffectSearchPaths=.\reshade-shaders\Shaders\**");
-        sb.AppendLine(@"TextureSearchPaths=.\reshade-shaders\Textures\**");
-        sb.AppendLine($"PresetPath=.\\{presetFile}");
+        sb.AppendLine($"EffectSearchPaths={Raiz(@"reshade-shaders\Shaders\**")}");
+        sb.AppendLine($"TextureSearchPaths={Raiz(@"reshade-shaders\Textures\**")}");
+        sb.AppendLine($"PresetPath={Raiz(presetFile)}");
         // Caminho direto: só efeitos marcados no preset são carregados — e o preset é
         // vazio. Assim nenhum .fx que sobrou na pasta (de instalação antiga, ou do
         // usuário) é compilado e alocado no device do jogo.
@@ -144,7 +155,7 @@ public static class ReShadeConfigWriter
         sb.AppendLine($"KeyOverlay={overlayKey},{Bit(ctrl)},{Bit(shift)},{Bit(alt)}");
         sb.AppendLine();
         sb.AppendLine("[ADDON]");
-        sb.AppendLine(@"AddonPath=.\");
+        sb.AppendLine($"AddonPath={(baseDir is null ? @".\" : baseDir)}");
         if (!feederUsed)
             sb.AppendLine("DisabledAddons=Generic Depth");
         if (feederUsed)

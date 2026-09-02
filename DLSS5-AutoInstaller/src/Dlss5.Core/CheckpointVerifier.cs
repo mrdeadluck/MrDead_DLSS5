@@ -87,7 +87,7 @@ public static class CheckpointVerifier
         // todo jogo instalado depois usar a nova, e o sintoma vira "o Home não abre" em
         // vários jogos ao mesmo tempo, sem nada de errado na instalação. Ler do arquivo
         // (e não da tela) é o que transforma isso numa linha visível.
-        var ini = Path.Combine(exe, "ReShade.ini");
+        var ini = profile.ReShadeIniPath;
         if (File.Exists(ini))
         {
             string textoIni;
@@ -99,7 +99,7 @@ public static class CheckpointVerifier
             r.Add(new CheckResult(9, "Tecla que abre o painel do ReShade",
                 tecla is null ? CheckStatus.Warning : CheckStatus.Manual,
                 tecla is null
-                    ? "ReShade.ini não tem a linha KeyOverlay."
+                    ? $"{Path.GetFileName(ini)} não tem a linha KeyOverlay."
                     : $"É {ReShadeConfigWriter.DescribeKey(tecla.Value.VirtualKey, tecla.Value.Ctrl, tecla.Value.Shift, tecla.Value.Alt)}" +
                       (ehHome ? "." : " — NÃO é Home."),
                 ehHome
@@ -178,21 +178,52 @@ public static class CheckpointVerifier
 
         // 6 — arquitetura do ReShade instalado. O nome muda com a API: num jogo OpenGL
         // procurar por dxgi.dll acusaria falha mesmo com a instalação correta.
-        var hook = profile.ReShadeHookName;
-        var dxgi = Path.Combine(exe, hook);
-        if (File.Exists(dxgi))
+        if (profile.UsarReFramework)
         {
-            var arch = PeFile.GetArchitecture(dxgi);
-            bool ok = arch == profile.Architecture;
-            r.Add(new CheckResult(6, $"{hook} do jogo com a arquitetura do exe",
-                ok ? CheckStatus.Pass : CheckStatus.Fail,
-                $"{hook} é {arch}, exe é {profile.Architecture}.",
-                ok ? null : "Arquitetura trocada: reinstale para extrair a versão certa do ReShade."));
+            var dinput = ReFramework.CaminhoDinput8(exe);
+            var plugin = ReFramework.CaminhoPlugin(exe);
+            bool temRef = File.Exists(dinput);
+            bool temPlugin = File.Exists(plugin);
+
+            r.Add(new CheckResult(6, "REFramework hospedando o ReShade",
+                temRef && temPlugin ? CheckStatus.Pass : CheckStatus.Fail,
+                temRef
+                    ? (temPlugin
+                        ? $"dinput8.dll na pasta do exe e {ReFramework.ReShadePlugin} em reshade\\plugins."
+                          .Replace("reshade\\plugins", "reframework\\plugins")
+                        : $"dinput8.dll está lá, mas falta reframework\\plugins\\{ReFramework.ReShadePlugin}.")
+                    : "dinput8.dll (REFramework) não está na pasta do exe.",
+                temRef && temPlugin
+                    ? null
+                    : "Rode a instalação. Neste modo o ReShade NÃO é o dxgi.dll: quem o carrega é o REFramework."));
+
+            // Um dxgi.dll sobrando aqui é a instalação antiga — e é justamente ele que a
+            // proteção do jogo derruba. Enquanto estiver na pasta, o teste não é limpo.
+            var dxgiVelho = Path.Combine(exe, "dxgi.dll");
+            if (File.Exists(dxgiVelho))
+                r.Add(new CheckResult(6, "Sobrou o dxgi.dll da injeção direta", CheckStatus.Fail,
+                    "Há um dxgi.dll na pasta do exe — resto da instalação anterior. É essa injeção " +
+                    "que a proteção do jogo recusa, e ela continua valendo mesmo com o REFramework no lugar.",
+                    "Clique em Desinstalar (reverter) e instale de novo, ou apague o dxgi.dll à mão."));
         }
         else
         {
-            r.Add(new CheckResult(6, $"{hook} do jogo", CheckStatus.Fail,
-                $"{hook} não está na pasta do exe.", "Rode a instalação."));
+            var hook = profile.ReShadeHookName;
+            var dxgi = Path.Combine(exe, hook);
+            if (File.Exists(dxgi))
+            {
+                var arch = PeFile.GetArchitecture(dxgi);
+                bool ok = arch == profile.Architecture;
+                r.Add(new CheckResult(6, $"{hook} do jogo com a arquitetura do exe",
+                    ok ? CheckStatus.Pass : CheckStatus.Fail,
+                    $"{hook} é {arch}, exe é {profile.Architecture}.",
+                    ok ? null : "Arquitetura trocada: reinstale para extrair a versão certa do ReShade."));
+            }
+            else
+            {
+                r.Add(new CheckResult(6, $"{hook} do jogo", CheckStatus.Fail,
+                    $"{hook} não está na pasta do exe.", "Rode a instalação."));
+            }
         }
 
         if (route is InstallRoute.B or InstallRoute.C)
@@ -230,24 +261,42 @@ public static class CheckpointVerifier
                     : null));
         }
 
-        // 11 — efeitos encontráveis. Só no caminho do Feeder: no direto a pasta de
-        // shaders não é instalada de propósito (nenhum efeito participa).
-        if (!profile.NeedsFeeder)
+        // 12 — o addon é encontrável a partir de onde o ReShade mora
+        //
+        // Hospedado no REFramework o ReShade fica em reframework\plugins e resolve
+        // AddonPath a partir dali: com o ".\" de sempre ele procura o addon dentro de
+        // plugins\, não acha, e o painel abre sem a aba do DLSS 5 — foi exatamente o que
+        // aconteceu no primeiro teste do RE9 (jogo abriu, Home abriu, DLSS não carregou).
+        if (profile.UsarReFramework)
         {
-            r.Add(new CheckResult(11, "Shaders", CheckStatus.NotApplicable,
-                "Não instalados neste caminho: nenhum efeito do ReShade participa — o RenoDX trabalha no contrato NGX do jogo.",
-                null));
+            var addon = Path.Combine(exe, "renodx-dlss5.addon64");
+            string textoRef;
+            try { textoRef = File.Exists(profile.ReShadeIniPath) ? ReadShared(profile.ReShadeIniPath) : ""; }
+            catch { textoRef = ""; }
+            bool absoluto = textoRef.Contains("AddonPath=" + exe, StringComparison.OrdinalIgnoreCase);
+
+            r.Add(new CheckResult(12, "Addon alcançável pelo ReShade hospedado",
+                absoluto && File.Exists(addon) ? CheckStatus.Pass : CheckStatus.Fail,
+                !File.Exists(addon)
+                    ? "renodx-dlss5.addon64 não está na pasta do exe."
+                    : absoluto
+                        ? $"AddonPath aponta para a pasta do jogo em {Path.GetFileName(profile.ReShadeIniPath)}."
+                        : $"O AddonPath de {Path.GetFileName(profile.ReShadeIniPath)} não é o caminho absoluto da pasta do jogo: " +
+                          "o ReShade procura o addon dentro de reframework\\plugins e o painel abre sem o DLSS 5.",
+                absoluto && File.Exists(addon)
+                    ? null
+                    : "Rode a instalação de novo — ela grava o ini com o caminho absoluto."));
         }
-        else
-        {
-            var feedFx = Path.Combine(exe, "reshade-shaders", "Shaders", "DLSS5_Feed.fx");
-            r.Add(new CheckResult(11, "Shaders no lugar",
-                File.Exists(feedFx) ? CheckStatus.Pass : CheckStatus.Fail,
-                File.Exists(feedFx)
-                    ? "reshade-shaders\\Shaders\\DLSS5_Feed.fx presente."
-                    : "DLSS5_Feed.fx não encontrado.",
-                File.Exists(feedFx) ? null : "Rode a instalação (ou reinstale: o desinstalador do ReShade apaga reshade-shaders\\)."));
-        }
+
+        // 11 — efeitos encontráveis. Sem a pasta, o ReShade abre reclamando na aba
+        // Início mesmo no caminho direto, onde nenhum efeito seria usado.
+        var feedFx = Path.Combine(exe, "reshade-shaders", "Shaders", "DLSS5_Feed.fx");
+        r.Add(new CheckResult(11, "Shaders no lugar",
+            File.Exists(feedFx) ? CheckStatus.Pass : CheckStatus.Fail,
+            File.Exists(feedFx)
+                ? "reshade-shaders\\Shaders\\DLSS5_Feed.fx presente."
+                : "DLSS5_Feed.fx não encontrado — o ReShade vai abrir reclamando que não há efeitos.",
+            File.Exists(feedFx) ? null : "Rode a instalação (ou reinstale: o desinstalador do ReShade apaga reshade-shaders\\)."));
 
         // 13 — preset com o provedor acima do Feed
         //
@@ -347,7 +396,7 @@ public static class CheckpointVerifier
         }
 
         // 7/8 — ReShade carregou e viu o swapchain (lê o log se já existir)
-        r.AddRange(VerifyReShadeLog(exe, profile.GameFolder, reinicioPendente));
+        r.AddRange(VerifyReShadeLog(exe, profile.GameFolder, reinicioPendente, profile.ReShadeLogPath));
 
         // 14/15/16 — dependem do jogo rodando
         r.AddRange(VerifyFeedLogs(exe, route, profile.NeedsFeeder));
@@ -389,9 +438,11 @@ public static class CheckpointVerifier
     }
 
     private static IEnumerable<CheckResult> VerifyReShadeLog(
-        string exeFolder, string? gameFolder = null, bool reinicioPendente = false)
+        string exeFolder, string? gameFolder = null, bool reinicioPendente = false,
+        string? logPath = null)
     {
-        var log = Path.Combine(exeFolder, "ReShade.log");
+        // Hospedado no REFramework, o ReShade grava o log ao lado da própria DLL.
+        var log = logPath ?? Path.Combine(exeFolder, "ReShade.log");
         if (!File.Exists(log))
         {
             var noutraPasta = LogEmOutraPasta(exeFolder, gameFolder);

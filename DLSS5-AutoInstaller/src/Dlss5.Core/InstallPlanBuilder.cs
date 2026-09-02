@@ -80,41 +80,84 @@ public static class InstallPlanBuilder
         // ReShade na pasta do exe, arquitetura = exe. O NOME depende da API: o jogo só
         // carrega a DLL que ele mesmo procura (dxgi.dll no Direct3D, opengl32.dll no OpenGL).
         var dxgiArch = profile.Architecture;
-        var hook = profile.ReShadeHookName;
         var dxgiSrc = dxgiArch == PeArchitecture.X64 ? kit.DxgiX64 : kit.DxgiX86;
-        if (dxgiSrc is not null)
+
+        if (profile.UsarReFramework)
         {
-            Copy(dxgiSrc, exe, hook);
+            // Jogo que recusa a injeção direta: o ReShade não entra pela tabela de
+            // importação do executável, e sim como plugin que o REFramework carrega
+            // depois de o jogo já estar de pé. Ver ReFramework.
+            if (kit.ReFrameworkDinput8 is null)
+            {
+                plan.Blockers.Add(
+                    "Falta no kit: dinput8.dll do REFramework (x64). Sem ele não há como hospedar " +
+                    "o ReShade num jogo que recusa a injeção direta.");
+            }
+            else
+            {
+                Copy(kit.ReFrameworkDinput8, exe, ReFramework.Dinput8);
+                if (kit.ReFrameworkRevision is not null)
+                    Copy(kit.ReFrameworkRevision, exe, ReFramework.RevisionFile);
+            }
+
+            var plugins = ReFramework.PastaPlugins(exe);
+            if (dxgiSrc is not null)
+            {
+                Copy(dxgiSrc, plugins, ReFramework.ReShadePlugin);
+            }
+            else if (kit.ReShadeSetup is not null)
+            {
+                plan.Actions.Add(new PlanAction(PlanActionKind.ExtractReShadeDll,
+                    $"Extrair ReShade ({dxgiArch}) do instalador → {Rel(profile, ReFramework.CaminhoPlugin(exe))}",
+                    kit.ReShadeSetup, ReFramework.CaminhoPlugin(exe)));
+            }
+
+            plan.Warnings.Add(
+                "Modo REFramework: o ReShade NÃO entra como dxgi.dll. Ele vai para " +
+                @"reframework\plugins\" + ReFramework.ReShadePlugin + " e quem o carrega é o " +
+                "REFramework, depois que o jogo já subiu — é assim que ele passa pela proteção " +
+                "anti-adulteração que derruba a injeção direta. O painel abre pela mesma tecla.");
         }
-        else if (kit.ReShadeSetup is not null)
+        else
         {
-            plan.Actions.Add(new PlanAction(PlanActionKind.ExtractReShadeDll,
-                $"Extrair ReShade ({dxgiArch}) do instalador → {Rel(profile, Path.Combine(exe, hook))}",
-                kit.ReShadeSetup, Path.Combine(exe, hook)));
+            var hook = profile.ReShadeHookName;
+            if (dxgiSrc is not null)
+            {
+                Copy(dxgiSrc, exe, hook);
+            }
+            else if (kit.ReShadeSetup is not null)
+            {
+                plan.Actions.Add(new PlanAction(PlanActionKind.ExtractReShadeDll,
+                    $"Extrair ReShade ({dxgiArch}) do instalador → {Rel(profile, Path.Combine(exe, hook))}",
+                    kit.ReShadeSetup, Path.Combine(exe, hook)));
+            }
         }
 
         // ReShade.ini + preset gerados.
         plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
-            "Gerar ReShade.ini", null, Path.Combine(exe, "ReShade.ini")));
+            profile.UsarReFramework
+                ? $"Gerar {ReFramework.ReShadeIni} (é o ini que o ReShade hospedado lê)"
+                : "Gerar ReShade.ini",
+            null, profile.ReShadeIniPath));
         plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
             profile.NeedsFeeder
                 ? $"Gerar ReShadePreset.ini (MV = {options.MvProvider}, acima do DLSS 5 Feed)"
                 : "Gerar ReShadePreset.ini (sem efeitos: com DLSS nativo em D3D12 o RenoDX se pendura na chamada do próprio jogo)",
             null, Path.Combine(exe, "ReShadePreset.ini")));
 
-        // Pasta de shaders — só no caminho do Feeder. No direto nenhum efeito participa
-        // (o preset sai vazio), e cada .fx da pasta ainda seria compilado e alocado no
-        // device do jogo toda vez que o runtime do ReShade sobe. No RE9 a tela de erro do
-        // jogo vinha 1 a 3 s depois desse ponto, com ou sem o RenoDX; uma instalação
-        // manual do addon não leva shader nenhum. A pasta fica de fora.
-        if (kit.ShadersDir is not null && profile.NeedsFeeder)
+        // Pasta de shaders: vai nos dois caminhos.
+        //
+        // Ela já ficou de fora do caminho direto, na suspeita de que compilar os .fx
+        // derrubava o RE9. A suspeita caiu: o RE9 caía pela proteção anti-adulteração do
+        // próprio jogo (com o REFramework hospedando o ReShade, ele abre). E sem a pasta
+        // o ReShade abre reclamando na aba Início — "nenhum arquivo de efeito (.fx)
+        // encontrado nos caminhos de pesquisa" — o que parece defeito e não é. Com a
+        // pasta no lugar e EffectLoadSkipping=1 (preset vazio no direto), os arquivos
+        // existem e mesmo assim nenhum é compilado.
+        if (kit.ShadersDir is not null)
             plan.Actions.Add(new PlanAction(PlanActionKind.CopyFile,
                 $"Copiar pasta reshade-shaders → {Rel(profile, shadersTarget)}",
                 kit.ShadersDir, shadersTarget));
-        else if (!profile.NeedsFeeder)
-            plan.Warnings.Add("Caminho direto: a pasta reshade-shaders NÃO é instalada. Nenhum efeito do " +
-                "ReShade participa (o RenoDX trabalha no contrato NGX do próprio jogo), e cada shader da " +
-                "pasta seria compilado e alocado no device do jogo à toa a cada vez que o runtime sobe.");
 
         if (route == InstallRoute.A)
         {

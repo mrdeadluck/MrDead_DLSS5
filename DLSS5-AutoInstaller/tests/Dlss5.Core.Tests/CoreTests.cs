@@ -505,21 +505,18 @@ public class PlanBuilderTests
     }
 
     [Fact]
-    public void CaminhoDiretoNaoInstalaAPastaDeShaders()
+    public void OsDoisCaminhosInstalamAPastaDeShaders()
     {
-        // RE9: a tela de erro do jogo vinha 1 a 3 s depois de o runtime do ReShade subir,
-        // com ou sem RenoDX — o ponto em que cada .fx da pasta é compilado e alocado no
-        // device do jogo. No direto nenhum efeito participa; a pasta fica de fora.
+        // A pasta já ficou de fora do caminho direto, na suspeita de que compilar os .fx
+        // derrubava o RE9. A suspeita caiu (era a proteção anti-adulteração do jogo), e
+        // sem a pasta o ReShade abre reclamando "nenhum arquivo de efeito encontrado" —
+        // parece defeito e não é. Com EffectLoadSkipping e preset vazio nada é compilado.
         var direto = Profile(PeArchitecture.X64, GraphicsApi.D3D12);
         direto.HasNativeDlss = true;
-        var planDireto = InstallPlanBuilder.Build(direto, FullKit(), new InstallOptions());
-        Assert.False(Targets(planDireto, "reshade-shaders"));
-        Assert.Contains(planDireto.Warnings, w => w.Contains("reshade-shaders NÃO é instalada", StringComparison.Ordinal));
+        Assert.True(Targets(InstallPlanBuilder.Build(direto, FullKit(), new InstallOptions()), "reshade-shaders"));
 
-        // No Feeder o Feed.fx e o provedor de MV são a cadeia inteira: continua indo.
         var feeder = Profile(PeArchitecture.X64, GraphicsApi.D3D12);
-        var planFeeder = InstallPlanBuilder.Build(feeder, FullKit(), new InstallOptions());
-        Assert.True(Targets(planFeeder, "reshade-shaders"));
+        Assert.True(Targets(InstallPlanBuilder.Build(feeder, FullKit(), new InstallOptions()), "reshade-shaders"));
     }
 
     [Fact]
@@ -3083,14 +3080,191 @@ public class VerificacaoSemRenodxNoLogTests
     }
 
     [Fact]
-    public void NoCaminhoDiretoOsShadersSaoNaoAplicaveis()
+    public void OsShadersSaoConferidosTambemNoCaminhoDireto()
     {
+        // A pasta de shaders voltou a ser instalada nos dois caminhos: sem ela o ReShade
+        // abre reclamando "nenhum arquivo de efeito encontrado", o que parece defeito.
         var dir = Pasta();
         try
         {
             var c11 = CheckpointVerifier.Verify(Perfil(dir), null).First(c => c.Number == 11);
-            Assert.Equal(CheckStatus.NotApplicable, c11.State);
+            Assert.Equal(CheckStatus.Fail, c11.State);
+
+            Directory.CreateDirectory(Path.Combine(dir, "reshade-shaders", "Shaders"));
+            File.WriteAllText(Path.Combine(dir, "reshade-shaders", "Shaders", "DLSS5_Feed.fx"), "x");
+            var ok = CheckpointVerifier.Verify(Perfil(dir), null).First(c => c.Number == 11);
+            Assert.Equal(CheckStatus.Pass, ok.State);
         }
         finally { Directory.Delete(dir, true); }
+    }
+}
+
+public class ReFrameworkTests
+{
+    private static string NovaPasta()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-ref-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    [Fact]
+    public void ReEngineEhReconhecidaPelosPaks()
+    {
+        var dir = NovaPasta();
+        try
+        {
+            Assert.False(ReFramework.EhReEngine(dir));
+            File.WriteAllText(Path.Combine(dir, "re_chunk_000.pak"), "x");
+            Assert.True(ReFramework.EhReEngine(dir));
+        }
+        finally { Directory.Delete(dir, true); }
+
+        Assert.False(ReFramework.EhReEngine(null));
+        Assert.False(ReFramework.EhReEngine(Path.Combine(Path.GetTempPath(), "nao-existe-" + Guid.NewGuid())));
+    }
+
+    [Fact]
+    public void OIniDoModoHospedadoUsaCaminhoAbsoluto()
+    {
+        // Hospedado em reframework\plugins, o ReShade resolve caminho relativo a partir
+        // da pasta dele: com ".\" ele procuraria o addon dentro de plugins e o painel
+        // abriria sem o DLSS 5. Foi o que aconteceu no primeiro teste do RE9.
+        var jogo = Path.Combine(Path.GetTempPath(), "JogoRE");
+        var ini = ReShadeConfigWriter.BuildReShadeIni(feederUsed: false, baseDir: jogo);
+
+        Assert.Contains($"AddonPath={jogo}", ini);
+        Assert.Contains(Path.Combine(jogo, "ReShadePreset.ini"), ini);
+        Assert.Contains(Path.Combine(jogo, @"reshade-shaders\Shaders\**"), ini);
+        Assert.DoesNotContain(@"AddonPath=.\", ini);
+
+        // Sem baseDir nada muda: continua relativo, como sempre foi.
+        var normal = ReShadeConfigWriter.BuildReShadeIni(feederUsed: false);
+        Assert.Contains(@"AddonPath=.\", normal);
+    }
+
+    [Fact]
+    public void PlanoHospedaOReShadeEmVezDeInjetarComoDxgi()
+    {
+        var dir = NovaPasta();
+        try
+        {
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "re9.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D12,
+                HasNativeDlss = true,
+                UsarReFramework = true,
+            };
+
+            var kitDir = NovaPasta();
+            try
+            {
+                var kit = new KitInventory { KitRoot = kitDir }; 
+                kit.DxgiX64 = Path.Combine(kitDir, "dxgi.dll");
+                kit.RenodxAddon64 = Path.Combine(kitDir, "renodx-dlss5.addon64");
+                kit.NvngxDlssnr = Path.Combine(kitDir, "nvngx_dlssnr.dll");
+                kit.NvngxDlss = Path.Combine(kitDir, "nvngx_dlss.dll");
+                kit.ShadersDir = kitDir;
+                kit.HasDrme = true;
+                kit.ReFrameworkDinput8 = Path.Combine(kitDir, "dinput8.dll");
+                kit.ReFrameworkRevision = Path.Combine(kitDir, ReFramework.RevisionFile);
+
+                var plan = InstallPlanBuilder.Build(perfil, kit, new InstallOptions());
+
+                bool Alvo(string trecho) => plan.Actions.Any(a =>
+                    a.TargetPath?.Contains(trecho, StringComparison.OrdinalIgnoreCase) == true);
+
+                // O REFramework entra, e o ReShade vai para dentro dele.
+                Assert.True(Alvo(ReFramework.Dinput8));
+                Assert.True(Alvo(Path.Combine("reframework", "plugins", ReFramework.ReShadePlugin)));
+                // E NÃO existe dxgi.dll na raiz: é a injeção que o jogo recusa.
+                Assert.DoesNotContain(plan.Actions, a =>
+                    string.Equals(a.TargetPath, Path.Combine(dir, "dxgi.dll"), StringComparison.OrdinalIgnoreCase));
+                // O ini gerado é o que aquele ReShade lê.
+                Assert.Equal(ReFramework.CaminhoIni(dir), perfil.ReShadeIniPath);
+                Assert.True(Alvo(ReFramework.ReShadeIni));
+            }
+            finally { Directory.Delete(kitDir, true); }
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void SemOREFrameworkNoKitOPlanoBloqueia()
+    {
+        var dir = NovaPasta();
+        try
+        {
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "re9.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D12,
+                HasNativeDlss = true,
+                UsarReFramework = true,
+            };
+            var kit = new KitInventory { KitRoot = dir };
+            var plan = InstallPlanBuilder.Build(perfil, kit, new InstallOptions());
+            Assert.Contains(plan.Blockers, b => b.Contains("REFramework", StringComparison.Ordinal));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void FaxinaSoRemoveODinput8QueEhDoKit()
+    {
+        var jogo = NovaPasta();
+        var kit = NovaPasta();
+        try
+        {
+            File.WriteAllText(Path.Combine(kit, ReFramework.Dinput8), "bytes do REFramework");
+            File.WriteAllText(Path.Combine(jogo, ReFramework.Dinput8), "bytes do REFramework");
+            File.WriteAllText(Path.Combine(jogo, ReFramework.RevisionFile), "abc");
+            File.WriteAllText(Path.Combine(jogo, "renodx-dlss5.addon64"), "x");
+            Directory.CreateDirectory(ReFramework.PastaPlugins(jogo));
+            File.WriteAllText(ReFramework.CaminhoPlugin(jogo), "reshade");
+
+            var engine = new InstallerEngine(_ => { })
+            {
+                ReFrameworkDoKit = Path.Combine(kit, ReFramework.Dinput8),
+            };
+            engine.LimpezaTotal(jogo);
+
+            Assert.False(File.Exists(Path.Combine(jogo, ReFramework.Dinput8)));
+            Assert.False(File.Exists(ReFramework.CaminhoPlugin(jogo)));
+            Assert.False(File.Exists(Path.Combine(jogo, ReFramework.RevisionFile)));
+        }
+        finally { Directory.Delete(jogo, true); Directory.Delete(kit, true); }
+    }
+
+    [Fact]
+    public void UmDinput8DiferenteDoKitNaoEhTocado()
+    {
+        // Pode ser um REFramework que o usuário instalou por conta, com mods dele em volta.
+        var jogo = NovaPasta();
+        var kit = NovaPasta();
+        try
+        {
+            File.WriteAllText(Path.Combine(kit, ReFramework.Dinput8), "bytes do kit");
+            File.WriteAllText(Path.Combine(jogo, ReFramework.Dinput8), "OUTRA versao");
+            File.WriteAllText(Path.Combine(jogo, "renodx-dlss5.addon64"), "x");
+
+            new InstallerEngine(_ => { })
+            {
+                ReFrameworkDoKit = Path.Combine(kit, ReFramework.Dinput8),
+            }.LimpezaTotal(jogo);
+
+            Assert.True(File.Exists(Path.Combine(jogo, ReFramework.Dinput8)));
+
+            // E sem gabarito nenhum, idem.
+            File.WriteAllText(Path.Combine(jogo, "renodx-dlss5.addon64"), "x");
+            new InstallerEngine(_ => { }).LimpezaTotal(jogo);
+            Assert.True(File.Exists(Path.Combine(jogo, ReFramework.Dinput8)));
+        }
+        finally { Directory.Delete(jogo, true); Directory.Delete(kit, true); }
     }
 }

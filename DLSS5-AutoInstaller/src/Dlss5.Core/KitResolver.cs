@@ -20,6 +20,10 @@ public sealed class KitInventory
     /// <summary>Instalador (ou zip) do ReShade para extrair ReShade32/64.dll.</summary>
     public string? ReShadeSetup { get; set; }
 
+    /// <summary>dinput8.dll do REFramework (x64) e o marcador de revisão da nightly.</summary>
+    public string? ReFrameworkDinput8 { get; set; }
+    public string? ReFrameworkRevision { get; set; }
+
     /// <summary>Pasta reshade-shaders completa (Shaders + Textures).</summary>
     public string? ShadersDir { get; set; }
 
@@ -149,6 +153,13 @@ public static class KitResolver
         inv.FeedAddon64 = First("dlss5-feed.addon64");
         inv.FeedAddon32 = First("dlss5-feed.addon32");
         inv.FeedHost64Exe = First("dlss5-feed-host64.exe");
+
+        // REFramework: só o x64 serve, e ele nunca pode ser confundido com um dinput8.dll
+        // que por acaso esteja em outra pasta do kit.
+        inv.ReFrameworkDinput8 = Named(ReFramework.Dinput8)
+            .Where(Ok)
+            .FirstOrDefault(p => PeFile.GetArchitecture(p) == PeArchitecture.X64);
+        inv.ReFrameworkRevision = First(ReFramework.RevisionFile);
 
         // dxgi.dll do ReShade: classifica por arquitetura lendo o cabeçalho PE.
         foreach (var dxgi in Named("dxgi.dll").Where(Ok))

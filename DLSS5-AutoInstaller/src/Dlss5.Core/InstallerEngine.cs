@@ -172,14 +172,18 @@ public sealed partial class InstallerEngine
             var existente = File.Exists(target) ? File.ReadAllText(target) : null;
             content = DxWrapperChain.GerarIni(existente, realDllPath!);
         }
-        else if (name.Equals("ReShade.ini", StringComparison.OrdinalIgnoreCase))
+        else if (name.Equals("ReShade.ini", StringComparison.OrdinalIgnoreCase)
+                 || name.Equals(ReFramework.ReShadeIni, StringComparison.OrdinalIgnoreCase))
         {
             content = ReShadeConfigWriter.BuildReShadeIni(
                 plan.Options.OverlayKey,
                 plan.Options.OverlayCtrl,
                 plan.Options.OverlayShift,
                 plan.Options.OverlayAlt,
-                feederUsed: plan.Profile.NeedsFeeder);
+                feederUsed: plan.Profile.NeedsFeeder,
+                // Hospedado no REFramework o ini fica longe da pasta do jogo: sem caminho
+                // absoluto o ReShade procuraria shaders e addons dentro de plugins\.
+                baseDir: plan.Profile.UsarReFramework ? plan.Profile.ExeFolder : null);
         }
         else
         {
@@ -240,6 +244,12 @@ public sealed partial class InstallerEngine
         // listado aqui, ele entra no aviso e na oferta de faxina completa.
         var transplante = Path.Combine(exeFolder, "nvngx_dlss.dll");
         if (TransplanteDlss.EhDoKit(transplante, NvngxDlssDoKit)) sobras.Add(transplante);
+
+        // Modo REFramework: o hospedeiro (só se for o do kit) e o ReShade dentro dele.
+        var dinput = ReFramework.CaminhoDinput8(exeFolder);
+        if (ReFramework.EhDoKit(dinput, ReFrameworkDoKit)) sobras.Add(dinput);
+        foreach (var caminho in new[] { ReFramework.CaminhoPlugin(exeFolder), ReFramework.CaminhoIni(exeFolder) })
+            if (File.Exists(caminho)) sobras.Add(caminho);
 
         // Um ini do DxWrapper ainda apontando para o dgVoodoo é sobra perigosa: com o
         // dgVoodoo fora, o DxWrapper tentaria carregar um arquivo que não existe.
