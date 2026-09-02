@@ -3399,7 +3399,8 @@ public class ReFrameworkLogTests
     {
         // Linha real do PluginLoader do REFramework.
         Assert.True(ReFramework.CarregouOPlugin(
-            @"[PluginLoader] Loaded G:\jogoeframework\plugins\ReShade64.dll"));
+            @"[PluginLoader] Loaded G:\jogo
+eframework\plugins\ReShade64.dll"));
         // Plugin sem o export do REFramework é PULADO, não descarregado — e a linha
         // "Loaded" vem antes, então continua contando como carregado.
         Assert.True(ReFramework.CarregouOPlugin(
@@ -3408,5 +3409,130 @@ public class ReFrameworkLogTests
 
         Assert.False(ReFramework.CarregouOPlugin("[PluginLoader] No plugins loaded."));
         Assert.False(ReFramework.CarregouOPlugin(null));
+    }
+}
+
+public class NomeDoReShadeTests
+{
+    private static GameProfile Perfil(string exe, GraphicsApi api) => new()
+    {
+        GameFolder = Path.GetTempPath(),
+        RealExePath = Path.Combine(Path.GetTempPath(), exe),
+        Architecture = PeArchitecture.X64,
+        Api = api,
+    };
+
+    [Fact]
+    public void OPadraoContinuaSendoODxgi()
+    {
+        Assert.Equal("dxgi.dll", Perfil("jogo.exe", GraphicsApi.D3D11).ReShadeHookName);
+        Assert.Equal("dxgi.dll", Perfil("jogo.exe", GraphicsApi.D3D12).ReShadeHookName);
+        Assert.Equal("opengl32.dll", Perfil("jogo.exe", GraphicsApi.OpenGL).ReShadeHookName);
+    }
+
+    [Fact]
+    public void EscolherOutroNomeTrocaOArquivoInstalado()
+    {
+        var p = Perfil("jogo.exe", GraphicsApi.D3D11);
+        p.NomeDoReShadeEscolhido = "d3d11.dll";
+        Assert.Equal("d3d11.dll", p.ReShadeHookName);
+
+        // Em OpenGL o nome é ditado pela API: escolha nenhuma muda isso.
+        var gl = Perfil("jogo.exe", GraphicsApi.OpenGL);
+        gl.NomeDoReShadeEscolhido = "d3d11.dll";
+        Assert.Equal("opengl32.dll", gl.ReShadeHookName);
+    }
+
+    [Fact]
+    public void MgsVJaNasceComONomeQueOJogoAceita()
+    {
+        // Fox Engine: com o dxgi.dll na pasta o executável não abre.
+        static string Exe(string nome) => Path.Combine("jogo", nome);
+        Assert.Equal("d3d11.dll", GameProfile.NomeDeReShadePreferido(Exe("mgsvtpp.exe"), GraphicsApi.D3D11));
+        Assert.Equal("d3d11.dll", GameProfile.NomeDeReShadePreferido(Exe("MgsGroundZeroes.exe"), GraphicsApi.D3D11));
+        Assert.Equal("d3d11.dll", GameProfile.NomeDeReShadePreferido(Exe("mgsvgz.exe"), GraphicsApi.D3D11));
+
+        // Qualquer outro jogo segue no padrão.
+        Assert.Null(GameProfile.NomeDeReShadePreferido(Exe("re9.exe"), GraphicsApi.D3D12));
+        Assert.Null(GameProfile.NomeDeReShadePreferido(null, GraphicsApi.D3D11));
+    }
+
+    [Fact]
+    public void APastaSeLimpaDoNomeAlternativo()
+    {
+        // Sem isto a desinstalação deixaria para trás justamente o arquivo que impede o
+        // jogo de abrir, e o usuário não teria como saber de onde ele veio.
+        Assert.Contains(Propriedade.PrecisamDeProva, p => p.Nome == "d3d11.dll" && p.Prova == "ReShade");
+        Assert.Contains(Propriedade.PrecisamDeProva, p => p.Nome == "d3d12.dll" && p.Prova == "ReShade");
+    }
+
+    [Fact]
+    public void OPlanoInstalaComONomeEscolhido()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-nome-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var arq = Path.Combine(dir, "x");
+            File.WriteAllText(arq, "x");
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "mgsvtpp.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D11,
+                NomeDoReShadeEscolhido = "d3d11.dll",
+            };
+            var kit = new KitInventory { KitRoot = dir, DxgiX64 = arq, RenodxAddon64 = arq, NvngxDlssnr = arq };
+
+            var plan = InstallPlanBuilder.Build(perfil, kit, new InstallOptions());
+
+            Assert.Contains(plan.Actions, a =>
+                a.TargetPath?.EndsWith("d3d11.dll", StringComparison.OrdinalIgnoreCase) == true);
+            Assert.DoesNotContain(plan.Actions, a =>
+                a.TargetPath?.EndsWith("dxgi.dll", StringComparison.OrdinalIgnoreCase) == true);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}
+
+public class IsolamentoDoFeederTests
+{
+    [Fact]
+    public void DesligaSoOFeederEDeixaReShadeERenodx()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-feedoff-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        Directory.CreateDirectory(Path.Combine(dir, "host64"));
+        try
+        {
+            foreach (var n in new[] { "dxgi.dll", "renodx-dlss5.addon64", "dlss5-feed.addon64" })
+                File.WriteAllText(Path.Combine(dir, n), "x");
+            File.WriteAllText(Path.Combine(dir, "host64", "dlss5-feed-host64.exe"), "x");
+
+            var iso = new Isolamento(_ => { });
+            var desligados = iso.Aplicar(EstadoIsolamento.SemFeeder, dir, dir);
+
+            Assert.Contains(desligados, d => d.EndsWith("dlss5-feed.addon64", StringComparison.Ordinal));
+            Assert.False(File.Exists(Path.Combine(dir, "dlss5-feed.addon64")));
+            Assert.False(File.Exists(Path.Combine(dir, "host64", "dlss5-feed-host64.exe")));
+            // O que NÃO é o Feeder fica de pé: é isso que torna o teste conclusivo.
+            Assert.True(File.Exists(Path.Combine(dir, "dxgi.dll")));
+            Assert.True(File.Exists(Path.Combine(dir, "renodx-dlss5.addon64")));
+
+            iso.Aplicar(EstadoIsolamento.Tudo, dir, dir);
+            Assert.True(File.Exists(Path.Combine(dir, "dlss5-feed.addon64")));
+            Assert.True(File.Exists(Path.Combine(dir, "host64", "dlss5-feed-host64.exe")));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void ALeituraDizOQueCadaResultadoSignifica()
+    {
+        var texto = Isolamento.Leitura(EstadoIsolamento.SemFeeder);
+        Assert.Contains("FEEDER DESLIGADO", texto);
+        Assert.Contains("Se ele ABRIR agora", texto);
+        Assert.Contains("Isolar a causa", texto);
     }
 }

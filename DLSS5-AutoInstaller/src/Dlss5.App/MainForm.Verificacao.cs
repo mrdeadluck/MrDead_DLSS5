@@ -20,6 +20,7 @@ public sealed partial class MainForm
     private readonly ComboBox _cboPlaca = new();
     private readonly CheckBox _chkTnL = new();
     private readonly Button _btnRenodx = Ui.Secondary("Testar sem o RenoDX");
+    private readonly Button _btnFeeder = Ui.Secondary("Testar sem o Feeder");
     // Caminho direto: a chave EnableHooks do RenoDX, trocada no ReShade.ini sem reinstalar.
     private readonly FlowLayoutPanel _barraHooks = Ui.Fila();
     private readonly ComboBox _cboHooks = new();
@@ -121,6 +122,12 @@ public sealed partial class MainForm
         _btnRenodx.Margin = new Padding(0, 4, 8, 4);
         _btnRenodx.Click += (_, _) => TestarSemRenodx();
         bar.Controls.Add(_btnRenodx);
+
+        // O Feeder é o suspeito número um quando o jogo NÃO ABRE, e até agora não havia
+        // como desligar só ele: a bisseção pulava direto para o ReShade inteiro.
+        _btnFeeder.Margin = new Padding(0, 4, 8, 4);
+        _btnFeeder.Click += (_, _) => TestarSemFeeder();
+        bar.Controls.Add(_btnFeeder);
         bar.Controls.Add(Botao("Reiniciar o PC (opcional)…", (_, _) => ReiniciarSeOUsuarioQuiser()));
         bar.Controls.Add(Botao(Textos.BotaoAbrirLogs, (_, _) => AbrirPastaDeLogs()));
         bar.Controls.Add(Botao(Textos.BotaoExportarDiagnostico, (_, _) => ExportarDiagnostico()));
@@ -421,9 +428,44 @@ public sealed partial class MainForm
         catch (Exception ex) { Erro("Não consegui alterar os arquivos do teste", ex); }
     }
 
+    /// <summary>
+    /// Teste avulso do caso "instalei e o jogo não abre mais": desliga só o Feeder,
+    /// mantendo ReShade e RenoDX. O Feeder inicializa um NGX dentro do processo do jogo
+    /// e foi quem derrubou Onimusha e GTA 5 — mas não havia degrau para ele, então a
+    /// bisseção acusava o ReShade inteiro e o culpado escapava.
+    /// </summary>
+    private void TestarSemFeeder()
+    {
+        if (_profile is null) { Aviso("Faça a detecção primeiro."); return; }
+        if (_ocupado) { Status(Textos.OperacaoEmAndamento); return; }
+        var rodando = Preflight.JogoRodando(_profile.RealExePath);
+        if (rodando is not null) { Aviso("O jogo está aberto", $"Feche o jogo ({rodando}.exe) antes: arquivo em uso não é renomeado."); return; }
+
+        var proximo = _isolamento == EstadoIsolamento.SemFeeder ? EstadoIsolamento.Tudo : EstadoIsolamento.SemFeeder;
+        try
+        {
+            using var etapa = _diario.Etapa("Testar sem o Feeder");
+            new Isolamento(_diario.Info).Aplicar(proximo, _profile.ExeFolder, _profile.RendererFolder ?? _profile.ExeFolder);
+            _isolamento = proximo;
+            AtualizarBotaoRenodx();
+            Status(proximo == EstadoIsolamento.SemFeeder
+                ? "Feeder desligado. Abra o jogo e veja se ele abre."
+                : "Feeder religado.");
+            Dialogos.Informar(this, "Testar sem o Feeder",
+                proximo == EstadoIsolamento.SemFeeder ? "Feeder desligado" : "Feeder religado",
+                Isolamento.Leitura(proximo, _profile.NeedsDgVoodoo));
+        }
+        catch (Exception ex) { Erro("Não consegui alterar os arquivos do teste", ex); }
+    }
+
     /// <summary>O texto do botão diz o que o clique fará, não o estado atual.</summary>
-    private void AtualizarBotaoRenodx() =>
+    private void AtualizarBotaoRenodx()
+    {
         _btnRenodx.Text = _isolamento == EstadoIsolamento.SemRenodx ? "Religar o RenoDX" : "Testar sem o RenoDX";
+        _btnFeeder.Text = _isolamento == EstadoIsolamento.SemFeeder ? "Religar o Feeder" : "Testar sem o Feeder";
+        // Sem Feeder instalado (caminho direto) o teste não existe.
+        _btnFeeder.Visible = _profile?.NeedsFeeder ?? false;
+    }
 
     /// <summary>Mostra na lista o valor que o ReShade.ini da pasta tem de fato.</summary>
     private void SincronizarHooksDoRenodx()

@@ -59,6 +59,11 @@ public static class Propriedade
     {
         ("dxgi.dll", "ReShade"),
         ("opengl32.dll", "ReShade"),
+        // Nomes alternativos do ReShade, usados em jogo que recusa o dxgi.dll (MGS V).
+        // Sem eles aqui, a desinstalação deixaria para trás justamente o arquivo que
+        // impede o jogo de abrir.
+        ("d3d11.dll", "ReShade"),
+        ("d3d12.dll", "ReShade"),
     };
 
     public static readonly (string Nome, string Prova)[] PrecisamDeProvaEEscolta =

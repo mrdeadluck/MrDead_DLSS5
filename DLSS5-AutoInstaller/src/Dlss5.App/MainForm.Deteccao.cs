@@ -15,6 +15,9 @@ public sealed partial class MainForm
     private readonly Label _lblNativeWhy = new();
     private readonly CheckBox _chkDireto = new();
     private readonly CheckBox _chkReFramework = new();
+    private readonly ComboBox _cboReShadeNome = new();
+    private readonly Label _lblDicaReShadeNome = new();
+    private readonly Label _lblReShadeNome = new();
     private readonly Button _btnNativeAjustar = Ui.Secondary("Ajustar…");
     private readonly TextBox _txtRenderer = new();
     private readonly Label _lblRoute = new();
@@ -105,6 +108,27 @@ public sealed partial class MainForm
         _chkReFramework.Margin = new Padding(0, 0, 0, 6);
         _chkReFramework.CheckedChanged += (_, _) => SyncProfileFromUi();
         form.Controls.Add(_chkReFramework, 1, linha++);
+
+        // O nome com que o ReShade entra. Quase sempre dxgi.dll; mas há jogo que recusa
+        // exatamente esse nome (MGS V, Fox Engine: com o dxgi.dll na pasta o executável
+        // nem abre) e aceita o nome da própria API.
+        _lblReShadeNome.Text = "ReShade entra como:";
+        _lblReShadeNome.AutoSize = true;
+        _lblReShadeNome.Margin = new Padding(0, 8, 0, 6);
+        _cboReShadeNome.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cboReShadeNome.Width = 200;
+        _cboReShadeNome.Margin = new Padding(0, 4, 0, 6);
+        _cboReShadeNome.SelectedIndexChanged += (_, _) => SyncProfileFromUi();
+        var filaNome = Ui.Fila();
+        filaNome.Controls.Add(_cboReShadeNome);
+        filaNome.Controls.Add(_lblDicaReShadeNome);
+        _lblDicaReShadeNome.Text = "dxgi.dll serve em quase tudo. Troque só se o jogo não abrir com ele.";
+        _lblDicaReShadeNome.AutoSize = true;
+        _lblDicaReShadeNome.ForeColor = Ui.Muted;
+        _lblDicaReShadeNome.Font = Ui.SmallFont;
+        _lblDicaReShadeNome.Margin = new Padding(8, 8, 0, 0);
+        form.Controls.Add(_lblReShadeNome, 0, linha);
+        form.Controls.Add(filaNome, 1, linha++);
 
         // Renderizador
         _txtRenderer.Dock = DockStyle.Fill;
@@ -235,6 +259,8 @@ public sealed partial class MainForm
         _cboApi.SelectedItem = _profile.Api;
         _chkDireto.Checked = _profile.PreferirFeeder;
         _chkReFramework.Checked = _profile.UsarReFramework;
+        _profile.NomeDoReShadeEscolhido ??= GameProfile.NomeDeReShadePreferido(_profile.RealExePath, _profile.Api);
+        PopularNomesDeReShade();
         _txtRenderer.Text = _profile.RendererFolder ?? _profile.ExeFolder;
         _cboMv.SelectedIndex = _options.MvProvider == MvProvider.Drme ? 1 : 0;
         _chkRegistry.Checked = _options.ApplyRegistryOverride;
@@ -362,6 +388,8 @@ public sealed partial class MainForm
         _profile.MvProvider = _options.MvProvider;
         _profile.PreferirFeeder = _chkDireto.Visible && _chkDireto.Checked;
         _profile.UsarReFramework = _chkReFramework.Visible && _chkReFramework.Checked;
+        if (_cboReShadeNome.SelectedItem is string nomeReShade)
+            _profile.NomeDoReShadeEscolhido = nomeReShade;
         UpdateMvAvailability();
         UpdateNativeLabel();
         UpdateRouteLabel();
@@ -376,6 +404,7 @@ public sealed partial class MainForm
         var porque = _profile.NativeDlss?.Resumo ?? "sem detecção";
         _lblNativeWhy.Text = porque + Environment.NewLine + ConsequenciaDoNativo();
         _chkDireto.Visible = _profile.HasNativeDlss && _profile.Api == GraphicsApi.D3D12;
+        PopularNomesDeReShade();
 
         // O REFramework é x64 e só carrega em RE Engine — mas quem decide é o usuário, não
         // o palpite. Já escondi essa caixa duas vezes: primeiro atrás da detecção de RE
@@ -430,6 +459,34 @@ public sealed partial class MainForm
                      ? $"Jogo 32-bit em {_profile.Api} não funciona (o addon32 só aceita D3D11): troque para D3D9 ou D3D11 se o jogo permitir."
                      : "Confira arquitetura e API."),
         };
+    }
+
+    /// <summary>
+    /// Enche a lista com os nomes que a API do jogo aceita e marca o que vale agora. Em
+    /// jogo hospedado no REFramework o nome é outro (ReShade64.dll, dentro de plugins\),
+    /// então a escolha não se aplica e a lista some.
+    /// </summary>
+    private void PopularNomesDeReShade()
+    {
+        if (_profile is null) return;
+
+        var nomes = _profile.NomesDeReShadePossiveis;
+        bool cabe = nomes.Count > 1 && !_profile.UsarReFramework;
+
+        _lblReShadeNome.Visible = cabe;
+        _cboReShadeNome.Visible = cabe;
+        _lblDicaReShadeNome.Visible = cabe;
+        if (!cabe) return;
+
+        var atual = _profile.ReShadeHookName;
+        if (_cboReShadeNome.Items.Count != nomes.Count
+            || !_cboReShadeNome.Items.Cast<string>().SequenceEqual(nomes))
+        {
+            _cboReShadeNome.Items.Clear();
+            foreach (var n in nomes) _cboReShadeNome.Items.Add(n);
+        }
+        int i = nomes.ToList().IndexOf(atual);
+        _cboReShadeNome.SelectedIndex = i < 0 ? 0 : i;
     }
 
     private static string DescribeKit(KitInventory kit)

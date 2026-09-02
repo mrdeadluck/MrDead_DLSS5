@@ -177,7 +177,50 @@ public sealed class GameProfile
     /// usa: um jogo OpenGL nunca vai procurar por dxgi.dll, então instalar com esse nome
     /// resulta em ReShade que jamais é carregado e num ReShade.log que nem chega a existir.
     /// </summary>
-    public string ReShadeHookName => Api == GraphicsApi.OpenGL ? "opengl32.dll" : "dxgi.dll";
+    public string ReShadeHookName => Api == GraphicsApi.OpenGL
+        ? "opengl32.dll"
+        : NomeDoReShadeEscolhido ?? "dxgi.dll";
+
+    /// <summary>
+    /// Nome alternativo escolhido para o ReShade, quando o dxgi.dll não serve.
+    ///
+    /// O dxgi.dll é o nome que funciona na esmagadora maioria dos jogos Direct3D, porque
+    /// é pela DXGI que o swapchain nasce. Mas há jogo que RECUSA especificamente esse
+    /// nome: o MGS V (Fox Engine, TPP e Ground Zeroes) tem uma proteção anti-adulteração
+    /// que, com o dxgi.dll na pasta, faz o executável nem abrir — e o contorno que a
+    /// comunidade usa há anos é entrar como d3d11.dll, o nome da própria API. O jogo
+    /// carrega a DLL, o ReShade se pendura na criação do device e a proteção não reage.
+    /// </summary>
+    public string? NomeDoReShadeEscolhido { get; set; }
+
+    /// <summary>
+    /// Jogos que sabidamente recusam o dxgi.dll. O MGS V (Fox Engine) é o caso
+    /// documentado: com o dxgi.dll na pasta o executável não abre, e trocar para o nome
+    /// da própria API é o contorno que a comunidade usa. Devolve nulo quando não há
+    /// motivo para fugir do padrão.
+    /// </summary>
+    public static string? NomeDeReShadePreferido(string? exePath, GraphicsApi api)
+    {
+        if (string.IsNullOrWhiteSpace(exePath)) return null;
+        if (api is not (GraphicsApi.D3D11 or GraphicsApi.D3D12)) return null;
+
+        var exe = Path.GetFileNameWithoutExtension(exePath);
+        bool foxEngine =
+            exe.Equals("mgsvtpp", StringComparison.OrdinalIgnoreCase) ||
+            exe.Equals("mgsvgz", StringComparison.OrdinalIgnoreCase) ||
+            exe.Equals("MgsGroundZeroes", StringComparison.OrdinalIgnoreCase);
+
+        return foxEngine ? "d3d11.dll" : null;
+    }
+
+    /// <summary>Nomes oferecidos para o ReShade, na ordem em que a tela mostra.</summary>
+    public IReadOnlyList<string> NomesDeReShadePossiveis => Api switch
+    {
+        GraphicsApi.OpenGL => new[] { "opengl32.dll" },
+        GraphicsApi.D3D12 => new[] { "dxgi.dll", "d3d12.dll" },
+        GraphicsApi.D3D11 => new[] { "dxgi.dll", "d3d11.dll" },
+        _ => new[] { "dxgi.dll" },
+    };
 
     /// <summary>
     /// Wrapper do dgVoodoo2 correspondente à API do jogo (rota C). O dgVoodoo traz um

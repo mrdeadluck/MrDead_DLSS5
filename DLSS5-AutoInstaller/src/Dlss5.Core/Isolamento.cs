@@ -16,6 +16,13 @@ public enum EstadoIsolamento
     /// se é essa interceptação que está travando.
     /// </summary>
     SemRenodx,
+    /// <summary>
+    /// Só o Feeder desligado; ReShade e RenoDX continuam. É o teste do jogo que NÃO ABRE
+    /// depois de instalar: o Feeder inicializa um NGX próprio dentro do processo, e é o
+    /// componente que já derrubou Onimusha e GTA 5. Faltava um degrau para ele — sem
+    /// isso, a bisseção só sabia acusar o ReShade inteiro.
+    /// </summary>
+    SemFeeder,
 }
 
 /// <summary>
@@ -60,6 +67,14 @@ public sealed class Isolamento
             {
                 Path.Combine(exeFolder, "renodx-dlss5.addon64"),
                 Path.Combine(exeFolder, "host64", "renodx-dlss5.addon64"),
+            },
+            // O Feeder tem três peças: o addon (64 ou 32 bits) e, em jogo x86, o
+            // processo auxiliar que roda o NGX fora dele.
+            EstadoIsolamento.SemFeeder => new[]
+            {
+                Path.Combine(exeFolder, "dlss5-feed.addon64"),
+                Path.Combine(exeFolder, "dlss5-feed.addon32"),
+                Path.Combine(exeFolder, "host64", "dlss5-feed-host64.exe"),
             },
             _ => Array.Empty<string>(),
         };
@@ -242,6 +257,19 @@ public sealed class Isolamento
             "• Se o jogo ABRIR agora: o ReShade é que atrapalha a criação do device pelo " +
             "dgVoodoo. Sem ele não há DLSS 5, mas ao menos o culpado está identificado.\r\n" +
             "• Se AINDA recusar: junto com o teste anterior, isso aponta para o dgVoodoo.",
+
+        EstadoIsolamento.SemFeeder =>
+            "FEEDER DESLIGADO. ReShade e RenoDX continuam ativos.\r\n\r\n" +
+            "O Feeder é quem fabrica o DLSS em jogo que não tem DLSS próprio — e, para isso, " +
+            "ele inicializa um NGX DENTRO do processo do jogo. É o componente que mais " +
+            "aparece quando o jogo simplesmente NÃO ABRE depois de instalar (foi assim no " +
+            "Onimusha e no GTA 5).\r\n\r\n" +
+            "Abra o jogo:\r\n" +
+            "• Se ele ABRIR agora, o Feeder é o culpado. Não há DLSS 5 neste estado — o teste " +
+            "serve para nomear a causa, não para jogar assim.\r\n" +
+            "• Se AINDA não abrir, o Feeder está inocente: siga para \"Isolar a causa\", que " +
+            "desliga o ReShade inteiro.\r\n\r\n" +
+            "O mesmo botão religa o Feeder.",
 
         EstadoIsolamento.SemRenodx =>
             "RenoDX DESLIGADO. ReShade e Feeder continuam ativos.\r\n\r\n" +
