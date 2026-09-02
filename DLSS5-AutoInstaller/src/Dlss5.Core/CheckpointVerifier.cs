@@ -9,8 +9,15 @@ public static class CheckpointVerifier
     /// <summary>ReShade.log menor que isso = placeholder "não fui carregado" (spec 8.3).</summary>
     public const long ReShadeLogPlaceholderSize = 982;
 
+    /// <param name="overrideNoBoot">
+    /// O override estava no registro quando o Windows subiu (ver
+    /// <see cref="SignatureOverride.EstadoNoBoot"/>). Com esse dado, o checkpoint 2 só
+    /// acusa reinício pendente quando o estado de agora difere do que o driver leu no
+    /// boot. Sem ele, cai na heurística antiga do carimbo do manifesto.
+    /// </param>
     public static IReadOnlyList<CheckResult> Verify(
-        GameProfile profile, InstallManifest? manifest, string? nvngxDlssDoKit = null)
+        GameProfile profile, InstallManifest? manifest, string? nvngxDlssDoKit = null,
+        bool? overrideNoBoot = null)
     {
         var r = new List<CheckResult>();
         var exe = profile.ExeFolder;
@@ -28,7 +35,23 @@ public static class CheckpointVerifier
 
         // 2 — reiniciou depois do override
         bool reinicioPendente = false;
-        if (manifest?.RegistryOverrideAppliedUtc is { } appliedUtc)
+        if (overrideNoBoot is bool noBoot)
+        {
+            // O dado bom: o driver lê a chave no boot, então o que importa é se o estado
+            // de agora é o mesmo que ele viu subindo — não quando o manifesto foi gravado.
+            reinicioPendente = status.AllSet && !noBoot;
+            r.Add(new CheckResult(2, "Reinício após aplicar o override",
+                !status.AllSet ? CheckStatus.Manual : reinicioPendente ? CheckStatus.Warning : CheckStatus.Pass,
+                !status.AllSet
+                    ? "Sem override aplicado."
+                    : reinicioPendente
+                        ? "O override foi aplicado depois que o Windows subiu: o driver ainda não leu a chave."
+                        : "O Windows já subiu com o override aplicado — desinstalar e reinstalar hoje não muda isso.",
+                reinicioPendente
+                    ? "Se quiser, reinicie o Windows quando for cômodo — o driver lê essa chave na inicialização. O programa nunca reinicia sozinho."
+                    : null));
+        }
+        else if (manifest?.RegistryOverrideAppliedUtc is { } appliedUtc)
         {
             bool rebooted = SignatureOverride.RebootedSinceEnable(appliedUtc);
             reinicioPendente = !rebooted;
@@ -96,8 +119,10 @@ public static class CheckpointVerifier
         // 3 — o DLSS do próprio jogo: o kit não mexe nele. O que este checkpoint vigia de
         // verdade é o nvngx_dlss.dll do jogo, que desinstalações antigas chegaram a apagar
         // (e sem ele o menu de DLSS some e o jogo pode nem abrir).
-        if (profile.HasNativeDlss && profile.NeedsFeeder)
+        if (profile.HasNativeDlss)
         {
+            // Nos dois caminhos o DLSS do jogo precisa existir e ser o DELE: no direto o
+            // RenoDX se pendura na chamada que o jogo faz, e no Feeder o NGX é o mesmo.
             var caminhoDll = Path.Combine(exe, "nvngx_dlss.dll");
             if (!File.Exists(caminhoDll))
             {
@@ -125,21 +150,28 @@ public static class CheckpointVerifier
                     "este arquivo. Depois: Steam → Propriedades → Arquivos instalados → Verificar " +
                     "integridade, abra o jogo sem instalar nada para confirmar, e só então reinstale."));
             }
+            else if (profile.UsesRenodxDirectPath)
+            {
+                r.Add(new CheckResult(3, "DLSS do jogo tem que ficar LIGADO", CheckStatus.Manual,
+                    "Caminho direto: em D3D12 o RenoDX se pendura na chamada de DLSS que o próprio jogo faz. " +
+                    "Sem o jogo pedir DLSS, não existe chamada para interceptar.",
+                    "Opções gráficas do jogo → ligue o DLSS (qualquer modo). Sem isso o RenoDX fica em " +
+                    "\"HOOKS ARMED / NO DLSS CREATE SEEN\"."));
+            }
             else
             {
-                r.Add(new CheckResult(3, "DLSS do jogo: como você preferir", CheckStatus.Manual,
-                    "O jogo tem DLSS próprio e o kit NÃO mexe nele: pode deixar ligado ou desligado " +
-                    "no menu, inclusive baixando a qualidade para ganhar FPS. O Neural Rendering " +
-                    $"entra por cima, pelo Feeder (o jogo roda em {profile.Api})."));
+                // A regra "como você preferir" caiu com evidência: Onimusha e GTA 5. O Feeder
+                // inicializa um NGX próprio dentro do processo; com o DLSS do jogo ligado, o
+                // NGX do jogo e o nosso colidem — trava depois da tela inicial, ou ao aplicar
+                // o DLSS no menu. Desligado, o jogo não chama o NGX e o Feeder trabalha como
+                // nos jogos sem DLSS.
+                r.Add(new CheckResult(3, "DLSS do jogo: DESLIGADO neste caminho", CheckStatus.Manual,
+                    "Caminho do Feeder num jogo com DLSS próprio: o Feeder roda um NGX dele dentro do " +
+                    "processo, e com o DLSS do jogo ligado os dois colidem — o jogo trava depois da tela " +
+                    $"inicial ou ao aplicar o DLSS no menu (o jogo roda em {profile.Api}).",
+                    "Opções gráficas do jogo → DLSS desligado (faça isso com o jogo limpo, ou com o ReShade " +
+                    "desligado pelo Isolar a causa). O Neural Rendering entra pelo Feed, sem o DLSS do jogo."));
             }
-        }
-        else if (profile.UsesRenodxDirectPath)
-        {
-            r.Add(new CheckResult(3, "DLSS do jogo tem que ficar LIGADO", CheckStatus.Manual,
-                "Aqui é o contrário: em D3D12 o RenoDX se pendura na chamada de DLSS que o próprio jogo faz. " +
-                "Sem o jogo pedir DLSS, não existe chamada para interceptar.",
-                "Opções gráficas do jogo → ligue o DLSS (qualquer modo). Sem isso o RenoDX fica em " +
-                "\"HOOKS ARMED / NO DLSS CREATE SEEN\"."));
         }
 
         // 6 — arquitetura do ReShade instalado. O nome muda com a API: num jogo OpenGL

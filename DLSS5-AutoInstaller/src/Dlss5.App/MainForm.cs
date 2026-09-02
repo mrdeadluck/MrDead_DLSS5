@@ -8,6 +8,13 @@ namespace Dlss5.App;
 public sealed class MainForm : Form
 {
     private readonly AppSettings _settings = AppSettings.Load();
+
+    /// <summary>
+    /// O override de assinatura estava no registro quando o Windows subiu? É o que decide
+    /// se falta reiniciar — não o carimbo do manifesto, que cada Desinstalar/Instalar do
+    /// dia renova sem mudar nada no driver.
+    /// </summary>
+    private bool? _overrideNoBoot;
     private readonly InstallOptions _options = new();
 
     private GameProfile? _profile;
@@ -36,7 +43,7 @@ public sealed class MainForm : Form
     private readonly Label _lblNativeWhy = new();
     private readonly CheckBox _chkDireto = new()
     {
-        Text = "Usar o caminho direto do RenoDX (sem Feeder) — experimental: só marque se já viu funcionar",
+        Text = "Usar o Feeder em vez do caminho direto — experimental: em jogo com DLSS nativo o Feeder colide com o NGX do jogo",
         AutoSize = false,
         Width = 680,
         Height = 22,
@@ -715,7 +722,7 @@ public sealed class MainForm : Form
         if (_cboApi.SelectedItem is GraphicsApi g) _profile.Api = g;
         if (!string.IsNullOrWhiteSpace(_txtRenderer.Text)) _profile.RendererFolder = _txtRenderer.Text;
         _profile.MvProvider = _options.MvProvider;
-        _profile.PreferirCaminhoDireto = _chkDireto.Visible && _chkDireto.Checked;
+        _profile.PreferirFeeder = _chkDireto.Visible && _chkDireto.Checked;
         UpdateMvAvailability();
         UpdateNativeLabel();
         UpdateRouteLabel();
@@ -1490,6 +1497,8 @@ public sealed class MainForm : Form
 
         _settings.KitFolder = kitFolder;
         _settings.LastGameFolder = gameFolder;
+        // Antes de qualquer instalação desta execução: o que o driver viu no boot.
+        _overrideNoBoot = SignatureOverride.EstadoNoBoot(_settings);
         _settings.Save();
 
         _status.Text = "Analisando...";
@@ -1665,7 +1674,7 @@ public sealed class MainForm : Form
         _btnTestarConf.Visible = _profile.NeedsDgVoodoo;
 
         _grid.Rows.Clear();
-        var resultados = CheckpointVerifier.Verify(_profile, _manifest, NvngxDoKit()).ToList();
+        var resultados = CheckpointVerifier.Verify(_profile, _manifest, NvngxDoKit(), _overrideNoBoot).ToList();
         foreach (var c in resultados)
         {
             int i = _grid.Rows.Add(StateText(c.State), $"{c.Number}. {c.Title}",

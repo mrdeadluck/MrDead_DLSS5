@@ -412,20 +412,19 @@ public class PlanBuilderTests
 
         var plan = InstallPlanBuilder.Build(profile, FullKit(), new InstallOptions());
         Assert.True(Targets(plan, "dlss5-feed.addon64"));
-        // O aviso deixou de mandar desligar o DLSS (ele pode ficar ligado) e passou a
-        // dizer que o kit não sobrescreve o DLSS do jogo.
-        Assert.Contains(plan.Warnings, w => w.Contains("NÃO sobrescreve", StringComparison.Ordinal));
+        // Com o Feeder num jogo que tem DLSS próprio, o DLSS do jogo tem que ficar
+        // desligado: o Feeder roda um NGX dele e, com o do jogo ativo, os dois colidem.
+        Assert.Contains(plan.Warnings, w => w.Contains("DLSS desligado", StringComparison.Ordinal));
     }
 
     [Fact]
     public void NativeDlss_InD3D12_SkipsTheFeeder()
     {
-        // O caminho direto agora é opt-in: em 30+ jogos o Feeder funcionou de forma
-        // visível, e o direto disse "ok" no log com a tela inalterada (Onimusha, GTA 5).
+        // Em D3D12 com DLSS nativo o caminho direto é o padrão: no Onimusha só ele abriu
+        // com o DLSS do jogo ligado e interceptou (creates 11, NR INJECTED).
 
         var profile = Profile(PeArchitecture.X64, GraphicsApi.D3D12);
         profile.HasNativeDlss = true;
-        profile.PreferirCaminhoDireto = true;
 
         Assert.False(profile.NeedsFeeder);
         Assert.True(profile.UsesRenodxDirectPath);
@@ -436,18 +435,47 @@ public class PlanBuilderTests
     }
 
     [Fact]
-    public void D3D12ComDlssNativo_PorPadraoAindaUsaOFeeder()
+    public void D3D12ComDlssNativo_PorPadraoUsaOCaminhoDireto()
     {
-        // A decisão é empírica: 30+ jogos funcionando pelo Feeder contra zero sucesso
-        // visível do caminho direto. Sem pedido explícito, o Feeder entra sempre.
+        // A decisão é empírica, e a evidência mudou de lado no Onimusha: o Feeder
+        // inicializa um NGX próprio e colide com o do jogo (trava com DLSS ligado; sem
+        // feature com DLSS desligado). O caminho direto abriu e interceptou. Os 30+
+        // jogos do Feeder não tinham DLSS nativo — continuam no Feeder.
         var profile = Profile(PeArchitecture.X64, GraphicsApi.D3D12);
         profile.HasNativeDlss = true;
+
+        Assert.True(profile.UsesRenodxDirectPath);
+        Assert.False(profile.NeedsFeeder);
+
+        var plan = InstallPlanBuilder.Build(profile, FullKit(), new InstallOptions());
+        Assert.False(Targets(plan, "dlss5-feed.addon64"));
+        Assert.True(Targets(plan, "renodx-dlss5.addon64"));
+        Assert.Contains(plan.Warnings, w => w.Contains("Caminho direto", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void PreferirFeederDevolveOFeederComAvisoDeDlssDesligado()
+    {
+        // Opt-in consciente: o Feeder entra, e o plano avisa que o DLSS do jogo precisa
+        // ficar desligado — com ele ligado, os dois NGX colidem.
+        var profile = Profile(PeArchitecture.X64, GraphicsApi.D3D12);
+        profile.HasNativeDlss = true;
+        profile.PreferirFeeder = true;
 
         Assert.False(profile.UsesRenodxDirectPath);
         Assert.True(profile.NeedsFeeder);
 
         var plan = InstallPlanBuilder.Build(profile, FullKit(), new InstallOptions());
-        Assert.True(Targets(plan, @"\dlss5-feed.addon64"));
+        Assert.True(Targets(plan, "dlss5-feed.addon64"));
+        Assert.Contains(plan.Warnings, w => w.Contains("DLSS desligado", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void JogoSemDlssNativoContinuaNoFeeder()
+    {
+        var profile = Profile(PeArchitecture.X64, GraphicsApi.D3D12);
+        Assert.False(profile.UsesRenodxDirectPath);
+        Assert.True(profile.NeedsFeeder);
     }
 
     [Fact]
@@ -678,7 +706,6 @@ public class PlanBuilderTests
     {
         var profile = Profile(PeArchitecture.X64, GraphicsApi.D3D12);
         profile.HasNativeDlss = true;
-        profile.PreferirCaminhoDireto = true;
         var plan = InstallPlanBuilder.Build(profile, FullKit(), new InstallOptions());
 
         Assert.False(Targets(plan, "dlss5-feed.addon64"));
@@ -2162,8 +2189,42 @@ public class TransplanteTests
             var c3 = CheckpointVerifier.Verify(PerfilComDlssNativo(dir), null, kitDll)
                 .First(c => c.Number == 3);
 
+            // Caminho direto (o padrão em D3D12): o DLSS do jogo é a chamada interceptada.
             Assert.Equal(CheckStatus.Manual, c3.State);
-            Assert.Contains("como você preferir", c3.Title);
+            Assert.Contains("LIGADO", c3.Title);
+
+            // Feeder por opção: com DLSS do jogo ligado os dois NGX colidem.
+            var comFeeder = PerfilComDlssNativo(dir);
+            comFeeder.PreferirFeeder = true;
+            var c3f = CheckpointVerifier.Verify(comFeeder, null, kitDll).First(c => c.Number == 3);
+            Assert.Equal(CheckStatus.Manual, c3f.State);
+            Assert.Contains("DESLIGADO", c3f.Title);
+        }
+        finally { Directory.Delete(dir, true); Directory.Delete(kit, true); }
+    }
+
+    [Fact]
+    public void Checkpoint3AcusaOTransplanteTambemNoCaminhoDireto()
+    {
+        // No caminho direto o DLL do jogo importa AINDA mais: é a chamada dele que o
+        // RenoDX intercepta. Um transplante ou um DLL sumido tem que acusar nos dois.
+        var (dir, kit) = Pastas();
+        try
+        {
+            var kitDll = Path.Combine(kit, "nvngx_dlss.dll");
+            File.WriteAllText(kitDll, "bytes do kit");
+            File.WriteAllText(Path.Combine(dir, "nvngx_dlss.dll"), "bytes do kit");
+
+            var perfil = PerfilComDlssNativo(dir);
+            Assert.True(perfil.UsesRenodxDirectPath);
+            var c3 = CheckpointVerifier.Verify(perfil, null, kitDll).First(c => c.Number == 3);
+            Assert.Equal(CheckStatus.Fail, c3.State);
+            Assert.Contains("DO KIT", c3.Title);
+
+            File.Delete(Path.Combine(dir, "nvngx_dlss.dll"));
+            var sumiu = CheckpointVerifier.Verify(perfil, null, kitDll).First(c => c.Number == 3);
+            Assert.Equal(CheckStatus.Fail, sumiu.State);
+            Assert.Contains("SUMIU", sumiu.Title);
         }
         finally { Directory.Delete(dir, true); Directory.Delete(kit, true); }
     }
@@ -2534,7 +2595,6 @@ public class CaminhoDiretoNaoAcusaFalsoAlarmeTests
         Architecture = PeArchitecture.X64,
         Api = GraphicsApi.D3D12,
         HasNativeDlss = true,
-        PreferirCaminhoDireto = true,   // o caminho direto virou opt-in
     };
 
     [Fact]
@@ -2570,7 +2630,6 @@ public class CaminhoDiretoNaoAcusaFalsoAlarmeTests
         {
             var perfil = PerfilD3D12ComDlssNativo(dir);
             perfil.HasNativeDlss = false;       // agora o Feeder entra
-            perfil.PreferirCaminhoDireto = false;
             Assert.True(perfil.NeedsFeeder);
 
             File.WriteAllText(Path.Combine(dir, "ReShadePreset.ini"), "[jogo.exe]\nTechniques=\n");

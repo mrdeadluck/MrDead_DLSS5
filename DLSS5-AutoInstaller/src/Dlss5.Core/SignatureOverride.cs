@@ -70,6 +70,40 @@ public static class SignatureOverride
         }
     }
 
+    /// <summary>Instante (UTC) do último boot, pelo uptime do sistema.</summary>
+    public static DateTime LastBootUtc() =>
+        DateTime.UtcNow - TimeSpan.FromMilliseconds(Environment.TickCount64);
+
+    /// <summary>
+    /// O override estava no registro quando o Windows subiu? Observado uma vez por boot
+    /// e guardado nas preferências: a primeira chamada de cada boot registra o estado
+    /// atual; as seguintes, no mesmo boot, devolvem o que foi registrado. Chamar ANTES
+    /// de qualquer instalação da execução é o que dá sentido ao valor.
+    ///
+    /// É o que separa "aplicou agora e falta reiniciar" de "desinstalou e reinstalou
+    /// hoje, mas o driver subiu com a chave": o carimbo do manifesto não distingue os
+    /// dois, e acusava reinício pendente num PC em que o DLSS 5 estava aplicando.
+    /// </summary>
+    public static bool? EstadoNoBoot(AppSettings settings)
+    {
+        try
+        {
+            var boot = LastBootUtc();
+            bool mesmoBoot = settings.BootObservadoUtc is { } visto
+                             && Math.Abs((boot - visto).TotalMinutes) < 2;
+            if (!mesmoBoot || settings.OverrideNoBoot is null)
+            {
+                settings.OverrideNoBoot = Query().AllSet;
+                settings.BootObservadoUtc = boot;
+            }
+            return settings.OverrideNoBoot;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     /// <summary>
     /// Verifica se o sistema foi reiniciado depois de a chave ter sido escrita.
     /// Compara o último boot com a hora de modificação da chave. Como o registro

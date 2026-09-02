@@ -117,27 +117,32 @@ public sealed class GameProfile
     }
 
     /// <summary>
-    /// Pedido explícito para usar o caminho direto do RenoDX em vez do Feeder.
-    /// Desligado por padrão por um motivo empírico: em mais de 30 jogos testados, o
-    /// Feeder funcionou com diferença visível; o caminho direto registrou "evaluation
-    /// succeeded" no log com a imagem inalterada (Onimusha, GTA 5) — a rede roda e o
-    /// resultado não chega na tela. Enquanto isso for verdade, o caminho comprovado é
-    /// o padrão e o direto é escolha consciente.
+    /// Pedido explícito para usar o Feeder num jogo em que o caminho direto é o padrão
+    /// (D3D12 com DLSS nativo). É escolha consciente porque a evidência foi contra:
+    /// no Onimusha, o Feeder inicializa um NGX próprio dentro do processo e colide com
+    /// o do jogo — com o DLSS do jogo ligado, trava depois da tela inicial (o GTA 5
+    /// trava ao ligar o DLSS no menu); com o DLSS desligado, o Feeder nunca chega a
+    /// "feature ready", porque o Streamline do jogo já é dono do NGX. O caminho direto,
+    /// no mesmo jogo, abriu com DLSS ligado e interceptou (creates 11, NR INJECTED).
     /// </summary>
-    public bool PreferirCaminhoDireto { get; set; }
+    public bool PreferirFeeder { get; set; }
 
     /// <summary>
     /// O RenoDX se pendura direto nas chamadas de DLSS que o jogo já faz, mas só enxerga
     /// NGX em D3D12 (spec 1: "só funciona em jogos com DLSS nativo, 64-bit, D3D12").
     /// Num jogo D3D11 ou Vulkan com DLSS nativo ele instala os hooks e nunca vê um create
-    /// — daí o "HOOKS ARMED / NO DLSS CREATE SEEN". E mesmo em D3D12 só entra a pedido.
+    /// — daí o "HOOKS ARMED / NO DLSS CREATE SEEN". Em D3D12 com DLSS nativo é o padrão;
+    /// o caminho direto foi rebaixado a "experimental" numa época em que o nvngx_dlss.dll
+    /// do jogo estava transplantado e o DLSS do jogo nem funcionava — ele nunca teve
+    /// chance real até o Onimusha.
     /// </summary>
-    public bool UsesRenodxDirectPath => PreferirCaminhoDireto && HasNativeDlss && Api == GraphicsApi.D3D12;
+    public bool UsesRenodxDirectPath => HasNativeDlss && Api == GraphicsApi.D3D12 && !PreferirFeeder;
 
     /// <summary>
     /// O Feeder entra sempre que o RenoDX não consegue pegar o DLSS do próprio jogo —
-    /// inclusive em jogo COM DLSS nativo que não seja D3D12, porque ele roda o NGX num
-    /// device D3D12 privado e por isso independe da API do jogo.
+    /// jogo sem DLSS (os 30+ que funcionaram) ou jogo com DLSS nativo fora do D3D12,
+    /// porque ele roda o NGX num device D3D12 privado e independe da API do jogo. Em
+    /// jogo com DLSS nativo, o DLSS do jogo tem que ficar DESLIGADO neste caminho.
     /// </summary>
     public bool NeedsFeeder => !UsesRenodxDirectPath;
 

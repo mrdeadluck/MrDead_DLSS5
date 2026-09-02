@@ -225,21 +225,22 @@ public static class InstallPlanBuilder
         if (profile.HasNativeDlss && !profile.UsesRenodxDirectPath)
         {
             plan.Warnings.Add(
-                "O jogo tem DLSS próprio, e o kit NÃO sobrescreve o DLSS dele — o DLSS do jogo continua " +
-                "funcionando no menu, ligado ou desligado, do jeito que você preferir. O que o kit " +
-                "acrescenta é o Neural Rendering por cima. Se depois da instalação as opções de DLSS " +
-                "sumirem do menu ou o jogo travar ao ligar o DLSS, é sinal de que uma instalação ANTERIOR " +
-                "trocou o nvngx_dlss.dll do jogo: use Desinstalar (reverter) e, se preciso, a verificação " +
-                "de integridade da Steam para repor os arquivos originais do jogo.");
+                "Caminho do Feeder num jogo com DLSS próprio: o kit NÃO mexe no DLSS do jogo, mas o " +
+                "Feeder roda um NGX dele dentro do processo, e com o DLSS do jogo LIGADO os dois colidem " +
+                "— o jogo trava depois da tela inicial (Onimusha) ou ao aplicar o DLSS no menu (GTA 5). " +
+                "Antes de abrir: opções gráficas do jogo → DLSS desligado. O Neural Rendering entra pelo " +
+                "Feed. Se as opções de DLSS sumirem do menu, é sinal de instalação ANTERIOR que trocou o " +
+                "nvngx_dlss.dll do jogo: Desinstalar (reverter) e verificação de integridade da Steam.");
         }
 
         if (profile.UsesRenodxDirectPath)
         {
             plan.Warnings.Add(
-                "Caminho direto (D3D12 + DLSS nativo): o RenoDX processa a chamada de DLSS que o próprio " +
-                "jogo faz, então o DLSS do jogo fica LIGADO no menu, no modo que você quiser. Confira o " +
-                "resultado alternando com F6 dentro do jogo. Se a imagem não mudar, marque a caixa " +
-                "experimental do caminho direto (na Detecção) para testar o Feeder em vez dele.");
+                "Caminho direto (D3D12 + DLSS nativo, o padrão neste caso): o RenoDX processa a chamada " +
+                "de DLSS que o próprio jogo faz, então o DLSS do jogo fica LIGADO no menu, no modo que " +
+                "você quiser. Sem o Feeder não há segundo NGX no processo — foi o que fez o Onimusha abrir " +
+                "e interceptar. Confira o resultado alternando com F6 dentro do jogo; a aba Complementos " +
+                "do ReShade mostra \"ACTIVE - NR INJECTED\" quando está aplicando.");
         }
 
 

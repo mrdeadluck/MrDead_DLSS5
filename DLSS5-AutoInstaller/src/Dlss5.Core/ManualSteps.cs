@@ -29,11 +29,11 @@ public static class ManualSteps
             "Overlays podem carregar o DXGI antes do ReShade e roubar a interceptação.", false));
 
         if (profile.HasNativeDlss && profile.NeedsFeeder)
-            steps.Add(new ManualStep(n++, "DLSS do jogo: pode deixar como preferir",
-                "Este jogo tem DLSS próprio, e o kit NÃO mexe nele — o menu de DLSS do jogo continua " +
-                "funcionando, ligado ou desligado. O Feeder acrescenta o Neural Rendering por cima, num " +
-                "device D3D12 próprio. Se você gosta do DLSS do jogo ligado para ganhar FPS, deixe ligado; " +
-                "o Neural Rendering entra em cima disso.", false));
+            steps.Add(new ManualStep(n++, "DESLIGAR o DLSS nas opções do jogo",
+                "Este jogo tem DLSS próprio e o kit NÃO mexe nele — mas o Feeder roda um NGX dele dentro " +
+                "do processo, e com o DLSS do jogo ligado os dois colidem: o jogo trava depois da tela " +
+                "inicial (Onimusha) ou ao aplicar o DLSS no menu (GTA 5). Desligue o DLSS do jogo antes de " +
+                "abrir com o kit instalado; o Neural Rendering entra pelo Feed, como nos jogos sem DLSS.", true));
 
         if (profile.UsesRenodxDirectPath)
             steps.Add(new ManualStep(n++, "LIGAR o DLSS nas opções do jogo",
