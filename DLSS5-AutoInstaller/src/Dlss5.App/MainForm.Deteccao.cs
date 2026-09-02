@@ -463,16 +463,17 @@ public sealed partial class MainForm
     }
 
     /// <summary>
-    /// Enche a lista com os nomes que a API do jogo aceita e marca o que vale agora. Em
-    /// jogo hospedado no REFramework o nome é outro (ReShade64.dll, dentro de plugins\),
-    /// então a escolha não se aplica e a lista some.
+    /// Enche a lista com os nomes que a API do jogo aceita e marca o que vale agora.
     /// </summary>
     private void PopularNomesDeReShade()
     {
         if (_profile is null) return;
 
+        // Antes o REFramework escondia esta lista, porque no desenho antigo ele hospedava
+        // o ReShade e o nome não valia de nada. Agora os dois convivem na pasta e o
+        // ReShade continua sendo a DLL que o jogo carrega: o nome importa nos dois casos.
         var nomes = _profile.NomesDeReShadePossiveis;
-        bool cabe = nomes.Count > 1 && !_profile.UsarReFramework;
+        bool cabe = nomes.Count > 1;
 
         _lblReShadeNome.Visible = cabe;
         _cboReShadeNome.Visible = cabe;
