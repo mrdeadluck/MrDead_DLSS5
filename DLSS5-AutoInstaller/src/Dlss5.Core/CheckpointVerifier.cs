@@ -181,21 +181,21 @@ public static class CheckpointVerifier
         if (profile.UsarReFramework)
         {
             var dinput = ReFramework.CaminhoDinput8(exe);
-            var plugin = ReFramework.CaminhoPlugin(exe);
+            var reshade = Path.Combine(exe, profile.ReShadeHookName);
             bool temRef = File.Exists(dinput);
-            bool temPlugin = File.Exists(plugin);
+            bool temReShade = File.Exists(reshade);
 
-            r.Add(new CheckResult(6, "REFramework hospedando o ReShade",
-                temRef && temPlugin ? CheckStatus.Pass : CheckStatus.Fail,
+            r.Add(new CheckResult(6, "REFramework ao lado do ReShade",
+                temRef && temReShade ? CheckStatus.Pass : CheckStatus.Fail,
                 temRef
-                    ? (temPlugin
-                        ? $"dinput8.dll na pasta do exe e {ReFramework.ReShadePlugin} em reshade\\plugins."
-                          .Replace("reshade\\plugins", "reframework\\plugins")
-                        : $"dinput8.dll está lá, mas falta reframework\\plugins\\{ReFramework.ReShadePlugin}.")
+                    ? (temReShade
+                        ? $"dinput8.dll e {profile.ReShadeHookName} na pasta do exe."
+                        : $"dinput8.dll está lá, mas falta o {profile.ReShadeHookName}.")
                     : "dinput8.dll (REFramework) não está na pasta do exe.",
-                temRef && temPlugin
+                temRef && temReShade
                     ? null
-                    : "Rode a instalação. Neste modo o ReShade NÃO é o dxgi.dll: quem o carrega é o REFramework."));
+                    : "Rode a instalação. Os dois moram juntos na pasta do exe: o REFramework desarma a " +
+                      "checagem de integridade e o ReShade é a DLL que o jogo carrega."));
 
             // 17 — o log do PRÓPRIO REFramework. Quando "o jogo abre e o Home não faz
             // nada", é este arquivo que separa as três causas possíveis, e nenhuma delas
@@ -218,22 +218,22 @@ public static class CheckpointVerifier
                 string textoRefLog;
                 try { textoRefLog = ReadShared(Path.Combine(pastaRef, ReFramework.LogDoFramework)); }
                 catch { textoRefLog = ""; }
-                bool carregou = ReFramework.CarregouOPlugin(textoRefLog);
+                bool desarmou = textoRefLog.Contains("REFramework entry", StringComparison.OrdinalIgnoreCase);
 
-                r.Add(new CheckResult(17, "REFramework carregou o ReShade",
-                    carregou ? CheckStatus.Pass : CheckStatus.Fail,
-                    carregou
-                        ? $"O log do REFramework registra o {ReFramework.ReShadePlugin} carregado."
+                r.Add(new CheckResult(17, "REFramework rodou no jogo",
+                    naPastaDoJogo && desarmou ? CheckStatus.Pass : CheckStatus.Fail,
+                    !desarmou
+                        ? $"Existe um {ReFramework.LogDoFramework} em {pastaRef}, mas sem o registro de entrada do REFramework."
                         : naPastaDoJogo
-                            ? $"O REFramework rodou, mas o log dele não registra o {ReFramework.ReShadePlugin}."
+                            ? "O REFramework entrou no jogo e é ele que desarma a checagem de integridade. " +
+                              "Se o ReShade ainda não abrir, a causa é do ReShade, não dele."
                             : $"O REFramework NÃO consegue escrever na pasta do jogo e caiu para {pastaRef}. " +
-                              "É lá que ele procura os plugins — o nosso, na pasta do jogo, nunca é lido.",
-                    carregou
+                              "Ele ainda desarma a checagem, mas a configuração dele fica fora da pasta do jogo.",
+                    naPastaDoJogo && desarmou
                         ? null
                         : naPastaDoJogo
                             ? "Abra o jogo uma vez com esta instalação e verifique de novo."
-                            : $"Copie a pasta reframework\\plugins da pasta do jogo para {pastaRef}, ou " +
-                              "dê permissão de escrita na pasta do jogo ao seu usuário do Windows " +
+                            : "Dê permissão de escrita na pasta do jogo ao seu usuário do Windows " +
                               "(Propriedades → Segurança) e abra o jogo de novo."));
             }
 
@@ -315,17 +315,12 @@ public static class CheckpointVerifier
             catch { textoRef = ""; }
             bool absoluto = textoRef.Contains("AddonPath=" + exe, StringComparison.OrdinalIgnoreCase);
 
-            r.Add(new CheckResult(12, "Addon alcançável pelo ReShade hospedado",
-                absoluto && File.Exists(addon) ? CheckStatus.Pass : CheckStatus.Fail,
-                !File.Exists(addon)
-                    ? "renodx-dlss5.addon64 não está na pasta do exe."
-                    : absoluto
-                        ? $"AddonPath aponta para a pasta do jogo em {Path.GetFileName(profile.ReShadeIniPath)}."
-                        : $"O AddonPath de {Path.GetFileName(profile.ReShadeIniPath)} não é o caminho absoluto da pasta do jogo: " +
-                          "o ReShade procura o addon dentro de reframework\\plugins e o painel abre sem o DLSS 5.",
-                absoluto && File.Exists(addon)
-                    ? null
-                    : "Rode a instalação de novo — ela grava o ini com o caminho absoluto."));
+            r.Add(new CheckResult(12, "Addon alcançável pelo ReShade",
+                File.Exists(addon) ? CheckStatus.Pass : CheckStatus.Fail,
+                File.Exists(addon)
+                    ? "renodx-dlss5.addon64 está na pasta do exe, que é onde o AddonPath aponta."
+                    : "renodx-dlss5.addon64 não está na pasta do exe.",
+                File.Exists(addon) ? null : "Rode a instalação de novo."));
         }
 
         // 11 — efeitos encontráveis. Sem a pasta, o ReShade abre reclamando na aba

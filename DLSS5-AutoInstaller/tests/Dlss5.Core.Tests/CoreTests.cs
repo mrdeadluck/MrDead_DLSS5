@@ -3226,7 +3226,7 @@ public class ReFrameworkTests
     }
 
     [Fact]
-    public void PlanoHospedaOReShadeEmVezDeInjetarComoDxgi()
+    public void PlanoPoeOReFrameworkAoLadoDoReShade()
     {
         var dir = NovaPasta();
         try
@@ -3259,15 +3259,16 @@ public class ReFrameworkTests
                 bool Alvo(string trecho) => plan.Actions.Any(a =>
                     a.TargetPath?.Contains(trecho, StringComparison.OrdinalIgnoreCase) == true);
 
-                // O REFramework entra, e o ReShade vai para dentro dele.
+                // O REFramework entra AO LADO do ReShade, não no lugar dele: o binário
+                // dele traz o desarme da checagem de integridade (com patch nomeado para
+                // o RE9), e é isso que deixa a DLL do ReShade conviver com o jogo.
                 Assert.True(Alvo(ReFramework.Dinput8));
-                Assert.True(Alvo(Path.Combine("reframework", "plugins", ReFramework.ReShadePlugin)));
-                // E NÃO existe dxgi.dll na raiz: é a injeção que o jogo recusa.
+                Assert.True(Alvo(Path.Combine(dir, "dxgi.dll")));
+                // Nada é hospedado dentro de reframework\plugins.
                 Assert.DoesNotContain(plan.Actions, a =>
-                    string.Equals(a.TargetPath, Path.Combine(dir, "dxgi.dll"), StringComparison.OrdinalIgnoreCase));
-                // O ini gerado é o que aquele ReShade lê.
-                Assert.Equal(ReFramework.CaminhoIni(dir), perfil.ReShadeIniPath);
-                Assert.True(Alvo(ReFramework.ReShadeIni));
+                    a.TargetPath?.Contains(Path.Combine("reframework", "plugins"), StringComparison.OrdinalIgnoreCase) == true);
+                // E o ini é o de sempre, ao lado do executável.
+                Assert.Equal(Path.Combine(dir, "ReShade.ini"), perfil.ReShadeIniPath);
             }
             finally { Directory.Delete(kitDir, true); }
         }

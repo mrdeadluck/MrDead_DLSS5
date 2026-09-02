@@ -123,18 +123,21 @@ public static class InstallPlanBuilder
         var dxgiArch = profile.Architecture;
         var dxgiSrc = dxgiArch == PeArchitecture.X64 ? kit.DxgiX64 : kit.DxgiX86;
 
+        // O REFramework entra JUNTO com o ReShade, não no lugar dele. O binário dele traz
+        // IntegrityCheckBypass — com patch nomeado para o RE9 — e é isso que desarma a
+        // checagem que derruba o jogo quando há uma DLL a mais na pasta. Hospedar o ReShade
+        // dentro de reframework\plugins foi invenção minha e não é o caminho que funciona:
+        // o ReShade continua sendo a DLL ao lado do executável, como em qualquer outro jogo.
         if (profile.UsarReFramework)
         {
-            // Jogo que recusa a injeção direta: o ReShade não entra pela tabela de
-            // importação do executável, e sim como plugin que o REFramework carrega
-            // depois de o jogo já estar de pé. Ver ReFramework.
             if (kit.ReFrameworkDinput8 is null)
             {
                 plan.Blockers.Add(
                     "Falta no kit: dinput8.dll do REFramework (x64). Baixe a nightly em " +
                     "github.com/praydog/REFramework-nightly/releases e ponha o dinput8.dll em qualquer " +
                     "subpasta do kit (" + kit.KitRoot + ") — por exemplo numa pasta REFramework\\. " +
-                    "Sem ele não há como hospedar o ReShade num jogo que recusa a injeção direta.");
+                    "Sem ele o ReShade não roda em jogo da RE Engine: é o REFramework que desarma a " +
+                    "checagem de integridade.");
             }
             else
             {
@@ -153,25 +156,12 @@ public static class InstallPlanBuilder
                     "pasta), siga; se não for, o ReShade não vai carregar por este caminho e o certo " +
                     "é desmarcar a caixa e instalar pela injeção direta.");
 
-            var plugins = ReFramework.PastaPlugins(exe);
-            if (dxgiSrc is not null)
-            {
-                Copy(dxgiSrc, plugins, ReFramework.ReShadePlugin);
-            }
-            else if (kit.ReShadeSetup is not null)
-            {
-                plan.Actions.Add(new PlanAction(PlanActionKind.ExtractReShadeDll,
-                    $"Extrair ReShade ({dxgiArch}) do instalador → {Rel(profile, ReFramework.CaminhoPlugin(exe))}",
-                    kit.ReShadeSetup, ReFramework.CaminhoPlugin(exe)));
-            }
-
             plan.Warnings.Add(
-                "Modo REFramework: o ReShade NÃO entra como dxgi.dll. Ele vai para " +
-                @"reframework\plugins\" + ReFramework.ReShadePlugin + " e quem o carrega é o " +
-                "REFramework, depois que o jogo já subiu — é assim que ele passa pela proteção " +
-                "anti-adulteração que derruba a injeção direta. O painel abre pela mesma tecla.");
+                "Modo REFramework: ele entra como dinput8.dll AO LADO do ReShade, não no lugar " +
+                "dele. O binário traz um desarme de checagem de integridade (com patch nomeado " +
+                "para o RE9), e é isso que deixa a DLL do ReShade conviver com o jogo.");
         }
-        else
+
         {
             var hook = profile.ReShadeHookName;
 

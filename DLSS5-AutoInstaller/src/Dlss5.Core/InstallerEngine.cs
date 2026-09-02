@@ -363,7 +363,7 @@ public sealed partial class InstallerEngine
                 feederUsed: plan.Profile.NeedsFeeder,
                 // Hospedado no REFramework o ini fica longe da pasta do jogo: sem caminho
                 // absoluto o ReShade procuraria shaders e addons dentro de plugins\.
-                baseDir: plan.Profile.UsarReFramework ? plan.Profile.ExeFolder : null)
+                baseDir: null)
             : ReShadeConfigWriter.BuildPresetIni(plan.Options.MvProvider, feederUsed: plan.Profile.NeedsFeeder);
     }
 
