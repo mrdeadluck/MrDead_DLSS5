@@ -229,8 +229,10 @@ jobs:
           Copy-Item "${{ github.workspace }}\publish\DLSS5-AutoInstaller.exe" $dest
           Copy-Item "${{ github.workspace }}\DLSS 5 Files" (Join-Path $dest 'DLSS 5 Files') -Recurse
           Copy-Item (Join-Path $dest 'DLSS 5 Files\LEIA-ME.txt') (Join-Path $dest 'LEIA-ME.txt')
+          # Ponteiro do LFS é pelo CONTEÚDO, não pelo tamanho: o kit tem .fx legítimos de
+          # poucos bytes (REST_NOOP.fx), e barrar por tamanho derrubava o pacote inteiro.
           $ponteiros = Get-ChildItem $dest -Recurse -File |
-            Where-Object { $_.Length -lt 300 -and $_.Extension -in '.dll', '.exe', '.addon64', '.addon32', '.fx' }
+            Where-Object { $_.Length -lt 300 -and ((Get-Content $_.FullName -TotalCount 1 -ErrorAction SilentlyContinue) -like 'version https://git-lfs.github.com/spec/*') }
           if ($ponteiros) { $ponteiros | ForEach-Object { Write-Host "PONTEIRO LFS: $($_.FullName)" }; throw "O checkout nao materializou os arquivos do LFS." }
           foreach ($n in 'dlss5-feed.addon64', 'dlss5-feed.addon32', 'dlss5-feed-host64.exe') {
             $f = Get-Item (Join-Path $dest "DLSS 5 Files\$n")
