@@ -3564,3 +3564,64 @@ public class CarimboDoBuildTests
         Assert.True(AppInfo.Build.Length <= 7, $"Build longo demais: {AppInfo.Build}");
     }
 }
+
+public class DeteccaoEscolheONomeDoReShadeTests
+{
+    /// <summary>
+    /// PE x64 mínimo que o detector aceita: cabeçalho MZ, ponteiro em 0x3C, assinatura
+    /// "PE\0\0" e a máquina. O resto é preenchimento com o marcador da API enterrado
+    /// dentro, que é como o ApiDetector reconhece D3D11.
+    /// </summary>
+    private static byte[] ExeX64(string marcador)
+    {
+        var buf = new byte[8 * 1024];
+        buf[0] = (byte)'M'; buf[1] = (byte)'Z';
+        const int peOff = 0x100;
+        BitConverter.GetBytes(peOff).CopyTo(buf, 0x3C);
+        buf[peOff] = (byte)'P'; buf[peOff + 1] = (byte)'E';
+        BitConverter.GetBytes((ushort)0x8664).CopyTo(buf, peOff + 4);   // AMD64
+        System.Text.Encoding.ASCII.GetBytes(marcador).CopyTo(buf, 0x800);
+        return buf;
+    }
+
+    private static string PastaComExe(string nomeExe)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-det-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        File.WriteAllBytes(Path.Combine(dir, nomeExe), ExeX64("D3D11CreateDevice"));
+        return dir;
+    }
+
+    [Fact]
+    public void OGroundZeroesJaSaiDaDeteccaoComD3d11()
+    {
+        // A regressão que isto tranca: a preferência ficava na tela e era sobrescrita
+        // pelos eventos dos controles antes de valer, e o MGS V seguia em dxgi.dll.
+        var dir = PastaComExe("MgsGroundZeroes.exe");
+        try
+        {
+            var r = GameDetector.Detect(dir);
+
+            Assert.Equal(PeArchitecture.X64, r.Profile.Architecture);
+            Assert.Equal("d3d11.dll", r.Profile.NomeDoReShadeEscolhido);
+            Assert.Equal("d3d11.dll", r.Profile.ReShadeHookName);
+            Assert.Contains(r.Notes, n => n.Contains("recusa o dxgi.dll", StringComparison.Ordinal));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void JogoComumSegueNoDxgiESemNotaNenhuma()
+    {
+        var dir = PastaComExe("jogo.exe");
+        try
+        {
+            var r = GameDetector.Detect(dir);
+
+            Assert.Null(r.Profile.NomeDoReShadeEscolhido);
+            Assert.Equal("dxgi.dll", r.Profile.ReShadeHookName);
+            Assert.DoesNotContain(r.Notes, n => n.Contains("recusa o dxgi.dll", StringComparison.Ordinal));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}

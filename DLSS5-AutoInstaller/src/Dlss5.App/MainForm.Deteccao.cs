@@ -259,7 +259,6 @@ public sealed partial class MainForm
         _cboApi.SelectedItem = _profile.Api;
         _chkDireto.Checked = _profile.PreferirFeeder;
         _chkReFramework.Checked = _profile.UsarReFramework;
-        _profile.NomeDoReShadeEscolhido ??= GameProfile.NomeDeReShadePreferido(_profile.RealExePath, _profile.Api);
         PopularNomesDeReShade();
         _txtRenderer.Text = _profile.RendererFolder ?? _profile.ExeFolder;
         _cboMv.SelectedIndex = _options.MvProvider == MvProvider.Drme ? 1 : 0;
@@ -389,7 +388,7 @@ public sealed partial class MainForm
         _profile.MvProvider = _options.MvProvider;
         _profile.PreferirFeeder = _chkDireto.Visible && _chkDireto.Checked;
         _profile.UsarReFramework = _chkReFramework.Visible && _chkReFramework.Checked;
-        if (_cboReShadeNome.SelectedItem is string nomeReShade)
+        if (_cboReShadeNome.Visible && _cboReShadeNome.SelectedItem is string nomeReShade)
             _profile.NomeDoReShadeEscolhido = nomeReShade;
         UpdateMvAvailability();
         UpdateNativeLabel();

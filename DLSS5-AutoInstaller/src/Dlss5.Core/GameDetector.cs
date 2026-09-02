@@ -68,6 +68,17 @@ public static class GameDetector
 
         DetectApiAndRenderer(profile, result.Notes);
         DetectNativeDlss(profile, result.Notes);
+
+        // Jogo que recusa o dxgi.dll já sai da detecção com o nome que ele aceita. Isto
+        // ficava na tela e chegava tarde: cada atribuição de controle dispara o
+        // sincronismo do formulário, que gravava o nome do combo no perfil ANTES — e a
+        // preferência, aplicada depois com "??=", virava no-op. No MGS V o resultado era
+        // o instalador continuar em dxgi.dll, justamente o nome que impede o jogo de abrir.
+        profile.NomeDoReShadeEscolhido =
+            GameProfile.NomeDeReShadePreferido(profile.RealExePath, profile.Api);
+        if (profile.NomeDoReShadeEscolhido is { } nome)
+            result.Notes.Add($"Este jogo recusa o dxgi.dll (proteção anti-adulteração): o ReShade entra como {nome}.");
+
         return result;
     }
 
