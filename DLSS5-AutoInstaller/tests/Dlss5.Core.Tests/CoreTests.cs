@@ -664,7 +664,7 @@ public class PlanBuilderTests
             var tpp = InstallPlanBuilder.Build(Perfil("mgsvtpp.exe"), FullKit(), new InstallOptions());
             Assert.False(tpp.CanRun);
             Assert.Contains(tpp.Blockers, b => b.Contains("CheckModuleHook", StringComparison.Ordinal)
-                                               && b.Contains(MotorFox.NomeDoPatcher, StringComparison.Ordinal));
+                                               && b.Contains("não é o 1.0.15.4", StringComparison.Ordinal));
 
             var gz = InstallPlanBuilder.Build(Perfil("MgsGroundZeroes.exe"), FullKit(), new InstallOptions());
             Assert.False(gz.CanRun);
@@ -673,77 +673,110 @@ public class PlanBuilderTests
         finally { Directory.Delete(dir, true); }
     }
 
+    /// <summary>Um "mgsvtpp.exe" pequeno com hashes reais, no lugar do alvo de 166 MB.</summary>
+    private static (string exe, AlvoDoPatch alvo) ExeFalsoDoPhantomPain(string dir)
+    {
+        var conteudo = new byte[4096];
+        new Random(7).NextBytes(conteudo);
+        const int offset = 0x123;
+        conteudo[offset] = 0x75; conteudo[offset + 1] = 0x2D;
+        var exe = Path.Combine(dir, "mgsvtpp.exe");
+        File.WriteAllBytes(exe, conteudo);
+        var remendado = (byte[])conteudo.Clone();
+        remendado[offset] = 0xEB;
+        static string Sha(byte[] b) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(b)).ToLowerInvariant();
+        return (exe, new AlvoDoPatch(conteudo.Length, offset, new byte[] { 0x75, 0x2D }, new byte[] { 0xEB, 0x2D },
+            Sha(conteudo), Sha(remendado)));
+    }
+
     [Fact]
-    public void ComOPatcherNoKitOPlanoRodaElePrimeiroEmVezDeBloquear()
+    public void ComOExeOriginalOPlanoAplicaOPatchPrimeiroEmVezDeBloquear()
     {
         var dir = Path.Combine(Path.GetTempPath(), "dlss5fox_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
+        var alvoOriginal = MotorFox.Alvo;
         try
         {
-            var kit = FullKit();
-            kit.MgsvPatcher = @"C:\kit\MGSV\" + MotorFox.NomeDoPatcher;
+            var (exe, alvo) = ExeFalsoDoPhantomPain(dir);
+            MotorFox.Alvo = alvo;
             var profile = new GameProfile
             {
                 GameFolder = dir,
-                RealExePath = Path.Combine(dir, "mgsvtpp.exe"),
+                RealExePath = exe,
                 Architecture = PeArchitecture.X64,
                 Api = GraphicsApi.D3D11,
                 RendererFolder = dir,
             };
 
-            var plan = InstallPlanBuilder.Build(profile, kit, new InstallOptions());
+            var plan = InstallPlanBuilder.Build(profile, FullKit(), new InstallOptions());
 
             Assert.True(plan.CanRun);
-            Assert.Equal(PlanActionKind.CopyFile, plan.Actions[0].Kind);
-            Assert.EndsWith(MotorFox.NomeDoPatcher, plan.Actions[0].TargetPath!);
-            Assert.Equal(PlanActionKind.RunMgsvPatcher, plan.Actions[1].Kind);
-            Assert.Equal(profile.RealExePath, plan.Actions[1].TargetPath);
-            Assert.Contains(plan.Warnings, w => w.Contains("roda", StringComparison.Ordinal)
-                                                && w.Contains(MotorFox.SufixoDoBackup, StringComparison.Ordinal));
+            Assert.Equal(PlanActionKind.PatchMgsvExe, plan.Actions[0].Kind);
+            Assert.Equal(exe, plan.Actions[0].TargetPath);
+            Assert.Contains(plan.Warnings, w => w.Contains("0x2B90AB", StringComparison.Ordinal));
 
-            // Ground Zeroes continua bloqueado mesmo com o patcher no kit: ele não cobre o GZ.
-            profile.RealExePath = Path.Combine(dir, "MgsGroundZeroes.exe");
-            var gz = InstallPlanBuilder.Build(profile, kit, new InstallOptions());
-            Assert.False(gz.CanRun);
+            // Exe de outra versão: bloqueia com tamanho e hash, sem tocar em nada.
+            File.WriteAllBytes(exe, new byte[100]);
+            var outro = InstallPlanBuilder.Build(profile, FullKit(), new InstallOptions());
+            Assert.False(outro.CanRun);
+            Assert.Contains(outro.Blockers, b => b.Contains("não é o 1.0.15.4", StringComparison.Ordinal)
+                                                 && b.Contains("100 bytes", StringComparison.Ordinal));
         }
-        finally { Directory.Delete(dir, true); }
+        finally { MotorFox.Alvo = alvoOriginal; Directory.Delete(dir, true); }
     }
 
     [Fact]
-    public void RodarPatcherSoAceitaSucessoComOBackupNaPasta()
+    public void AplicarPatchRemendaComBackupEEhIdempotente()
     {
         var dir = Path.Combine(Path.GetTempPath(), "dlss5patch_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
-        var original = MotorFox.Executor;
+        var alvoOriginal = MotorFox.Alvo;
         try
         {
-            var exe = Path.Combine(dir, "mgsvtpp.exe");
-            File.WriteAllText(exe, "exe");
-            var patcher = Path.Combine(dir, MotorFox.NomeDoPatcher);
-            File.WriteAllText(patcher, "patcher");
+            var (exe, alvo) = ExeFalsoDoPhantomPain(dir);
+            MotorFox.Alvo = alvo;
             var log = new List<string>();
 
-            // Patcher que "recusa" o exe: sai sem criar backup → falha explicada.
-            MotorFox.Executor = (_, _, _) => true;
-            var ex = Assert.Throws<InvalidOperationException>(() => MotorFox.RodarPatcher(patcher, exe, log.Add));
-            Assert.Contains("1.0.15.4", ex.Message);
+            Assert.Equal(EstadoDoExeFox.Original, MotorFox.EstadoDoExe(exe));
             Assert.False(MotorFox.PatchAplicado(exe));
 
-            // Patcher que remenda: cria o backup → sucesso, com o processo rodando na pasta do exe.
-            string? pastaVista = null;
-            MotorFox.Executor = (p, pasta, _) => { pastaVista = pasta; File.WriteAllText(MotorFox.CaminhoDoBackup(exe), "orig"); return true; };
-            MotorFox.RodarPatcher(patcher, exe, log.Add);
-            Assert.Equal(dir, pastaVista);
-            Assert.True(MotorFox.PatchAplicado(exe));
-            Assert.Contains(log, l => l.Contains("Patch aplicado", StringComparison.Ordinal));
+            MotorFox.AplicarPatch(exe, log.Add);
 
-            // Já aplicado: não roda de novo.
-            bool rodou = false;
-            MotorFox.Executor = (_, _, _) => { rodou = true; return true; };
-            MotorFox.RodarPatcher(patcher, exe, log.Add);
-            Assert.False(rodou);
+            Assert.Equal(EstadoDoExeFox.Remendado, MotorFox.EstadoDoExe(exe));
+            Assert.True(MotorFox.PatchAplicado(exe));
+            var backup = MotorFox.CaminhoDoBackup(exe);
+            Assert.True(File.Exists(backup));
+            Assert.Equal(EstadoDoExeFox.Original, MotorFox.EstadoDoExe(backup));
+            var bytes = File.ReadAllBytes(exe);
+            Assert.Equal(0xEB, bytes[alvo.Offset]);
+            Assert.Equal(0x2D, bytes[alvo.Offset + 1]);
+            Assert.Contains(log, l => l.Contains("Patch anti-hook aplicado", StringComparison.Ordinal));
+
+            // De novo: nada muda, nada explode.
+            MotorFox.AplicarPatch(exe, log.Add);
+            Assert.Contains(log, l => l.Contains("já aplicado", StringComparison.Ordinal));
+
+            // Exe desconhecido: recusa sem tocar.
+            var outro = Path.Combine(dir, "outro.exe");
+            File.WriteAllBytes(outro, new byte[300]);
+            var ex = Assert.Throws<InvalidOperationException>(() => MotorFox.AplicarPatch(outro));
+            Assert.Contains("1.0.15.4", ex.Message);
+            Assert.False(File.Exists(MotorFox.CaminhoDoBackup(outro)));
         }
-        finally { MotorFox.Executor = original; Directory.Delete(dir, true); }
+        finally { MotorFox.Alvo = alvoOriginal; Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void OAlvoRealEhODoPatcherV10()
+    {
+        // Os números do MGSV-ReShade-AntiHook-Patcher v1.0 (fonte no kit, DLSS 5 Files\MGSV\).
+        var a = MotorFox.PhantomPain;
+        Assert.Equal(166_517_760, a.Tamanho);
+        Assert.Equal(0x2B90AB, a.Offset);
+        Assert.Equal(new byte[] { 0x75, 0x2D }, a.BytesOriginais);
+        Assert.Equal(new byte[] { 0xEB, 0x2D }, a.BytesRemendados);
+        Assert.Equal("085c2f82d1c963c40b3d2d55786661dfee2b18cbbf388a710c00fa76c5e9bb45", a.Sha256Original);
+        Assert.Equal("184e0d1abec30561eee4650cb7f913e838692ba30233e8aab5dcbce522d8c297", a.Sha256Remendado);
     }
 
     [Fact]
@@ -3617,7 +3650,7 @@ public class CheckpointFoxEngineTests
             Assert.Equal(CheckStatus.Fail, c14.State);
             Assert.Contains("SAIU sozinho", c14.Detail);
             Assert.Contains("CheckModuleHook", c14.FixHint!);
-            // Ground Zeroes: sem patcher, a dica diz isso e não manda reinstalar.
+            // Ground Zeroes: sem patch, a dica diz isso e não manda reinstalar.
             Assert.Contains("não há patch publicado", c14.FixHint!);
 
             var c19 = checagens.First(c => c.Number == 19);
@@ -3634,6 +3667,9 @@ public class CheckpointFoxEngineTests
         {
             File.WriteAllText(Path.Combine(dir, "renodx-dlss5.addon64"), "x");
             File.WriteAllText(Path.Combine(dir, "ReShade.log"), LogGz + new string(' ', 2000));
+            // Exe remendado por outra versão do patch (hash desconhecido) com o backup do
+            // patcher ao lado: conta como aplicado.
+            File.WriteAllBytes(Path.Combine(dir, "mgsvtpp.exe"), new byte[777]);
             File.WriteAllText(Path.Combine(dir, "mgsvtpp.exe" + MotorFox.SufixoDoBackup), "exe original");
 
             var perfil = new GameProfile
@@ -3650,7 +3686,6 @@ public class CheckpointFoxEngineTests
             // restaurado o exe original, não "aplique o patch".
             var c14 = checagens.First(c => c.Number == 14);
             Assert.Contains("integridade", c14.FixHint!);
-            Assert.DoesNotContain("rode UMA vez", c14.FixHint!);
         }
         finally { Directory.Delete(dir, true); }
     }
@@ -4360,7 +4395,7 @@ public class DeteccaoEscolheONomeDoReShadeTests
 
             Assert.Equal("mgsvtpp.exe", Path.GetFileName(r.Profile.RealExePath));
             Assert.True(MotorFox.EhFoxEngine(r.Profile.RealExePath));
-            Assert.Contains(r.Notes, n => n.Contains(MotorFox.NomeDoPatcher, StringComparison.Ordinal));
+            Assert.Contains(r.Notes, n => n.Contains("não é o 1.0.15.4", StringComparison.Ordinal));
         }
         finally { Directory.Delete(dir, true); }
     }
@@ -4374,7 +4409,7 @@ public class DeteccaoEscolheONomeDoReShadeTests
             File.WriteAllText(Path.Combine(dir, "mgsvtpp.exe" + MotorFox.SufixoDoBackup), "exe original");
             var r = GameDetector.Detect(dir);
             Assert.True(MotorFox.PatchAplicado(r.Profile.RealExePath));
-            Assert.Contains(r.Notes, n => n.Contains("instalação está liberada", StringComparison.Ordinal));
+            Assert.Contains(r.Notes, n => n.Contains("já aplicado", StringComparison.Ordinal));
         }
         finally { Directory.Delete(dir, true); }
     }

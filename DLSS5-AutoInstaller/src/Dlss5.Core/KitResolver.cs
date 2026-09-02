@@ -24,8 +24,6 @@ public sealed class KitInventory
     public string? ReFrameworkDinput8 { get; set; }
     public string? ReFrameworkRevision { get; set; }
 
-    /// <summary>MGSV-ReShade-AntiHook-Patcher.exe (pasta MGSV do kit): o patch do Phantom Pain.</summary>
-    public string? MgsvPatcher { get; set; }
 
     /// <summary>Pasta reshade-shaders completa (Shaders + Textures).</summary>
     public string? ShadersDir { get; set; }
@@ -178,7 +176,6 @@ public static class KitResolver
             .Where(Ok)
             .FirstOrDefault(p => PeFile.GetArchitecture(p) == PeArchitecture.X64);
         inv.ReFrameworkRevision = First(ReFramework.RevisionFile);
-        inv.MgsvPatcher = First(MotorFox.NomeDoPatcher);
 
         // dxgi.dll do ReShade: classifica por arquitetura lendo o cabeçalho PE.
         foreach (var dxgi in Named("dxgi.dll").Where(Ok))

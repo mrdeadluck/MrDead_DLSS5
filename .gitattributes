@@ -19,3 +19,10 @@ DLSS[[:space:]]5[[:space:]]Files/**/*.md !filter !diff !merge text
 # Exceção: a pasta MGSV do kit guarda o patcher anti-hook do Phantom Pain, um exe de
 # poucos KB com o código-fonte junto. Fica fora do LFS (regras posteriores vencem).
 DLSS[[:space:]]5[[:space:]]Files/MGSV/** !filter !diff !merge -text
+
+# O patcher anti-hook do MGS V tem 189 KB: fica FORA do LFS (regra posterior vence),
+# para entrar no repositório como arquivo comum e sair inteiro em qualquer download.
+DLSS[[:space:]]5[[:space:]]Files/MGSV/** !filter !diff !merge -text
+DLSS[[:space:]]5[[:space:]]Files/MGSV/*.txt !filter !diff !merge text
+DLSS[[:space:]]5[[:space:]]Files/MGSV/*.md !filter !diff !merge text
+DLSS[[:space:]]5[[:space:]]Files/MGSV/*.cpp !filter !diff !merge text

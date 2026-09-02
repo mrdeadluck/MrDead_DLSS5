@@ -388,27 +388,25 @@ public static class InstallPlanBuilder
 
         if (MotorFox.EhFoxEngine(profile.RealExePath) && !MotorFox.PatchAplicado(profile.RealExePath))
         {
-            if (MotorFox.PatcherCobre(profile.RealExePath) && kit.MgsvPatcher is not null && profile.RealExePath is not null)
+            var exeFox = profile.RealExePath!;
+            if (!MotorFox.PatcherCobre(exeFox))
             {
-                // O patcher está no kit: entra ANTES de tudo, para uma recusa dele (exe de
-                // outra versão) parar a instalação sem deixar nada na pasta.
-                var patcherNoJogo = Path.Combine(exe, MotorFox.NomeDoPatcher);
-                plan.Actions.Insert(0, new PlanAction(PlanActionKind.RunMgsvPatcher,
-                    "Rodar o patcher anti-hook da Fox Engine (desvia o CheckModuleHook; cria mgsvtpp.exe" + MotorFox.SufixoDoBackup + ")",
-                    patcherNoJogo, profile.RealExePath));
-                plan.Actions.Insert(0, new PlanAction(PlanActionKind.CopyFile,
-                    $"Copiar {MotorFox.NomeDoPatcher} → {MotorFox.NomeDoPatcher}", kit.MgsvPatcher, patcherNoJogo));
+                plan.Blockers.Add(MotorFox.Aviso + " " + MotorFox.SemPatcherParaGz);
+            }
+            else if (MotorFox.EstadoDoExe(exeFox) == EstadoDoExeFox.Original)
+            {
+                // O patch entra ANTES de tudo: se falhar, a instalação para sem deixar nada
+                // na pasta (a reversão desfaz o que veio antes — e antes não veio nada).
+                plan.Actions.Insert(0, new PlanAction(PlanActionKind.PatchMgsvExe,
+                    "Aplicar o patch anti-hook no mgsvtpp.exe (desvia o CheckModuleHook; backup mgsvtpp.exe" +
+                    MotorFox.SufixoDoBackup + ")", null, exeFox));
                 plan.Warnings.Add(MotorFox.Aviso + " " + MotorFox.PatchAutomatico);
             }
             else
             {
-                // Bloqueio, não aviso: está provado (log + teste "só o ReShade") que sem o patch
-                // o jogo fecha com qualquer ReShade. Instalar de novo é rodada perdida.
-                plan.Blockers.Add(MotorFox.Aviso + " " +
-                    (MotorFox.PatcherCobre(profile.RealExePath)
-                        ? MotorFox.ComoAplicarOPatch + $" Ou ponha o {MotorFox.NomeDoPatcher} na pasta MGSV do kit " +
-                          "(DLSS 5 Files\\MGSV\\) e gere o plano de novo: aí a instalação roda o patcher sozinha."
-                        : MotorFox.SemPatcherParaGz));
+                // Exe de outra versão/idioma: bloqueio com tamanho e hash, para a resposta
+                // não depender de mais uma rodada de "não abriu".
+                plan.Blockers.Add(MotorFox.Aviso + " " + MotorFox.ExeNaoCoberto(exeFox));
             }
         }
 

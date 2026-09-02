@@ -232,15 +232,32 @@ public static class CheckpointVerifier
         // 19 — Fox Engine: o patch anti-hook está no executável? Sem ele nada abaixo importa.
         if (MotorFox.EhFoxEngine(profile.RealExePath))
         {
-            bool patch = MotorFox.PatchAplicado(profile.RealExePath);
+            var exeFox = profile.RealExePath!;
+            var estado = MotorFox.EstadoDoExe(exeFox);
+            bool patch = MotorFox.PatchAplicado(exeFox);
+            string detalhe = estado switch
+            {
+                EstadoDoExeFox.Remendado => "O hash do mgsvtpp.exe é o do exe remendado: o CheckModuleHook está desviado.",
+                EstadoDoExeFox.Original => "O mgsvtpp.exe é o 1.0.15.4 Steam inglês INTACTO: a checagem ainda está ativa e o jogo " +
+                                           "vai se fechar com o ReShade. (Se você tinha aplicado o patch, a Steam restaurou o exe.)",
+                EstadoDoExeFox.Desconhecido => patch
+                    ? $"Existe {Path.GetFileName(MotorFox.CaminhoDoBackup(exeFox))} ao lado, mas o exe não tem o hash do remendo " +
+                      $"conhecido ({MotorFox.DescreverExe(exeFox)})."
+                    : MotorFox.ExeNaoCoberto(exeFox),
+                _ => "Não achei o executável.",
+            };
+            string? dica = estado switch
+            {
+                EstadoDoExeFox.Remendado => "Atenção: a verificação de integridade da Steam restaura o exe original e desfaz o patch.",
+                EstadoDoExeFox.Original => MotorFox.PatcherCobre(exeFox)
+                    ? "Instale de novo: a instalação aplica o patch sozinha, antes de qualquer outro arquivo."
+                    : MotorFox.SemPatcherParaGz,
+                _ => patch ? null : MotorFox.PatcherCobre(exeFox) ? null : MotorFox.SemPatcherParaGz,
+            };
             r.Add(new CheckResult(19, "Patch anti-hook da Fox Engine (CheckModuleHook)",
-                patch ? CheckStatus.Pass : CheckStatus.Fail,
-                patch
-                    ? $"Existe {Path.GetFileName(MotorFox.CaminhoDoBackup(profile.RealExePath!))}: o exe passou pelo patcher. " +
-                      "Atenção: a verificação de integridade da Steam restaura o exe original e desfaz o patch."
-                    : "Não existe o backup .anti-hook-backup ao lado do exe: o jogo ainda confere os ganchos do D3D11 e se " +
-                      "fecha com qualquer ReShade — foi o que o teste \"só o ReShade\" mostrou.",
-                patch ? null : MotorFox.PatcherCobre(profile.RealExePath) ? MotorFox.ComoAplicarOPatch : MotorFox.SemPatcherParaGz));
+                estado == EstadoDoExeFox.Remendado || (estado == EstadoDoExeFox.Desconhecido && patch)
+                    ? CheckStatus.Pass : CheckStatus.Fail,
+                detalhe, dica));
         }
 
         // 6 — arquitetura do ReShade instalado. O nome muda com a API: num jogo OpenGL
@@ -659,7 +676,11 @@ public static class CheckpointVerifier
                                     ? "O backup do patch está na pasta, mas o jogo fechou assim mesmo: confira se o patcher " +
                                       "aceitou o exe (ele só cobre o 1.0.15.4 Steam inglês) e se a Steam não restaurou o " +
                                       "executável original por cima (verificação de integridade desfaz o patch)."
-                                    : MotorFox.PatcherCobre(exePath) ? MotorFox.ComoAplicarOPatch : MotorFox.SemPatcherParaGz)
+                                    : MotorFox.PatcherCobre(exePath)
+                                        ? (MotorFox.EstadoDoExe(exePath) == EstadoDoExeFox.Original
+                                            ? "O exe é o 1.0.15.4 intacto: instale de novo — a instalação aplica o patch sozinha, antes de tudo."
+                                            : MotorFox.ExeNaoCoberto(exePath!))
+                                        : MotorFox.SemPatcherParaGz)
                                 : "O jogo se fechou sozinho depois de criar o device — não travou. Isso é " +
                                   "proteção anti-adulteração recusando a DLL, ou uma sobreposição brigando " +
                                   "pela API. Com o jogo fechado: 1) \"Testar só o ReShade\" (desliga os dois " +

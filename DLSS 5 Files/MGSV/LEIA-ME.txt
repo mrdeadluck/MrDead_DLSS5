@@ -1,22 +1,28 @@
-Pasta do patch anti-hook do Metal Gear Solid V: The Phantom Pain
-================================================================
+Patch anti-hook do Metal Gear Solid V: The Phantom Pain
+========================================================
 
 A Fox Engine confere se as interfaces D3D11 foram enganchadas
 (fox::gr::dg::CheckModuleHook) e, como o ReShade engancha o ID3D11DeviceContext,
 o jogo se FECHA sozinho antes de criar a swapchain — com qualquer ReShade, com
 qualquer nome de DLL. Não é travamento: é o jogo se encerrando.
 
-A cura é um patch no executável: o MGSV-ReShade-AntiHook-Patcher (publicado no
-Discord do RenoDX, com o código-fonte). Ele desvia o resultado do CheckModuleHook,
-cria o mgsvtpp.exe.anti-hook-backup ao lado do exe e só aceita o mgsvtpp.exe
-1.0.15.4 (Steam, inglês) — executável diferente não é tocado.
+A cura é um patch de DOIS BYTES no mgsvtpp.exe 1.0.15.4 (Steam, inglês):
+    offset 0x2B90AB:  75 2D (jne)  ->  EB 2D (jmp)
+    exe original:  166.517.760 bytes, SHA-256 085C2F82...
+    exe remendado: SHA-256 184E0D1A...
 
-Ponha aqui:
-    MGSV-ReShade-AntiHook-Patcher.exe
+O INSTALADOR APLICA ESSE PATCH SOZINHO, antes de qualquer outro arquivo, e deixa
+o backup mgsvtpp.exe.anti-hook-backup ao lado. Só remenda o exe com esse tamanho
+e esse hash; outro exe (outra versão, outro idioma, já modificado) não é tocado e
+a instalação para explicando. Desinstalar não desfaz o patch (o jogo abre normal
+com ele); para voltar ao original, renomeie o backup por cima do exe. A
+verificação de integridade da Steam restaura o exe original: se fizer, instale
+de novo.
 
-Com ele nesta pasta, o instalador copia o patcher para a pasta do jogo e o RODA
-sozinho, antes de qualquer outro arquivo. Se o patcher recusar o exe, a
-instalação para sem tocar em mais nada. Desinstalar não desfaz o patch (o jogo
-abre normalmente com ele); para voltar ao original, renomeie o backup por cima.
+Os arquivos desta pasta são a REFERÊNCIA de onde o patch veio, não são usados
+pela instalação:
+    MGSV-ReShade-AntiHook-Patcher.exe   patcher original da comunidade (Discord do RenoDX)
+    MGSVAntiHookPatch.cpp               código-fonte dele
+    README-patcher.md                   instruções originais
 
 Ground Zeroes (MgsGroundZeroes.exe) não tem patch publicado.

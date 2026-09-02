@@ -90,9 +90,13 @@ public static class GameDetector
         if (MotorFox.EhFoxEngine(profile.RealExePath))
         {
             result.Notes.Add(MotorFox.Aviso);
-            result.Notes.Add(MotorFox.PatchAplicado(profile.RealExePath)
-                ? $"Patch anti-hook aplicado (existe {Path.GetFileName(MotorFox.CaminhoDoBackup(profile.RealExePath!))}): a instalação está liberada."
-                : MotorFox.PatcherCobre(profile.RealExePath) ? MotorFox.ComoAplicarOPatch : MotorFox.SemPatcherParaGz);
+            var exeFox = profile.RealExePath!;
+            result.Notes.Add(MotorFox.PatchAplicado(exeFox)
+                ? "Patch anti-hook já aplicado no exe: a instalação está liberada."
+                : !MotorFox.PatcherCobre(exeFox) ? MotorFox.SemPatcherParaGz
+                : MotorFox.EstadoDoExe(exeFox) == EstadoDoExeFox.Original
+                    ? "mgsvtpp.exe 1.0.15.4 Steam inglês reconhecido: a instalação aplica o patch anti-hook sozinha."
+                    : MotorFox.ExeNaoCoberto(exeFox));
         }
 
         return result;
