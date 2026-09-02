@@ -68,6 +68,7 @@ jobs:
           -r win-x64
           --self-contained false
           -p:PublishSingleFile=true
+          -p:EnableCompressionInSingleFile=false
           -p:DebugType=None
           -o ${{ github.workspace }}\publish-leve
 
