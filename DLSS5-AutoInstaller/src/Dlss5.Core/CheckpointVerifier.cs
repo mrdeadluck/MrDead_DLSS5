@@ -577,6 +577,16 @@ public static class CheckpointVerifier
                 yield break;
             }
 
+            if (EaJavelin.EhJavelin(exeFolder))
+            {
+                // Sob o EA Javelin o dxgi.dll não carrega e o log nunca nasce. Mandar
+                // desligar overlays aqui seria a rodada perdida de sempre.
+                yield return new CheckResult(7, "ReShade carregou", CheckStatus.Fail,
+                    "ReShade.log não existe — e este jogo abre sob o EA Javelin Anticheat, que não deixa o " +
+                    "dxgi.dll do ReShade carregar.", EaJavelin.ComoAbrir);
+                yield break;
+            }
+
             yield return new CheckResult(7, "ReShade carregou", CheckStatus.Manual,
                 "ReShade.log ainda não existe — abra o jogo uma vez.",
                 "Depois de abrir o jogo, volte aqui e clique em Verificar de novo. Se você JÁ abriu " +

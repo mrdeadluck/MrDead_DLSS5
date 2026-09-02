@@ -419,6 +419,8 @@ public class RouteTests
 
 public class PlanBuilderTests
 {
+    internal static KitInventory KitCompleto() => FullKit();
+
     private static KitInventory FullKit() => new()
     {
         KitRoot = @"C:\kit",
@@ -3605,6 +3607,70 @@ public class RuntimeNrTests
                                                 && w.Contains("rhi-repo", StringComparison.Ordinal));
         }
         finally { Directory.Delete(dir, true); Directory.Delete(kitDir, true); }
+    }
+}
+
+public class EaJavelinTests
+{
+    private static string Pasta()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-ea-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    [Fact]
+    public void ReconhecePeloLauncherDoAnticheatEPeloLiveEditor()
+    {
+        var dir = Pasta();
+        try
+        {
+            Assert.False(EaJavelin.EhJavelin(dir));
+            File.WriteAllText(Path.Combine(dir, EaJavelin.Launcher), "x");
+            Assert.True(EaJavelin.EhJavelin(dir));
+            Assert.False(EaJavelin.EhJavelin(null));
+
+            var le = Path.Combine(dir, "LE");
+            Directory.CreateDirectory(le);
+            var launcher = Path.Combine(le, EaJavelin.LauncherDoLiveEditor);
+            File.WriteAllText(launcher, "x");
+            Assert.False(EaJavelin.PareceLiveEditor(launcher));      // sem a DLL ao lado
+            File.WriteAllText(Path.Combine(le, EaJavelin.DllDoLiveEditor), "x");
+            Assert.True(EaJavelin.PareceLiveEditor(launcher));
+            Assert.False(EaJavelin.PareceLiveEditor(null));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void SemReShadeLogNumJogoJavelinADicaEhOLiveEditorENaoOsOverlays()
+    {
+        // O FC 26 pela Steam: os arquivos estão certos, o log nunca nasce. Mandar desligar
+        // overlays aqui era a rodada perdida de sempre.
+        var dir = Pasta();
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, EaJavelin.Launcher), "x");
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "FC26.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D12,
+                HasNativeDlss = true,
+            };
+
+            var c7 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 7);
+            Assert.Equal(CheckStatus.Fail, c7.State);
+            Assert.Contains("Javelin", c7.Detail);
+            Assert.Contains("Live Editor", c7.FixHint!);
+            Assert.Contains("OFFLINE", c7.FixHint!);
+
+            var plan = InstallPlanBuilder.Build(perfil, PlanBuilderTests.KitCompleto(), new InstallOptions());
+            Assert.True(plan.CanRun);   // os arquivos são os mesmos: aviso, não bloqueio
+            Assert.Contains(plan.Warnings, w => w.Contains("Javelin", StringComparison.Ordinal));
+        }
+        finally { Directory.Delete(dir, true); }
     }
 }
 

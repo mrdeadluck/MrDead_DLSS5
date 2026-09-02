@@ -7,6 +7,9 @@ public sealed class AppSettings
 {
     public string? KitFolder { get; set; }
     public string? LastGameFolder { get; set; }
+
+    /// <summary>Launcher.exe do FC Live Editor, para abrir jogo sob EA Javelin sem o anticheat.</summary>
+    public string? LiveEditorLauncher { get; set; }
     public string MvProvider { get; set; } = nameof(Core.MvProvider.Launchpad);
     public int OverlayKey { get; set; } = ReShadeConfigWriter.KeyHome;
     public bool OverlayCtrl { get; set; }

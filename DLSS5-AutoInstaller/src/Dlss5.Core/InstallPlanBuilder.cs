@@ -386,6 +386,9 @@ public static class InstallPlanBuilder
                 "geforce_ti_4800 ou ati_radeon_8500 — não precisa reinstalar.");
         }
 
+        if (EaJavelin.EhJavelin(exe))
+            plan.Warnings.Add(EaJavelin.Aviso + " " + EaJavelin.ComoAbrir);
+
         if (MotorFox.EhFoxEngine(profile.RealExePath) && !MotorFox.PatchAplicado(profile.RealExePath))
         {
             var exeFox = profile.RealExePath!;

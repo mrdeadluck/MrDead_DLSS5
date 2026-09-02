@@ -316,6 +316,35 @@ public sealed partial class MainForm
         if (_profile?.RealExePath is null || !File.Exists(_profile.RealExePath)) { Aviso("Executável do jogo não encontrado."); return; }
         try
         {
+            if (EaJavelin.EhJavelin(_profile.ExeFolder))
+            {
+                // Pela Steam o anticheat sobe antes do jogo e o ReShade não entra. O jogo
+                // abre pelo Launcher do Live Editor, que o usuário aponta uma vez.
+                var launcher = _settings.LiveEditorLauncher;
+                if (!EaJavelin.PareceLiveEditor(launcher))
+                {
+                    Dialogos.Informar(this, "Jogo sob EA Javelin Anticheat", "Abrir pelo Live Editor",
+                        EaJavelin.Aviso + "\r\n\r\n" + EaJavelin.ComoAbrir + "\r\n\r\nAponte o Launcher.exe do Live Editor.");
+                    using var dlg = new OpenFileDialog
+                    {
+                        Title = "Launcher.exe do FC Live Editor",
+                        Filter = "Launcher do Live Editor|Launcher.exe|Executáveis|*.exe",
+                        CheckFileExists = true,
+                    };
+                    if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                    launcher = dlg.FileName;
+                    if (!EaJavelin.PareceLiveEditor(launcher) &&
+                        !Dialogos.Pergunta(this, "Não parece o Live Editor",
+                            $"Não achei {EaJavelin.DllDoLiveEditor} ao lado desse arquivo. Usar assim mesmo?"))
+                        return;
+                    _settings.LiveEditorLauncher = launcher;
+                    _settings.Save();
+                }
+                Process.Start(new ProcessStartInfo(launcher!) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(launcher)! });
+                Status("Live Editor aberto: inicie o jogo por ele (sem o anticheat). Depois de fechar, clique em Verificar de novo.");
+                return;
+            }
+
             var appId = SteamGame.FindAppId(_profile.GameFolder);
             if (appId is not null)
             {
