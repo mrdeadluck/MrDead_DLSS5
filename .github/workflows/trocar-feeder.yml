@@ -233,7 +233,11 @@ jobs:
           # poucos bytes (REST_NOOP.fx), e barrar por tamanho derrubava o pacote inteiro.
           $ponteiros = Get-ChildItem $dest -Recurse -File |
             Where-Object { $_.Length -lt 300 -and ((Get-Content $_.FullName -TotalCount 1 -ErrorAction SilentlyContinue) -like 'version https://git-lfs.github.com/spec/*') }
-          if ($ponteiros) { $ponteiros | ForEach-Object { Write-Host "PONTEIRO LFS: $($_.FullName)" }; throw "O checkout nao materializou os arquivos do LFS." }
+          # Binário ou shader como ponteiro é pacote quebrado; um texto (README/LICENSE
+          # antigo que entrou no LFS antes da exceção do .gitattributes) só é avisado.
+          $graves = $ponteiros | Where-Object { $_.Extension -in '.dll', '.exe', '.addon64', '.addon32', '.fx', '.fxh', '.png', '.conf' }
+          $ponteiros | ForEach-Object { Write-Host "PONTEIRO LFS: $($_.FullName)" }
+          if ($graves) { throw "O checkout nao materializou os arquivos do LFS." }
           foreach ($n in 'dlss5-feed.addon64', 'dlss5-feed.addon32', 'dlss5-feed-host64.exe') {
             $f = Get-Item (Join-Path $dest "DLSS 5 Files\$n")
             Write-Host ("{0}: {1} bytes, FileVersion={2}" -f $n, $f.Length, $f.VersionInfo.FileVersion)
