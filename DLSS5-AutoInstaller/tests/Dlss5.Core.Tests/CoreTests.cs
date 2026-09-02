@@ -5252,3 +5252,56 @@ public class FeederAntigoNaVerificacaoTests
         finally { Directory.Delete(dir, true); }
     }
 }
+
+public class RayReconstructionTests
+{
+    // Trecho real do ReShade.log do Alan Wake 2: NR "ativo" em todo quadro, imagem igual com F6.
+    private const string LogAw2 =
+        "17:18:53:317 [34476] | INFO  | Registered add-on \"DLSS 5 Neural Rendering\" v0.2026.828.517 using ReShade API version 18.\n" +
+        "17:18:53:318 [34476] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: RenoDX DLSS5 Generic v4.1.5 (build Aug 30 2026 22:25:38) loaded (hotkeys: NR toggle F6, screenshot F5) | EnableHooks=2: NGX hooks only, Streamline modules left unpatched\n" +
+        "17:18:53:321 [34476] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: D3D12 NGX hooks installed across 3 module copy(ies); inline DLSS contract capture armed\n" +
+        "17:18:56:938 [37352] | INFO  | Redirecting IDXGIFactory::CreateSwapChain(...) ...\n" +
+        "17:20:08:575 [37352] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: NGX feature create intercepted: feature=13 (DLSSD/RR), slot=0\n" +
+        "17:20:08:660 [37352] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: NGX feature create intercepted: feature=11 (DLSSG/FrameGeneration), slot=0\n" +
+        "17:20:08:820 [38888] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: skipping NR on NGX evaluate: feature 11 (DLSSG/FrameGeneration) is not DLSS/DLSSD; frame generation and other NGX features are untouched\n" +
+        "17:20:09:303 [37352] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: feature 18 created via the signed snippet after DLSSD/RR for NR input 2560x1440 -> output 2560x1440 with guides 2560x1440\n" +
+        "17:20:12:797 [37352] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: inline feature 18 evaluation succeeded (count=60, NR input 2560x1440 (guides 1707x960), output 2560x1440 [native])\n";
+
+    [Fact]
+    public void LogDoAlanWake2LeRayReconstructionEFrameGeneration()
+    {
+        var s = RenodxLog.Ler(LogAw2)!;
+        Assert.True(s.Ativo);
+        Assert.True(s.RayReconstruction);
+        Assert.True(s.FrameGeneration);
+
+        var comum = RenodxLog.Ler(LogAw2.Replace("after DLSSD/RR", "after DLSS").Replace("feature=13 (DLSSD/RR)", "feature=1 (DLSS)"))!;
+        Assert.False(comum.RayReconstruction);
+    }
+
+    [Fact]
+    public void Checkpoint14MandaDesligarORayReconstructionParaComparar()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-aw2-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "ReShade.log"), LogAw2 + new string(' ', 2000));
+            File.WriteAllText(Path.Combine(dir, "renodx-dlss5.addon64"), "x");
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "AlanWake2.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D12,
+                HasNativeDlss = true,
+            };
+            var c14 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 14);
+            Assert.Equal(CheckStatus.Pass, c14.State);
+            Assert.Contains("RAY RECONSTRUCTION", c14.FixHint!);
+            Assert.Contains("DLSSD", c14.FixHint!);
+            Assert.Contains("GERAÇÃO DE QUADROS", c14.FixHint!);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}

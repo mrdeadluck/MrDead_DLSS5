@@ -27,6 +27,12 @@ namespace Dlss5.Core;
 /// O jogo ligou a geração de quadros (DLSSG, feature 11). O addon anuncia no log que
 /// NÃO encosta nela: os quadros gerados saem sem o Neural Rendering.
 /// </param>
+/// <param name="RayReconstruction">
+/// O DLSS do jogo é o Ray Reconstruction (DLSSD, feature 13) e o NR entrou depois dele
+/// ("feature 18 created ... after DLSSD/RR"). Alan Wake 2: o log diz sucesso em cada
+/// quadro e a imagem não muda com F6 — a saída do RR passa ainda por toda a
+/// pós-produção do jogo antes da tela.
+/// </param>
 public sealed record RenodxStatus(
     bool Ativo,
     int Avaliacoes,
@@ -41,7 +47,8 @@ public sealed record RenodxStatus(
     bool Encerrou = false,
     bool CriouDevice = false,
     bool CriouSwapchain = false,
-    bool FrameGeneration = false)
+    bool FrameGeneration = false,
+    bool RayReconstruction = false)
 {
     /// <summary>
     /// O jogo abriu a própria tela de erro antes de criar qualquer DLSS. Nesse quadro o
@@ -166,10 +173,14 @@ public static class RenodxLog
         // pula o NR nos quadros gerados. Quem está com geração de quadros ligada vê o
         // efeito em metade dos quadros — e é aí que nasce o "não mudou nada".
         bool frameGen = logText.Contains("DLSSG/FrameGeneration", StringComparison.OrdinalIgnoreCase);
+        // "feature=13 (DLSSD/RR)" e "feature 18 created ... after DLSSD/RR": o NR está
+        // pendurado no Ray Reconstruction, não no DLSS comum.
+        bool rayRec = logText.Contains("after DLSSD/RR", StringComparison.OrdinalIgnoreCase)
+                      || logText.Contains("feature=13 (DLSSD/RR)", StringComparison.OrdinalIgnoreCase);
 
         return new RenodxStatus(ativo, avaliacoes, hooksSemUso, recusada,
             hooksInstalados, criouFeature, enableHooks, streamline, pedeStreamline,
-            SegundosAteDialogo(logText), encerrou, criouDevice, criouSwapchain, frameGen);
+            SegundosAteDialogo(logText), encerrou, criouDevice, criouSwapchain, frameGen, rayRec);
     }
 
     /// <summary>

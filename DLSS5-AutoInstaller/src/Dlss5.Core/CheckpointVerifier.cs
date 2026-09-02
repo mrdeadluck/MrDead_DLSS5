@@ -733,6 +733,15 @@ public static class CheckpointVerifier
                             "Desligue a geração de quadros nas opções do jogo enquanto compara — com " +
                             "ela ligada, metade do que você vê não passou pelo DLSS 5."
                           : "") +
+                      (renodx.RayReconstruction
+                          ? "  |  O NR ESTÁ PENDURADO NO RAY RECONSTRUCTION (DLSSD) deste jogo, não no DLSS " +
+                            "comum — o log diz \"after DLSSD/RR\". Foi o quadro do Alan Wake 2: sucesso em todo " +
+                            "quadro e imagem igual com F6. Para o teste, DESLIGUE o Ray Reconstruction nas opções " +
+                            "do jogo (deixe o DLSS Super Resolution ligado, em Qualidade), abra de novo e compare; " +
+                            "no painel do addon, veja se a linha de estado passa a dizer DLSS em vez de DLSSD. " +
+                            "Se com o RR desligado a diferença aparecer, é o ponto de inserção; com ele ligado " +
+                            "o NR não tem efeito visível neste jogo."
+                          : "") +
                       "  |  Também desligue, só para comparar, o granulado de filme (film grain), o " +
                       "desfoque de movimento e a aberração cromática: eles entram DEPOIS do DLSS 5 e " +
                       "cobrem justamente o detalhe que ele acrescenta." +
