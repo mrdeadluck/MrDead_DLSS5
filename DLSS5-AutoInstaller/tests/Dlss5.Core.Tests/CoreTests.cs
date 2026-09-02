@@ -2978,6 +2978,11 @@ public class IsolamentoRotaATests
     public void SemDgVoodooOTesteDoReShadeRespondeSozinho()
     {
         Assert.Contains("ReShade é quem derruba", Isolamento.Veredito(null, true, temDgVoodoo: false));
+        // A conclusão nomeia a proteção anti-adulteração e o caminho que funciona,
+        // em vez de mandar só "trocar a versão do ReShade".
+        var v = Isolamento.Veredito(null, true, temDgVoodoo: false);
+        Assert.Contains("anti-adulteração", v);
+        Assert.Contains("REFramework", v);
         Assert.Contains("NÃO é a instalação", Isolamento.Veredito(null, false, temDgVoodoo: false));
         Assert.Contains("Faltou responder", Isolamento.Veredito(null, null, temDgVoodoo: false));
     }

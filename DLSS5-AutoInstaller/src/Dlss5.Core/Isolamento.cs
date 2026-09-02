@@ -168,10 +168,16 @@ public sealed class Isolamento
                 true => "CONCLUSÃO: o ReShade é quem derruba o jogo.\r\n\r\n" +
                         "Sem o dxgi.dll do ReShade o jogo roda; com ele, cai — e, pelo ReShade.log, cai " +
                         "antes de o RenoDX interceptar qualquer chamada de DLSS. Não é o addon nem o " +
-                        "override do registro: é o ReShade dentro deste jogo. O que muda isso é o que " +
-                        "roda junto dele — desligue TODAS as sobreposições (Steam, Xbox Game Bar, NVIDIA " +
-                        "App, Discord, RivaTuner/Afterburner) e teste de novo. Se persistir, este jogo " +
-                        "pede uma versão do ReShade diferente da que o kit traz.",
+                        "override do registro: é o ReShade dentro deste jogo.\r\n\r\n" +
+                        "Primeiro tente o barato: desligue TODAS as sobreposições (Steam, Xbox Game Bar, " +
+                        "NVIDIA App, Discord, RivaTuner/Afterburner) e teste de novo.\r\n\r\n" +
+                        "Se persistir, este jogo tem proteção anti-adulteração (Denuvo/RE Engine) que " +
+                        "recusa a injeção direta do ReShade — trocar o nome do dxgi.dll para dinput8.dll " +
+                        "não resolve, porque o bloqueio é a injeção, não o nome. Quem roda o DLSS 5 nesses " +
+                        "jogos NÃO injeta o ReShade direto: carrega tudo por dentro do REFramework (praydog) " +
+                        "ou do Special K, com os arquivos do Streamline corrigidos que circulam no Discord " +
+                        "do RenoDX (os do kit e os do Nexus não servem para o RE9). Isso o instalador não " +
+                        "faz com os arquivos do kit — é um caminho manual, por fora do app.",
                 false => "CONCLUSÃO: o problema NÃO é a instalação.\r\n\r\n" +
                          "O jogo cai mesmo sem o dxgi.dll do ReShade na pasta — com a pasta como antes " +
                          "de qualquer coisa ser instalada. Verifique a integridade dos arquivos na loja, " +

@@ -465,7 +465,10 @@ public static class CheckpointVerifier
                               "abra o jogo — se ainda cair, 2) \"Isolar a causa\" desliga o ReShade (dxgi.dll). Se aí " +
                               "o jogo roda, é o ReShade dentro deste jogo: desligue TODAS as sobreposições (Steam, Xbox " +
                               "Game Bar, NVIDIA App, Discord, RivaTuner) e teste de novo. Se cair mesmo sem nada, é o " +
-                              "jogo nesta máquina (integridade dos arquivos, driver)."
+                              "jogo nesta máquina (integridade dos arquivos, driver). OBS.: jogo com proteção " +
+                              "anti-adulteração (Denuvo/RE Engine, como o RE9) recusa a injeção direta do ReShade — " +
+                              "renomear para dinput8.dll não muda isso; o caminho que funciona é carregar por dentro do " +
+                              "REFramework ou do Special K, fora do app."
                         : renodx.HooksSemUso
                             ? "O RenoDX só enxerga NGX em D3D12. Fora disso quem trabalha é o Feeder; " +
                               "confirme que o DLSS 5 Feed está marcado no preset."
