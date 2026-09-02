@@ -18,6 +18,11 @@ namespace Dlss5.Core;
 /// (a tela de erro do próprio jogo). Nulo quando não houve diálogo.
 /// </param>
 /// <param name="Encerrou">O log termina com o processo saindo ("Exiting").</param>
+/// <param name="CriouDevice">O jogo chegou a criar o device de vídeo (D3D11/D3D12).</param>
+/// <param name="CriouSwapchain">
+/// O jogo chegou a criar a swapchain — é ela que dá a imagem na tela e o runtime do
+/// ReShade. Sem swapchain o jogo morreu antes de ter janela.
+/// </param>
 public sealed record RenodxStatus(
     bool Ativo,
     int Avaliacoes,
@@ -29,7 +34,9 @@ public sealed record RenodxStatus(
     bool Streamline = false,
     bool PedeStreamlineHooks = false,
     double? SegundosAteDialogo = null,
-    bool Encerrou = false)
+    bool Encerrou = false,
+    bool CriouDevice = false,
+    bool CriouSwapchain = false)
 {
     /// <summary>
     /// O jogo abriu a própria tela de erro antes de criar qualquer DLSS. Nesse quadro o
@@ -38,8 +45,21 @@ public sealed record RenodxStatus(
     /// </summary>
     public bool CaiuAntesDoDlss => SegundosAteDialogo is not null && !CriouFeature && !Ativo;
 
+    /// <summary>
+    /// A assinatura do MGS V: o jogo criou o device de vídeo, os addons carregaram, e o
+    /// processo saiu limpo — sem swapchain, sem janela, sem tela de erro. Não é travamento
+    /// (travamento deixa diálogo ou log truncado): é o jogo se fechando por decisão
+    /// própria, o que a proteção anti-adulteração da Fox Engine faz ao achar uma DLL
+    /// estranha pendurada no D3D11/DXGI.
+    /// </summary>
+    public bool FechouSemJanela =>
+        Encerrou && CriouDevice && !CriouSwapchain && SegundosAteDialogo is null && !Ativo;
+
     public string Resumo => AssinaturaRecusada
         ? "O NGX recusou a runtime (0xBAD00007): falta o override no registro ou falta reiniciar o PC."
+        : FechouSemJanela
+        ? "O jogo criou o device de vídeo, carregou os addons e SAIU sozinho, sem chegar a criar a " +
+          "swapchain (a janela). Não houve travamento nem tela de erro — foi o jogo que se fechou."
         : Ativo
             ? $"Neural Rendering ATIVO — {Avaliacoes} avaliação(ões) bem-sucedida(s) registradas."
             : CaiuAntesDoDlss
@@ -123,9 +143,22 @@ public static class RenodxLog
 
         bool encerrou = logText.Contains("| Exiting", StringComparison.OrdinalIgnoreCase);
 
+        bool criouDevice = logText.Contains("D3D11CreateDevice", StringComparison.OrdinalIgnoreCase)
+                           || logText.Contains("D3D12CreateDevice", StringComparison.OrdinalIgnoreCase)
+                           || logText.Contains("vkCreateDevice", StringComparison.OrdinalIgnoreCase);
+
+        // "::CreateSwapChain" com os dois-pontos duplos casa só o método da interface —
+        // "D3D11CreateDeviceAndSwapChain" também contém a palavra, e nesse jogo ele é
+        // chamado com ppSwapChain nulo, ou seja, sem criar swapchain nenhuma.
+        bool criouSwapchain = logText.Contains("::CreateSwapChain", StringComparison.OrdinalIgnoreCase)
+                              || logText.Contains("CreateSwapChainForHwnd", StringComparison.OrdinalIgnoreCase)
+                              || logText.Contains("CreateSwapChainForCoreWindow", StringComparison.OrdinalIgnoreCase)
+                              || logText.Contains("vkCreateSwapchainKHR", StringComparison.OrdinalIgnoreCase)
+                              || logText.Contains("Recreated runtime environment", StringComparison.OrdinalIgnoreCase);
+
         return new RenodxStatus(ativo, avaliacoes, hooksSemUso, recusada,
             hooksInstalados, criouFeature, enableHooks, streamline, pedeStreamline,
-            SegundosAteDialogo(logText), encerrou);
+            SegundosAteDialogo(logText), encerrou, criouDevice, criouSwapchain);
     }
 
     /// <summary>

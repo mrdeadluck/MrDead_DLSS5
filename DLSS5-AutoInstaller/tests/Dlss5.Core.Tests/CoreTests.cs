@@ -642,6 +642,38 @@ public class PlanBuilderTests
         finally { Directory.Delete(dir, true); }
     }
 
+    [Fact]
+    public void PlanoDoMgsvAvisaSobreAProtecaoAntesDeInstalar()
+    {
+        // O usuário reinstalou o MGS V várias vezes trocando o nome do ReShade. O plano
+        // tem que dizer, ANTES de instalar, que a proteção olha os dois nomes e qual é o
+        // teste que decide — senão a próxima rodada é igual à anterior.
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5fox_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var profile = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "MgsGroundZeroes.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D11,
+                RendererFolder = dir,
+                NomeDoReShadeEscolhido = "d3d11.dll",
+            };
+
+            var plan = InstallPlanBuilder.Build(profile, FullKit(), new InstallOptions());
+
+            Assert.Contains(plan.Warnings, w => w.Contains("Fox Engine", StringComparison.Ordinal));
+            Assert.Contains(plan.Warnings, w => w.Contains("Testar só o ReShade", StringComparison.Ordinal));
+            // E o plano continua instalando: o aviso não é bloqueio.
+            Assert.Contains(plan.Actions, a =>
+                a.Kind == PlanActionKind.CopyFile &&
+                a.TargetPath?.EndsWith("d3d11.dll", StringComparison.OrdinalIgnoreCase) == true);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
     private static GameProfile PerfilRotaC(string dir) => new()
     {
         GameFolder = dir,
@@ -2868,6 +2900,69 @@ public class RenodxLogRe9Tests
         00:34:30:141 [35364] | INFO  | Exiting ...
         """;
 
+    // MGS V Ground Zeroes, ReShade.log real: o ReShade entra como d3d11.dll, o jogo cria o
+    // device, os DOIS addons registram, o renderizador cria 27 contextos adiados — e o
+    // processo sai limpo. Nenhuma swapchain, nenhum diálogo, nenhum log truncado. Sem os
+    // arquivos o mesmo jogo abre. Isso não é travamento: é o jogo se fechando.
+    private const string LogMgsvGz = """
+        11:10:30:025 [23288] | INFO  | Initializing crosire's ReShade version '6.8.0.2155' (64-bit) loaded from 'E:\MGS GZ\d3d11.dll' into 'E:\MGS GZ\MgsGroundZeroes.exe' (0x87BB9CE3) ...
+        11:10:30:184 [23288] | INFO  | Initialized.
+        11:10:31:175 [23288] | INFO  | Redirecting D3D11CreateDevice(pAdapter = 000002527E9982A0, DriverType = 0, Software = 0000000000000000, Flags = 0) ...
+        11:10:31:177 [23288] | INFO  | Redirecting D3D11CreateDeviceAndSwapChain(pAdapter = 000002527E9982A0, pSwapChainDesc = 0000000000000000, ppSwapChain = 0000000000000000) ...
+        11:10:31:182 [23288] | INFO  | Registered add-on "DLSS 5 Feed 0.5.0" v0.5.0.0 using ReShade API version 20.
+        11:10:31:189 [23288] | INFO  | Registered add-on "DLSS 5 Neural Rendering" v0.2026.828.517 using ReShade API version 18.
+        11:10:31:190 [23288] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: RenoDX DLSS5 Generic v4.1.5 (build Aug 30 2026 22:25:38) loaded (hotkeys: NR toggle F6, screenshot F5) | EnableHooks=2: NGX hooks only, Streamline modules left unpatched
+        11:10:31:641 [23288] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: signed NR runtime (nvngx_dlssnr.dll) pre-loaded at device init
+        11:10:31:664 [23288] | INFO  | Redirecting ID3D11Device::CreateDeferredContext(this = 000002521AD772A0, ContextFlags = 0) ...
+        11:10:31:815 [23288] | INFO  | Unregistered add-on "DLSS 5 Neural Rendering".
+        11:10:31:815 [23288] | INFO  | Unregistered add-on "DLSS 5 Feed 0.5.0".
+        11:10:31:823 [23288] | INFO  | Exiting ...
+        11:10:32:891 [23288] | INFO  | Finished exiting.
+        """;
+
+    [Fact]
+    public void MgsvGz_FechouSozinhoSemChegarNaSwapchain()
+    {
+        var s = RenodxLog.Ler(LogMgsvGz);
+
+        Assert.NotNull(s);
+        Assert.False(s!.Ativo);
+        Assert.True(s.CriouDevice);
+        // "D3D11CreateDeviceAndSwapChain" tem a palavra, mas com ppSwapChain nulo: não
+        // pode contar como swapchain criada, senão o veredito inteiro inverte.
+        Assert.False(s.CriouSwapchain);
+        Assert.True(s.Encerrou);
+        Assert.Null(s.SegundosAteDialogo);     // não houve tela de erro: o jogo só saiu
+        Assert.False(s.CaiuAntesDoDlss);       // aquele veredito exige diálogo
+        Assert.True(s.FechouSemJanela);
+        Assert.Contains("SAIU sozinho", s.Resumo);
+    }
+
+    [Fact]
+    public void JogoQueChegouNaSwapchainNaoContaComoFechouSozinho()
+    {
+        // O contraveredito: com swapchain criada, sair do jogo é sair do jogo.
+        var s = RenodxLog.Ler(
+            "INFO | Registered add-on \"DLSS 5 Neural Rendering\" v0.2026.828.517\n" +
+            "INFO | Redirecting D3D11CreateDevice(...) ...\n" +
+            "INFO | Redirecting IDXGIFactory2::CreateSwapChainForHwnd(...) ...\n" +
+            "INFO | Exiting ...\n");
+
+        Assert.NotNull(s);
+        Assert.True(s!.CriouSwapchain);
+        Assert.False(s.FechouSemJanela);
+    }
+
+    [Fact]
+    public void FoxEngineEhReconhecidoPeloExe()
+    {
+        Assert.True(MotorFox.EhFoxEngine(Path.Combine("E:", "jogo", "MgsGroundZeroes.exe")));
+        Assert.True(MotorFox.EhFoxEngine(Path.Combine("E:", "jogo", "mgsvtpp.exe")));
+        Assert.True(MotorFox.EhFoxEngine(Path.Combine("E:", "jogo", "mgsvgz.exe")));
+        Assert.False(MotorFox.EhFoxEngine(Path.Combine("E:", "jogo", "re9.exe")));
+        Assert.False(MotorFox.EhFoxEngine(null));
+    }
+
     [Fact]
     public void Re9_CaiuAntesDeCriarODlss()
     {
@@ -3065,6 +3160,80 @@ public class IsolamentoRotaATests
 
         var rotaC = Isolamento.Leitura(EstadoIsolamento.SemReShade);
         Assert.Contains("dgVoodoo", rotaC);
+    }
+}
+
+public class CheckpointFoxEngineTests
+{
+    private static string Pasta()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-fox-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    private const string LogGz =
+        "11:10:30:025 [23288] | INFO  | Initializing crosire's ReShade version '6.8.0.2155' (64-bit) loaded from 'd3d11.dll' into 'MgsGroundZeroes.exe' ...\n" +
+        "11:10:31:175 [23288] | INFO  | Redirecting D3D11CreateDevice(pAdapter = 1) ...\n" +
+        "11:10:31:189 [23288] | INFO  | Registered add-on \"DLSS 5 Neural Rendering\" v0.2026.828.517 using ReShade API version 18.\n" +
+        "11:10:31:190 [23288] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: RenoDX DLSS5 Generic v4.1.5 loaded | EnableHooks=2: NGX hooks only\n" +
+        "11:10:31:823 [23288] | INFO  | Exiting ...\n";
+
+    [Fact]
+    public void CheckpointDizQueOJogoSeFechouENomeiaAProtecaoDaFoxEngine()
+    {
+        // Antes, este log caía no ramo "Warning / abra o jogo, jogue alguns segundos e
+        // verifique de novo" — conselho impossível de seguir num jogo que fecha sozinho.
+        var dir = Pasta();
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "renodx-dlss5.addon64"), "x");
+            File.WriteAllText(Path.Combine(dir, "ReShade.log"), LogGz + new string(' ', 2000));
+
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "MgsGroundZeroes.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D11,
+                NomeDoReShadeEscolhido = "d3d11.dll",
+            };
+
+            var c14 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 14);
+
+            Assert.Equal(CheckStatus.Fail, c14.State);
+            Assert.Contains("SAIU sozinho", c14.Detail);
+            Assert.Contains("Fox Engine", c14.FixHint!);
+            Assert.Contains("Testar só o ReShade", c14.FixHint!);
+            Assert.Contains("DXVK", c14.FixHint!);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void ForaDaFoxEngineADicaNaoInventaOMotor()
+    {
+        var dir = Pasta();
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "renodx-dlss5.addon64"), "x");
+            File.WriteAllText(Path.Combine(dir, "ReShade.log"), LogGz + new string(' ', 2000));
+
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "outrojogo.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D11,
+            };
+
+            var c14 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 14);
+
+            Assert.Equal(CheckStatus.Fail, c14.State);
+            Assert.DoesNotContain("Fox Engine", c14.FixHint!);
+            Assert.Contains("Testar só o ReShade", c14.FixHint!);
+        }
+        finally { Directory.Delete(dir, true); }
     }
 }
 

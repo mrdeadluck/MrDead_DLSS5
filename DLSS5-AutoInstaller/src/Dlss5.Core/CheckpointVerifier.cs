@@ -452,7 +452,7 @@ public static class CheckpointVerifier
 
         // 7/8 — ReShade carregou e viu o swapchain (lê o log se já existir)
         r.AddRange(VerifyReShadeLog(exe, profile.GameFolder, reinicioPendente, profile.ReShadeLogPath,
-            profile.ReShadeHookName, profile.UsarReFramework));
+            profile.ReShadeHookName, profile.UsarReFramework, profile.RealExePath));
 
         // 14/15/16 — dependem do jogo rodando
         r.AddRange(VerifyFeedLogs(exe, route, profile.NeedsFeeder));
@@ -495,7 +495,8 @@ public static class CheckpointVerifier
 
     private static IEnumerable<CheckResult> VerifyReShadeLog(
         string exeFolder, string? gameFolder = null, bool reinicioPendente = false,
-        string? logPath = null, string nomeDoReShade = "dxgi.dll", bool hospedado = false)
+        string? logPath = null, string nomeDoReShade = "dxgi.dll", bool hospedado = false,
+        string? exePath = null)
     {
         // Hospedado no REFramework, o ReShade grava o log ao lado da própria DLL.
         var log = logPath ?? Path.Combine(exeFolder, "ReShade.log");
@@ -541,6 +542,7 @@ public static class CheckpointVerifier
             var estado = renodx.AssinaturaRecusada ? CheckStatus.Fail
                        : renodx.Ativo ? CheckStatus.Pass
                        : renodx.CaiuAntesDoDlss ? CheckStatus.Fail
+                       : renodx.FechouSemJanela ? CheckStatus.Fail
                        : renodx.HooksSemUso ? CheckStatus.Fail
                        : CheckStatus.Warning;
 
@@ -576,6 +578,17 @@ public static class CheckpointVerifier
                               "anti-adulteração (Denuvo/RE Engine, como o RE9) recusa a injeção direta do ReShade — " +
                               "renomear para dinput8.dll não muda isso; o caminho que funciona é carregar por dentro do " +
                               "REFramework ou do Special K, fora do app."
+                        : renodx.FechouSemJanela
+                            // MGS V Ground Zeroes: device criado, addons registrados, 27
+                            // contextos adiados e saída limpa sem swapchain. Não é travamento
+                            // — é o jogo se fechando, que é o que a proteção da Fox Engine faz.
+                            ? (MotorFox.EhFoxEngine(exePath)
+                                ? MotorFox.Aviso + " " + MotorFox.Ladeira
+                                : "O jogo se fechou sozinho depois de criar o device — não travou. Isso é " +
+                                  "proteção anti-adulteração recusando a DLL, ou uma sobreposição brigando " +
+                                  "pela API. Com o jogo fechado: 1) \"Testar só o ReShade\" (desliga os dois " +
+                                  "addons); se abrir, o problema é addon. 2) Se não abrir, desligue TODAS as " +
+                                  "sobreposições (Steam, Xbox Game Bar, NVIDIA App, Discord, RivaTuner) e repita.")
                         : renodx.HooksSemUso
                             ? "O RenoDX só enxerga NGX em D3D12. Fora disso quem trabalha é o Feeder; " +
                               "confirme que o DLSS 5 Feed está marcado no preset."

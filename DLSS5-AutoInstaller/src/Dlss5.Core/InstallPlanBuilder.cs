@@ -376,6 +376,13 @@ public static class InstallPlanBuilder
                 "geforce_ti_4800 ou ati_radeon_8500 — não precisa reinstalar.");
         }
 
+        if (MotorFox.EhFoxEngine(profile.RealExePath))
+        {
+            // Não é aviso de rotina: aqui o jogo não trava, ele FECHA — e sem esta linha o
+            // usuário reinstala variações do mesmo plano achando que errou alguma coisa.
+            plan.Warnings.Add(MotorFox.Aviso + " " + MotorFox.Ladeira);
+        }
+
         if (profile.Api == GraphicsApi.Vulkan && profile.Architecture == PeArchitecture.X64)
         {
             plan.Warnings.Add(

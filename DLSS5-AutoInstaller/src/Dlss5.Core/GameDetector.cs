@@ -78,6 +78,8 @@ public static class GameDetector
             GameProfile.NomeDeReShadePreferido(profile.RealExePath, profile.Api);
         if (profile.NomeDoReShadeEscolhido is { } nome)
             result.Notes.Add($"Este jogo recusa o dxgi.dll (proteção anti-adulteração): o ReShade entra como {nome}.");
+        if (MotorFox.EhFoxEngine(profile.RealExePath))
+            result.Notes.Add(MotorFox.Aviso);
 
         return result;
     }
