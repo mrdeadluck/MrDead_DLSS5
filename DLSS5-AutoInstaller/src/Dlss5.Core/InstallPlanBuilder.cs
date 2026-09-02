@@ -10,7 +10,35 @@ public sealed class InstallPlan
     /// <summary>Coisas que não impedem instalar, mas que o usuário precisa saber.</summary>
     public List<string> Warnings { get; } = new();
 
+    /// <summary>
+    /// Arquivos que já existem no destino e NÃO são deste programa: serão substituídos,
+    /// com backup. A interface exige que o usuário veja esta lista antes de instalar.
+    /// </summary>
+    public List<string> Conflitos { get; } = new();
+
+    /// <summary>Arquivos de outros mods/injetores na pasta (só aviso; nunca são tocados).</summary>
+    public List<string> OutrosMods { get; } = new();
+
+    /// <summary>Manifesto de uma instalação anterior na mesma pasta, se houver.</summary>
+    public InstallManifest? InstalacaoAnterior { get; set; }
+
     public bool CanRun => Blockers.Count == 0 && Actions.Count > 0;
+
+    /// <summary>Resumo do que será feito, em números, para a confirmação.</summary>
+    public string ResumoCurto()
+    {
+        int copias = Actions.Count(a => a.Kind is PlanActionKind.CopyFile or PlanActionKind.ExtractReShadeDll);
+        int gerados = Actions.Count(a => a.Kind is PlanActionKind.WriteGeneratedFile or PlanActionKind.PatchDgVoodooConf);
+        int removidos = Actions.Count(a => a.Kind == PlanActionKind.DeleteForbiddenFile);
+        bool registro = Actions.Any(a => a.Kind == PlanActionKind.RegistryOverride);
+        var partes = new List<string>();
+        if (copias > 0) partes.Add($"{copias} cópia(s) de arquivo/pasta");
+        if (gerados > 0) partes.Add($"{gerados} arquivo(s) de configuração gerado(s)");
+        if (removidos > 0) partes.Add($"{removidos} arquivo(s) movido(s) para backup");
+        if (Conflitos.Count > 0) partes.Add($"{Conflitos.Count} arquivo(s) existente(s) substituído(s) com backup");
+        if (registro) partes.Add("override de assinatura no registro (HKLM)");
+        return string.Join(", ", partes) + ".";
+    }
 }
 
 /// <summary>
@@ -43,6 +71,9 @@ public static class InstallPlanBuilder
         var host64 = Path.Combine(exe, "host64");
         var shadersTarget = Path.Combine(exe, "reshade-shaders");
 
+        // Instalação anterior nesta pasta: decide o que já é nosso (reinstalar/reparar).
+        plan.InstalacaoAnterior = InstallManifest.Find(profile.GameFolder, profile.ExeFolder);
+
         void Copy(string? src, string dstFolder, string dstName)
         {
             if (src is null) return;
@@ -59,7 +90,17 @@ public static class InstallPlanBuilder
         void CopySemSobrescreverDoJogo(string? src, string dstFolder, string dstName)
         {
             if (src is null) return;
-            if (File.Exists(Path.Combine(dstFolder, dstName)))
+            var existente = Path.Combine(dstFolder, dstName);
+            // Se o que está lá foi gravado por NÓS (manifesto + hash conferem), continua
+            // sendo nosso: entra no plano (o motor pula se estiver igual) e segue rastreado
+            // para sair na desinstalação.
+            if (File.Exists(existente) && plan.InstalacaoAnterior is not null
+                && Propriedade.Classificar(existente, plan.InstalacaoAnterior) == OrigemDoArquivo.Nosso)
+            {
+                Copy(src, dstFolder, dstName);
+                return;
+            }
+            if (File.Exists(existente))
             {
                 plan.Warnings.Add($"{dstName} já existe na pasta (é do jogo) — mantido. " +
                     "O kit não sobrescreve o DLSS do próprio jogo: é isso que fazia as opções de " +
@@ -147,9 +188,8 @@ public static class InstallPlanBuilder
                         "O nvngx_dlss.dll desta pasta é o DO KIT (byte a byte igual): uma instalação " +
                         "antiga o pôs no lugar do DLL do jogo, e é isso que quebra o menu de DLSS e " +
                         "faz motor que carrega a DLL na inicialização travar antes de abrir a janela. " +
-                        "Antes de jogar: use Desinstalar (reverter) ou Desfazer tudo (forçado) — eles " +
-                        "removem este arquivo — e depois Steam → Verificar integridade para repor o " +
-                        "original do jogo.");
+                        "Antes de jogar: use Desinstalar (ou Remover vestígios) — eles removem este " +
+                        "arquivo — e depois Steam → Verificar integridade para repor o original do jogo.");
             }
             else
             {
@@ -238,7 +278,7 @@ public static class InstallPlanBuilder
                 "— o jogo trava depois da tela inicial (Onimusha) ou ao aplicar o DLSS no menu (GTA 5). " +
                 "Antes de abrir: opções gráficas do jogo → DLSS desligado. O Neural Rendering entra pelo " +
                 "Feed. Se as opções de DLSS sumirem do menu, é sinal de instalação ANTERIOR que trocou o " +
-                "nvngx_dlss.dll do jogo: Desinstalar (reverter) e verificação de integridade da Steam.");
+                "nvngx_dlss.dll do jogo: Desinstalar e verificação de integridade da Steam.");
         }
 
         if (profile.UsesRenodxDirectPath)
@@ -288,7 +328,41 @@ public static class InstallPlanBuilder
             plan.Actions.Add(new PlanAction(PlanActionKind.RegistryOverride,
                 "Aplicar override de assinatura NGX no registro (HKLM, 3 chaves)", null, null));
 
+        DetectarConflitos(plan);
         return plan;
+    }
+
+    /// <summary>
+    /// Arquivos preexistentes que não são nossos viram conflito explícito (serão
+    /// substituídos com backup, e o usuário precisa saber). Outros injetores viram aviso.
+    /// </summary>
+    private static void DetectarConflitos(InstallPlan plan)
+    {
+        var profile = plan.Profile;
+        var anterior = plan.InstalacaoAnterior;
+
+        foreach (var alvo in InstallerEngine.AlvosDoPlano(plan).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (!File.Exists(alvo)) continue;
+            var origem = Propriedade.Classificar(alvo, anterior, paraInstalar: true);
+            if (origem != OrigemDoArquivo.DoJogoOuTerceiro) continue;
+            // Dentro de reshade-shaders\ e host64\ pode haver arquivo do usuário com o
+            // mesmo nome de um do kit: também é conflito, mas com backup igual.
+            var backup = alvo + Propriedade.BackupSuffix;
+            plan.Conflitos.Add(File.Exists(backup) || (anterior?.BackedUpFiles.ContainsKey(alvo) ?? false)
+                ? $"{Rel(profile, alvo)} — já existe, foi alterado depois da instalação anterior; o backup ORIGINAL já guardado será preservado"
+                : $"{Rel(profile, alvo)} — já existe e não é deste programa; será substituído e o original guardado em {Path.GetFileName(backup)}");
+        }
+
+        foreach (var (nome, desc) in Propriedade.OutrosInjetores)
+        {
+            var p = Path.Combine(profile.ExeFolder, nome);
+            if (File.Exists(p)) plan.OutrosMods.Add($"{nome} — {desc}");
+        }
+        if (plan.OutrosMods.Count > 0)
+            plan.Warnings.Add("Outros mods ou injetores na pasta: " + string.Join("; ", plan.OutrosMods) +
+                              ". Eles não são tocados, mas podem disputar o mesmo gancho gráfico com o ReShade. " +
+                              "Se o DLSS 5 não aparecer, desative-os para testar.");
     }
 
     private const long OrcamentoWrapper = 32L * 1024 * 1024;
