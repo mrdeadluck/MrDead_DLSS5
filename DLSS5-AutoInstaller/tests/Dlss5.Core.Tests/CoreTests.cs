@@ -5305,3 +5305,97 @@ public class RayReconstructionTests
         finally { Directory.Delete(dir, true); }
     }
 }
+
+public class ApiPeloDlssNativoTests
+{
+    private static string Pasta()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-apingx-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    private static string Exe(string dir, params string[] marcadores)
+    {
+        var buffer = new byte[64 * 1024];
+        int offset = 1024;
+        foreach (var m in marcadores)
+        {
+            var bytes = System.Text.Encoding.ASCII.GetBytes(m);
+            Array.Copy(bytes, 0, buffer, offset, bytes.Length);
+            offset += 2048;
+        }
+        var path = Path.Combine(dir, "CrysisRemastered.exe");
+        File.WriteAllBytes(path, buffer);
+        return path;
+    }
+
+    // O exe do Crysis Remastered: o renderizador Vulkan da CryEngine inteiro dentro dele,
+    // e o jogo rodando em D3D11 — com o DLSS dele em NVSDK_NGX_D3D11.
+    private static readonly string[] Crysis =
+    {
+        "vulkan-1.dll", "vkCreateSwapchainKHR", "vkCreateInstance",
+        "d3d11.dll", "D3D11CreateDevice",
+    };
+
+    [Fact]
+    public void ODlssNativoEmD3D11DesempataParaD3D11()
+    {
+        var dir = Pasta();
+        try
+        {
+            var semNgx = ApiDetector.Detect(Exe(dir, Crysis), dir);
+            Assert.Equal(GraphicsApi.Vulkan, semNgx.Api);
+
+            var comNgx = ApiDetector.Detect(Exe(dir, Crysis.Append("NVSDK_NGX_D3D11_Init").ToArray()), dir);
+            Assert.Equal(GraphicsApi.D3D11, comNgx.Api);
+            Assert.True(comNgx.Confident, $"D3D11 {comNgx.Score} x Vulkan {comNgx.RunnerScore}");
+            Assert.Contains("NVSDK_NGX_D3D11", comNgx.TopSources());
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void DuasFamiliasDeNgxNaoDecidem()
+    {
+        var dir = Pasta();
+        try
+        {
+            // RDR2: NGX em D3D12 e em Vulkan — a pista não desempata nada.
+            var exe = Exe(dir, "vulkan-1.dll", "vkCreateSwapchainKHR", "d3d12.dll", "D3D12CreateDevice",
+                "NVSDK_NGX_D3D12_Init", "NVSDK_NGX_VULKAN_Init");
+            var r = ApiDetector.Detect(exe, dir);
+            Assert.DoesNotContain(r.Evidence, e => e.Source.Contains("DLSS do próprio jogo", StringComparison.Ordinal));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void OsLogsDaUltimaExecucaoValemMaisQueOExe()
+    {
+        var dir = Pasta();
+        try
+        {
+            var exe = Exe(dir, Crysis);
+            File.WriteAllText(Path.Combine(dir, "ReShade.log"),
+                "17:37:25:238 [39456] | INFO  | Redirecting IDXGIFactory2::CreateSwapChainForHwnd(this = 0000000007D921D0, ...) ...\n" +
+                "17:37:00:683 [ 6080] | INFO  | Redirecting D3D11CreateDevice(pAdapter = 0, DriverType = 1, ...) ...\n" +
+                "17:37:26:456 [39456] | INFO  | Redirecting D3D12CreateDevice(pAdapter = 00000000006041E0, MinimumFeatureLevel = b000, ...) ...\n");
+            File.WriteAllText(Path.Combine(dir, "dlss5-feed.log"),
+                "17:37:26.454  ################ feed: opening D3D12 session ################\n" +
+                "17:37:26.854  [feed] session ready: queue=000000004B3965A0 list=000000015FA69BC0 fence12=000000015F38D2D0 fence11=000000015FAF25C0\n");
+            var r = ApiDetector.Detect(exe, dir);
+            Assert.Equal(GraphicsApi.D3D11, r.Api);
+            Assert.Contains(r.Evidence, e => e.Source.Contains("ponte D3D11", StringComparison.Ordinal));
+            // O D3D12CreateDevice do Feeder não vira pista de D3D12.
+            Assert.DoesNotContain(r.Evidence, e => e.Api == GraphicsApi.D3D12 && e.Source.Contains("ReShade.log", StringComparison.Ordinal));
+
+            // E um jogo Vulkan de verdade continua Vulkan: a swapchain Vulkan no log decide.
+            File.WriteAllText(Path.Combine(dir, "ReShade.log"), "Redirecting vkCreateSwapchainKHR(device = 1, ...) ...\n");
+            File.Delete(Path.Combine(dir, "dlss5-feed.log"));
+            var vk = ApiDetector.Detect(Exe(dir, "d3d11.dll", "D3D11CreateDevice", "vulkan-1.dll"), dir);
+            Assert.Equal(GraphicsApi.Vulkan, vk.Api);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}

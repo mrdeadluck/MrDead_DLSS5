@@ -98,6 +98,46 @@ public static class ApiDetector
         ("d3d8", GraphicsApi.D3D8),
     };
 
+    /// <summary>
+    /// O DLSS do próprio jogo entrega a API: quem integra NGX em D3D11 renderiza em D3D11.
+    /// O Crysis Remastered ensinou — o exe carrega o renderizador Vulkan da CryEngine inteiro
+    /// (import de vulkan-1.dll, vkCreateSwapchainKHR, vkCreateInstance) e a detecção dizia
+    /// Vulkan, enquanto o jogo roda em D3D11 e o DLSS dele é NVSDK_NGX_D3D11. Só conta quando
+    /// há UMA família de NGX no exe: com duas (RDR2: D3D12 e Vulkan) a pista não decide.
+    /// </summary>
+    private static readonly (string Text, GraphicsApi Api)[] NgxFamilies =
+    {
+        ("NVSDK_NGX_D3D11_Init", GraphicsApi.D3D11),
+        ("NVSDK_NGX_D3D12_Init", GraphicsApi.D3D12),
+        ("NVSDK_NGX_VULKAN_Init", GraphicsApi.Vulkan),
+    };
+    private const int NgxFamilyWeight = 80;
+
+    /// <summary>
+    /// O que a última execução deixou nos logs vale mais do que qualquer string no exe: o
+    /// jogo rodou com AQUELA API nesta máquina. Do ReShade.log ficam de fora o D3D12 (o
+    /// Feeder cria um device D3D12 privado e o ReShade sonda D3D12CreateDevice ao subir,
+    /// então "Redirecting D3D12CreateDevice" aparece em jogo D3D11 também) e o
+    /// D3D11CreateDevice sem swapchain (muito jogo sonda adaptadores assim). O
+    /// dlss5-feed.log diz o transporte que o Feeder abriu, e esse é inequívoco.
+    /// </summary>
+    private static readonly (string Text, GraphicsApi Api, int Weight, string Source)[] LogMarkers =
+    {
+        ("Redirecting vkCreateSwapchainKHR", GraphicsApi.Vulkan, 70, "o ReShade.log da última execução viu a swapchain Vulkan"),
+        ("Redirecting D3D11CreateDeviceAndSwapChain", GraphicsApi.D3D11, 70, "o ReShade.log da última execução viu D3D11CreateDeviceAndSwapChain"),
+        ("Redirecting D3D11CreateDevice(", GraphicsApi.D3D11, 30, "o ReShade.log da última execução viu D3D11CreateDevice (pode ser só sondagem)"),
+        ("Redirecting Direct3DCreate9", GraphicsApi.D3D9, 70, "o ReShade.log da última execução viu Direct3DCreate9"),
+        ("Redirecting Direct3DCreate8", GraphicsApi.D3D8, 70, "o ReShade.log da última execução viu Direct3DCreate8"),
+        ("Redirecting D3D10CreateDevice", GraphicsApi.D3D10, 70, "o ReShade.log da última execução viu D3D10CreateDevice"),
+        ("Redirecting wglCreateContext", GraphicsApi.OpenGL, 70, "o ReShade.log da última execução viu wglCreateContext"),
+    };
+    private static readonly (string Text, GraphicsApi Api, int Weight, string Source)[] FeedLogMarkers =
+    {
+        ("opening same-device D3D12 session", GraphicsApi.D3D12, 70, "o dlss5-feed.log da última execução abriu sessão D3D12 no device do jogo"),
+        ("Vulkan transport", GraphicsApi.Vulkan, 70, "o dlss5-feed.log da última execução usou o transporte Vulkan"),
+        ("fence11=", GraphicsApi.D3D11, 70, "o dlss5-feed.log da última execução abriu a ponte D3D11→D3D12"),
+    };
+
     private const int ChunkSize = 4 * 1024 * 1024;
     private const int Overlap = 128;
     private const long ExeScanBudget = 192L * 1024 * 1024;
@@ -115,6 +155,10 @@ public static class ApiDetector
             evidence.Add(new ApiEvidence(api, weight, source));
         }
 
+        // 0. Logs da última execução nesta pasta: o jogo rodou com aquela API de fato.
+        foreach (var (text, api, weight, source) in LogEvidence(exeFolder))
+            Add(api, weight, source);
+
         // 1. Imports do PE: estrutural, a pista mais forte quando existe.
         if (exePath is not null)
         {
@@ -131,6 +175,16 @@ public static class ApiDetector
         {
             foreach (var m in MarkersFoundIn(exePath, ExeScanBudget))
                 Add(m.Api, m.Weight, $"\"{m.Text}\" no exe");
+        }
+
+        // 2b. A família de NGX do DLSS nativo, quando há uma só.
+        if (exePath is not null)
+        {
+            var ngx = ScanForMarkers(exePath, NgxFamilies.Select(f => f.Text).ToList(), ExeScanBudget);
+            var familias = NgxFamilies.Where(f => ngx.Contains(f.Text)).ToList();
+            if (familias.Count == 1)
+                Add(familias[0].Api, NgxFamilyWeight,
+                    $"o DLSS do próprio jogo é {familias[0].Text.Replace("_Init", "")}: quem integra NGX nessa API renderiza nela");
         }
 
         // 3. Ainda empatado? O renderizador pode estar numa DLL ao lado do exe.
@@ -165,6 +219,43 @@ public static class ApiDetector
             RunnerScore = ranked.Count > 1 ? second.Value : 0,
             Evidence = evidence,
         };
+    }
+
+    /// <summary>Pistas dos logs que a última execução deixou ao lado do exe.</summary>
+    internal static IEnumerable<(string Text, GraphicsApi Api, int Weight, string Source)> LogEvidence(string exeFolder)
+    {
+        var reshade = LerLog(Path.Combine(exeFolder, "ReShade.log"));
+        if (reshade is not null)
+        {
+            bool comSwapchain = reshade.Contains("D3D11CreateDeviceAndSwapChain", StringComparison.OrdinalIgnoreCase);
+            foreach (var m in LogMarkers)
+            {
+                // O device D3D11 sem swapchain só conta quando a versão com swapchain não contou.
+                if (m.Text.EndsWith("D3D11CreateDevice(", StringComparison.Ordinal) && comSwapchain) continue;
+                if (reshade.Contains(m.Text, StringComparison.OrdinalIgnoreCase)) yield return m;
+            }
+        }
+        var feed = LerLog(Path.Combine(exeFolder, "dlss5-feed.log"));
+        if (feed is not null)
+        {
+            foreach (var m in FeedLogMarkers)
+                if (feed.Contains(m.Text, StringComparison.OrdinalIgnoreCase)) yield return m;
+        }
+    }
+
+    private static string? LerLog(string path)
+    {
+        try
+        {
+            if (!File.Exists(path)) return null;
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var sr = new StreamReader(fs);
+            return sr.ReadToEnd();
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static bool IsDecisive(Dictionary<GraphicsApi, int> scores)
