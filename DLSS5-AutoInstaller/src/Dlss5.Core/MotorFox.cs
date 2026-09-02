@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace Dlss5.Core;
 
 /// <summary>
@@ -65,6 +67,54 @@ public static class MotorFox
         "(Steam, inglês) — executável diferente não é tocado. O Windows pode mostrar o SmartScreen " +
         "por ele não ser assinado. Depois gere o plano de novo: com o backup na pasta, o programa " +
         "libera a instalação e o ReShade entra como dxgi.dll.";
+
+    /// <summary>Quando o patcher está no kit: o programa roda por você.</summary>
+    public const string PatchAutomatico =
+        "O " + NomeDoPatcher + " está no kit: a instalação o copia para a pasta do jogo e o roda " +
+        "sozinha, antes de qualquer outro arquivo. Ele só remenda o mgsvtpp.exe 1.0.15.4 (Steam, inglês) " +
+        "e deixa o mgsvtpp.exe" + SufixoDoBackup + " ao lado; com executável diferente ele não faz nada, " +
+        "e aí a instalação para sem tocar em mais nada. O Windows pode mostrar o SmartScreen (o patcher " +
+        "não é assinado). Desinstalar não desfaz o patch — o jogo continua abrindo normalmente com ele; " +
+        "para voltar ao original, renomeie o backup por cima do exe.";
+
+    /// <summary>
+    /// Quem executa o patcher. Trocável só para os testes: no Windows real é o processo mesmo.
+    /// Devolve depois que o processo sai (ou do tempo limite).
+    /// </summary>
+    public static Func<string, string, TimeSpan, bool> Executor { get; set; } = RodarProcesso;
+
+    private static bool RodarProcesso(string patcher, string pastaDoExe, TimeSpan limite)
+    {
+        var psi = new ProcessStartInfo(patcher)
+        {
+            WorkingDirectory = pastaDoExe,
+            UseShellExecute = false,
+        };
+        using var proc = Process.Start(psi) ?? throw new InvalidOperationException("Não consegui iniciar o patcher.");
+        return proc.WaitForExit((int)limite.TotalMilliseconds);
+    }
+
+    /// <summary>
+    /// Roda o patcher ao lado do exe e confere o resultado pelo backup que ele deixa.
+    /// Sucesso é o backup existir — nada mais prova que o exe foi remendado.
+    /// </summary>
+    public static void RodarPatcher(string patcherNaPastaDoJogo, string exePath, Action<string>? log = null)
+    {
+        if (PatchAplicado(exePath))
+        {
+            log?.Invoke("Patch anti-hook já aplicado (backup presente); o patcher não roda de novo.");
+            return;
+        }
+        var pasta = Path.GetDirectoryName(exePath)!;
+        log?.Invoke($"Rodando {Path.GetFileName(patcherNaPastaDoJogo)} em {pasta}...");
+        bool saiu = Executor(patcherNaPastaDoJogo, pasta, TimeSpan.FromMinutes(3));
+        if (!PatchAplicado(exePath))
+            throw new InvalidOperationException(
+                (saiu ? "O patcher terminou" : "O patcher não terminou em 3 minutos") +
+                $" e não deixou o {Path.GetFileName(CaminhoDoBackup(exePath))}: o exe não foi remendado. " +
+                "Ele só aceita o mgsvtpp.exe 1.0.15.4 (Steam, inglês). Confira a versão do jogo.");
+        log?.Invoke($"Patch aplicado: {Path.GetFileName(CaminhoDoBackup(exePath))} criado.");
+    }
 
     /// <summary>Ground Zeroes não tem patcher conhecido.</summary>
     public const string SemPatcherParaGz =

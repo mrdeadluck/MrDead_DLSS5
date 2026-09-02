@@ -1,0 +1,22 @@
+Pasta do patch anti-hook do Metal Gear Solid V: The Phantom Pain
+================================================================
+
+A Fox Engine confere se as interfaces D3D11 foram enganchadas
+(fox::gr::dg::CheckModuleHook) e, como o ReShade engancha o ID3D11DeviceContext,
+o jogo se FECHA sozinho antes de criar a swapchain — com qualquer ReShade, com
+qualquer nome de DLL. Não é travamento: é o jogo se encerrando.
+
+A cura é um patch no executável: o MGSV-ReShade-AntiHook-Patcher (publicado no
+Discord do RenoDX, com o código-fonte). Ele desvia o resultado do CheckModuleHook,
+cria o mgsvtpp.exe.anti-hook-backup ao lado do exe e só aceita o mgsvtpp.exe
+1.0.15.4 (Steam, inglês) — executável diferente não é tocado.
+
+Ponha aqui:
+    MGSV-ReShade-AntiHook-Patcher.exe
+
+Com ele nesta pasta, o instalador copia o patcher para a pasta do jogo e o RODA
+sozinho, antes de qualquer outro arquivo. Se o patcher recusar o exe, a
+instalação para sem tocar em mais nada. Desinstalar não desfaz o patch (o jogo
+abre normalmente com ele); para voltar ao original, renomeie o backup por cima.
+
+Ground Zeroes (MgsGroundZeroes.exe) não tem patch publicado.

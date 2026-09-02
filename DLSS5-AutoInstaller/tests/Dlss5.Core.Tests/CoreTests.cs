@@ -674,6 +674,79 @@ public class PlanBuilderTests
     }
 
     [Fact]
+    public void ComOPatcherNoKitOPlanoRodaElePrimeiroEmVezDeBloquear()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5fox_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var kit = FullKit();
+            kit.MgsvPatcher = @"C:\kit\MGSV\" + MotorFox.NomeDoPatcher;
+            var profile = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "mgsvtpp.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D11,
+                RendererFolder = dir,
+            };
+
+            var plan = InstallPlanBuilder.Build(profile, kit, new InstallOptions());
+
+            Assert.True(plan.CanRun);
+            Assert.Equal(PlanActionKind.CopyFile, plan.Actions[0].Kind);
+            Assert.EndsWith(MotorFox.NomeDoPatcher, plan.Actions[0].TargetPath!);
+            Assert.Equal(PlanActionKind.RunMgsvPatcher, plan.Actions[1].Kind);
+            Assert.Equal(profile.RealExePath, plan.Actions[1].TargetPath);
+            Assert.Contains(plan.Warnings, w => w.Contains("roda", StringComparison.Ordinal)
+                                                && w.Contains(MotorFox.SufixoDoBackup, StringComparison.Ordinal));
+
+            // Ground Zeroes continua bloqueado mesmo com o patcher no kit: ele não cobre o GZ.
+            profile.RealExePath = Path.Combine(dir, "MgsGroundZeroes.exe");
+            var gz = InstallPlanBuilder.Build(profile, kit, new InstallOptions());
+            Assert.False(gz.CanRun);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void RodarPatcherSoAceitaSucessoComOBackupNaPasta()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5patch_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var original = MotorFox.Executor;
+        try
+        {
+            var exe = Path.Combine(dir, "mgsvtpp.exe");
+            File.WriteAllText(exe, "exe");
+            var patcher = Path.Combine(dir, MotorFox.NomeDoPatcher);
+            File.WriteAllText(patcher, "patcher");
+            var log = new List<string>();
+
+            // Patcher que "recusa" o exe: sai sem criar backup → falha explicada.
+            MotorFox.Executor = (_, _, _) => true;
+            var ex = Assert.Throws<InvalidOperationException>(() => MotorFox.RodarPatcher(patcher, exe, log.Add));
+            Assert.Contains("1.0.15.4", ex.Message);
+            Assert.False(MotorFox.PatchAplicado(exe));
+
+            // Patcher que remenda: cria o backup → sucesso, com o processo rodando na pasta do exe.
+            string? pastaVista = null;
+            MotorFox.Executor = (p, pasta, _) => { pastaVista = pasta; File.WriteAllText(MotorFox.CaminhoDoBackup(exe), "orig"); return true; };
+            MotorFox.RodarPatcher(patcher, exe, log.Add);
+            Assert.Equal(dir, pastaVista);
+            Assert.True(MotorFox.PatchAplicado(exe));
+            Assert.Contains(log, l => l.Contains("Patch aplicado", StringComparison.Ordinal));
+
+            // Já aplicado: não roda de novo.
+            bool rodou = false;
+            MotorFox.Executor = (_, _, _) => { rodou = true; return true; };
+            MotorFox.RodarPatcher(patcher, exe, log.Add);
+            Assert.False(rodou);
+        }
+        finally { MotorFox.Executor = original; Directory.Delete(dir, true); }
+    }
+
+    [Fact]
     public void PlanoDoMgsvComOPatchInstalaComoDxgi()
     {
         var dir = Path.Combine(Path.GetTempPath(), "dlss5fox_" + Guid.NewGuid().ToString("N"));

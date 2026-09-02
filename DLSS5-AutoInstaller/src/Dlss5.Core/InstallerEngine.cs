@@ -231,6 +231,14 @@ public sealed partial class InstallerEngine
                     case PlanActionKind.RegistryOverride:
                         AplicarOverride(manifest, desfazer);
                         break;
+
+                    case PlanActionKind.RunMgsvPatcher:
+                        // O patcher remenda o exe do jogo e deixa o próprio backup; a
+                        // desinstalação não mexe nisso de propósito (o jogo abre normal
+                        // com o patch). O que fica registrado é o patcher copiado, que
+                        // a ação de cópia anterior já pôs no manifesto.
+                        MotorFox.RodarPatcher(action.SourcePath!, action.TargetPath!, _log);
+                        break;
                 }
 
                 manifest.Save(exe);
@@ -318,6 +326,7 @@ public sealed partial class InstallerEngine
         PlanActionKind.WriteGeneratedFile => "Gerando configurações",
         PlanActionKind.PatchDgVoodooConf => "Ajustando o dgVoodoo",
         PlanActionKind.RegistryOverride => "Aplicando o override de assinatura no registro",
+        PlanActionKind.RunMgsvPatcher => "Rodando o patcher anti-hook do MGS V",
         _ => "Aplicando",
     };
 

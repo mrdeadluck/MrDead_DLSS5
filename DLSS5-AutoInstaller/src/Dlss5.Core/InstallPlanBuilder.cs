@@ -388,10 +388,28 @@ public static class InstallPlanBuilder
 
         if (MotorFox.EhFoxEngine(profile.RealExePath) && !MotorFox.PatchAplicado(profile.RealExePath))
         {
-            // Bloqueio, não aviso: está provado (log + teste "só o ReShade") que sem o patch
-            // o jogo fecha com qualquer ReShade. Instalar de novo é rodada perdida.
-            plan.Blockers.Add(MotorFox.Aviso + " " +
-                (MotorFox.PatcherCobre(profile.RealExePath) ? MotorFox.ComoAplicarOPatch : MotorFox.SemPatcherParaGz));
+            if (MotorFox.PatcherCobre(profile.RealExePath) && kit.MgsvPatcher is not null && profile.RealExePath is not null)
+            {
+                // O patcher está no kit: entra ANTES de tudo, para uma recusa dele (exe de
+                // outra versão) parar a instalação sem deixar nada na pasta.
+                var patcherNoJogo = Path.Combine(exe, MotorFox.NomeDoPatcher);
+                plan.Actions.Insert(0, new PlanAction(PlanActionKind.RunMgsvPatcher,
+                    "Rodar o patcher anti-hook da Fox Engine (desvia o CheckModuleHook; cria mgsvtpp.exe" + MotorFox.SufixoDoBackup + ")",
+                    patcherNoJogo, profile.RealExePath));
+                plan.Actions.Insert(0, new PlanAction(PlanActionKind.CopyFile,
+                    $"Copiar {MotorFox.NomeDoPatcher} → {MotorFox.NomeDoPatcher}", kit.MgsvPatcher, patcherNoJogo));
+                plan.Warnings.Add(MotorFox.Aviso + " " + MotorFox.PatchAutomatico);
+            }
+            else
+            {
+                // Bloqueio, não aviso: está provado (log + teste "só o ReShade") que sem o patch
+                // o jogo fecha com qualquer ReShade. Instalar de novo é rodada perdida.
+                plan.Blockers.Add(MotorFox.Aviso + " " +
+                    (MotorFox.PatcherCobre(profile.RealExePath)
+                        ? MotorFox.ComoAplicarOPatch + $" Ou ponha o {MotorFox.NomeDoPatcher} na pasta MGSV do kit " +
+                          "(DLSS 5 Files\\MGSV\\) e gere o plano de novo: aí a instalação roda o patcher sozinha."
+                        : MotorFox.SemPatcherParaGz));
+            }
         }
 
         if (profile.Api == GraphicsApi.Vulkan && profile.Architecture == PeArchitecture.X64)

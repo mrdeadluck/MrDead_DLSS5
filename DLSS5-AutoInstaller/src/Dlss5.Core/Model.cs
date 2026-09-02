@@ -257,6 +257,8 @@ public enum PlanActionKind
     PatchDgVoodooConf,
     DeleteForbiddenFile,
     RegistryOverride,
+    /// <summary>Roda o patcher anti-hook da Fox Engine sobre o exe do jogo (SourcePath = patcher, TargetPath = exe).</summary>
+    RunMgsvPatcher,
 }
 
 /// <summary>Uma ação do plano de instalação, exibível e executável.</summary>
