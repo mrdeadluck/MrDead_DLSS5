@@ -771,8 +771,13 @@ public sealed class MainForm : Form
 
         _chkDireto.Visible = _profile.HasNativeDlss && _profile.Api == GraphicsApi.D3D12;
 
-        // O REFramework só carrega em RE Engine, e só faz sentido em jogo x64.
-        bool cabeReFramework = _profile.EhReEngine && _profile.Architecture == PeArchitecture.X64;
+        // O REFramework é x64 e só carrega em RE Engine — mas quem decide é o usuário, não
+        // o palpite. A detecção de RE Engine procura re_chunk_*.pak na pasta do exe, e um
+        // jogo que guarde os dados noutro lugar sumiria com a opção da tela sem explicação
+        // nenhuma (foi o que aconteceu no RE9). Então a caixa aparece em todo jogo x64 com
+        // o REFramework no kit; o plano é que avisa quando a pasta não parece RE Engine.
+        bool cabeReFramework = _profile.Architecture == PeArchitecture.X64
+                               && _kit?.ReFrameworkDinput8 is not null;
         if (_chkReFramework.Visible != cabeReFramework)
         {
             _chkReFramework.Visible = cabeReFramework;
@@ -1632,6 +1637,10 @@ public sealed class MainForm : Form
         var notes = new List<string>(detection.Notes);
         if (_profile.LauncherExePath is not null)
             notes.Add($"Launcher detectado ({Path.GetFileName(_profile.LauncherExePath)}) — a instalação aponta para o exe real, não para ele.");
+        notes.Add("RE Engine (re_chunk_*.pak na pasta): " + (_profile.EhReEngine ? "SIM" : "NÃO") +
+                  " — é a engine em que o REFramework carrega. A caixa \"Hospedar o ReShade no " +
+                  "REFramework\" fica disponível em qualquer jogo x64; use-a no jogo que recusa a " +
+                  "injeção direta (o jogo abre a própria tela de erro logo depois do ReShade subir).");
         notes.Add($"Kit: {DescribeKit(_kit)}");
         foreach (var p in _kit.Problems) notes.Add("ATENÇÃO: " + p);
         _txtNotes.Lines = notes.ToArray();
@@ -1658,6 +1667,7 @@ public sealed class MainForm : Form
         if (kit.HasDrme) have.Add("DRME");
         if (kit.DgVoodooD3D9X86 is not null) have.Add("dgVoodoo-d3d9");
         if (kit.DgVoodooD3D8X86 is not null) have.Add("dgVoodoo-d3d8");
+        if (kit.ReFrameworkDinput8 is not null) have.Add("REFramework");
         return string.Join(", ", have);
     }
 

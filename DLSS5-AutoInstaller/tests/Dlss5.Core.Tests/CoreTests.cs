@@ -3268,3 +3268,89 @@ public class ReFrameworkTests
         finally { Directory.Delete(jogo, true); Directory.Delete(kit, true); }
     }
 }
+
+public class ReFrameworkForaDaReEngineTests
+{
+    private static string Pasta()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-refw-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    private static GameProfile Perfil(string dir, bool reEngine) 
+    {
+        File.WriteAllText(Path.Combine(dir, "jogo.exe"), "x");
+        if (reEngine) File.WriteAllText(Path.Combine(dir, "re_chunk_000.pak"), "x");
+        return new GameProfile
+        {
+            GameFolder = dir,
+            RealExePath = Path.Combine(dir, "jogo.exe"),
+            Architecture = PeArchitecture.X64,
+            Api = GraphicsApi.D3D12,
+            HasNativeDlss = true,
+            UsarReFramework = true,
+        };
+    }
+
+    private static KitInventory KitComReFramework(string dir)
+    {
+        var dinput8 = Path.Combine(dir, "kit-dinput8.dll");
+        File.WriteAllText(dinput8, "reframework");
+        return new KitInventory
+        {
+            KitRoot = dir,
+            DxgiX64 = dinput8,
+            RenodxAddon64 = dinput8,
+            NvngxDlssnr = dinput8,
+            ReFrameworkDinput8 = dinput8,
+        };
+    }
+
+    [Fact]
+    public void PastaSemReChunkAvisaMasNaoBloqueia()
+    {
+        var dir = Pasta();
+        try
+        {
+            var plan = InstallPlanBuilder.Build(Perfil(dir, reEngine: false), KitComReFramework(dir), new InstallOptions());
+
+            Assert.Contains(plan.Warnings, w => w.Contains("não parece um jogo da RE Engine", StringComparison.Ordinal));
+            // Aviso não pode virar desvio: o REFramework continua sendo instalado.
+            Assert.DoesNotContain(plan.Blockers, b => b.Contains("REFramework", StringComparison.Ordinal));
+            Assert.Contains(plan.Actions, a =>
+                a.TargetPath?.EndsWith(ReFramework.Dinput8, StringComparison.OrdinalIgnoreCase) == true);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void PastaComReChunkNaoAvisaNada()
+    {
+        var dir = Pasta();
+        try
+        {
+            var plan = InstallPlanBuilder.Build(Perfil(dir, reEngine: true), KitComReFramework(dir), new InstallOptions());
+
+            Assert.DoesNotContain(plan.Warnings, w => w.Contains("não parece um jogo da RE Engine", StringComparison.Ordinal));
+            Assert.Contains(plan.Actions, a =>
+                a.TargetPath?.EndsWith(ReFramework.Dinput8, StringComparison.OrdinalIgnoreCase) == true);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void SemOReFrameworkNoKitContinuaSendoBloqueio()
+    {
+        var dir = Pasta();
+        try
+        {
+            var kit = KitComReFramework(dir);
+            kit.ReFrameworkDinput8 = null;
+            var plan = InstallPlanBuilder.Build(Perfil(dir, reEngine: true), kit, new InstallOptions());
+
+            Assert.Contains(plan.Blockers, b => b.Contains("REFramework", StringComparison.Ordinal));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}

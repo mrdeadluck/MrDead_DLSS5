@@ -100,6 +100,16 @@ public static class InstallPlanBuilder
                     Copy(kit.ReFrameworkRevision, exe, ReFramework.RevisionFile);
             }
 
+            // Aviso, não desvio: a pasta sem re_chunk_*.pak pode ser um jogo da RE Engine
+            // que guarda os dados noutro lugar, e quem escolheu a caixa é quem sabe. O que
+            // não pode é a instalação mudar por causa do palpite.
+            if (!profile.EhReEngine)
+                plan.Warnings.Add(
+                    "Esta pasta não tem re_chunk_*.pak, então não parece um jogo da RE Engine — e o " +
+                    "REFramework só carrega nela. Se o jogo for RE Engine mesmo assim (dados noutra " +
+                    "pasta), siga; se não for, o ReShade não vai carregar por este caminho e o certo " +
+                    "é desmarcar a caixa e instalar pela injeção direta.");
+
             var plugins = ReFramework.PastaPlugins(exe);
             if (dxgiSrc is not null)
             {
