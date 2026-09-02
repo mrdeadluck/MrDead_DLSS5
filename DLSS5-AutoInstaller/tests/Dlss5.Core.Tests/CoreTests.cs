@@ -3043,8 +3043,10 @@ public class VerificacaoSemRenodxNoLogTests
         "00:34:30:141 [35364] | INFO  | Exiting ...\n";
 
     [Fact]
-    public void LogSemOAddonMasComQuedaTiraORenodxDaSuspeita()
+    public void AddonLigadoNoLogSemLinhaDeleNaoViraTesteDeIsolamento()
     {
+        // Com o addon LIGADO na pasta, dizer que o log é de um "teste de isolamento" é
+        // chute vendido como fato. O que se pode afirmar é o que o log mostra.
         var dir = Pasta();
         try
         {
@@ -3054,9 +3056,75 @@ public class VerificacaoSemRenodxNoLogTests
             var c14 = CheckpointVerifier.Verify(Perfil(dir), null).First(c => c.Number == 14);
 
             Assert.Equal(CheckStatus.Fail, c14.State);
-            Assert.Contains("SEM o RenoDX", c14.Detail);
+            Assert.DoesNotContain("teste de isolamento", c14.Detail);
+            Assert.Contains("viu o swapchain", c14.Detail);
             Assert.Contains("2.2 s", c14.Detail);
-            Assert.Contains("fora de suspeita", c14.Detail);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void SemSwapchainOAddonNemTeveChanceDeRodar()
+    {
+        // O caso do MGS V: o ReShade carrega, nunca chega ao swapchain, e por isso NENHUM
+        // addon é carregado. Culpar o RenoDX aqui manda caçar a pista errada.
+        var dir = Pasta();
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "renodx-dlss5.addon64"), "x");
+            File.WriteAllText(Path.Combine(dir, "ReShade.log"),
+                "00:33:51:039 [1] | INFO  | Initializing crosire's ReShade version '6.8.0.2155' (64-bit) ...\n" +
+                "00:33:51:066 [1] | INFO  | Registering hooks for 'd3d11.dll' ...\n" + new string(' ', 2000));
+
+            var c14 = CheckpointVerifier.Verify(Perfil(dir), null).First(c => c.Number == 14);
+
+            Assert.Equal(CheckStatus.Fail, c14.State);
+            Assert.Contains("nunca chegou ao swapchain", c14.Detail);
+            Assert.Contains("nem teve chance", c14.Detail);
+            Assert.Contains("item 8", c14.FixHint);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void ComOAddonRenomeadoAiSimEhOTesteDeIsolamento()
+    {
+        var dir = Pasta();
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "renodx-dlss5.addon64" + Isolamento.Sufixo), "x");
+            File.WriteAllText(Path.Combine(dir, "ReShade.log"),
+                "00:33:51:039 [1] | INFO  | Initializing crosire's ReShade version '6.8.0' ...\n" +
+                "00:33:59:035 [1] | INFO  | Recreated runtime environment on runtime 1 ('ReShade.ini').\n" + new string(' ', 2000));
+
+            var c14 = CheckpointVerifier.Verify(Perfil(dir), null).First(c => c.Number == 14);
+
+            Assert.Equal(CheckStatus.Manual, c14.State);
+            Assert.Contains("teste de isolamento", c14.Detail);
+            Assert.Contains("Religue o RenoDX", c14.FixHint);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void ADicaDoSwapchainNaoMandaReporODxgiQuandoONomeEhOutro()
+    {
+        // No MGS V o dxgi.dll é o arquivo que IMPEDE o jogo de abrir: mandar repô-lo era
+        // o pior conselho possível.
+        var dir = Pasta();
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "ReShade.log"),
+                "00:33:51:039 [1] | INFO  | Initializing crosire's ReShade version '6.8.0' ...\n" + new string(' ', 2000));
+            var perfil = Perfil(dir);
+            perfil.Api = GraphicsApi.D3D11;
+            perfil.NomeDoReShadeEscolhido = "d3d11.dll";
+
+            var c8 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 8);
+
+            Assert.Equal(CheckStatus.Fail, c8.State);
+            Assert.Contains("d3d11.dll", c8.FixHint);
+            Assert.DoesNotContain("dxgi.dll", c8.FixHint);
         }
         finally { Directory.Delete(dir, true); }
     }

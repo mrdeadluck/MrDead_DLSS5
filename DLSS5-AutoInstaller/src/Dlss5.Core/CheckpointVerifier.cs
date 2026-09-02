@@ -436,7 +436,8 @@ public static class CheckpointVerifier
         }
 
         // 7/8 — ReShade carregou e viu o swapchain (lê o log se já existir)
-        r.AddRange(VerifyReShadeLog(exe, profile.GameFolder, reinicioPendente, profile.ReShadeLogPath));
+        r.AddRange(VerifyReShadeLog(exe, profile.GameFolder, reinicioPendente, profile.ReShadeLogPath,
+            profile.ReShadeHookName, profile.UsarReFramework));
 
         // 14/15/16 — dependem do jogo rodando
         r.AddRange(VerifyFeedLogs(exe, route, profile.NeedsFeeder));
@@ -479,7 +480,7 @@ public static class CheckpointVerifier
 
     private static IEnumerable<CheckResult> VerifyReShadeLog(
         string exeFolder, string? gameFolder = null, bool reinicioPendente = false,
-        string? logPath = null)
+        string? logPath = null, string nomeDoReShade = "dxgi.dll", bool hospedado = false)
     {
         // Hospedado no REFramework, o ReShade grava o log ao lado da própria DLL.
         var log = logPath ?? Path.Combine(exeFolder, "ReShade.log");
@@ -575,17 +576,34 @@ public static class CheckpointVerifier
         else if (loaded && AddonRenodxNaPasta(exeFolder))
         {
             var seg = RenodxLog.SegundosAteDialogo(text);
+            // Duas razões MUITO diferentes para um log sem o RenoDX, e chamar as duas de
+            // "teste de isolamento" é chute vendido como fato: ou o addon está renomeado
+            // (o teste, mesmo), ou ele está lá, ligado, e o ReShade nem chegou a carregar
+            // addon nenhum porque não achou o swapchain — que é o caso do MGS V.
+            bool desligadoPeloTeste = AddonRenodxDesligado(exeFolder);
+            bool viuSwapchain = text.Contains("CreateSwapChain", StringComparison.OrdinalIgnoreCase)
+                                || text.Contains("Recreated runtime environment", StringComparison.OrdinalIgnoreCase);
+
+            var detalhe = desligadoPeloTeste
+                ? "O ReShade.log atual foi gravado com o RenoDX DESLIGADO (teste de isolamento): não diz nada sobre o DLSS 5."
+                : viuSwapchain
+                    ? "O ReShade carregou e viu o swapchain, mas o log não tem nenhuma linha do addon do RenoDX."
+                    : "O ReShade carregou mas nunca chegou ao swapchain, então NENHUM addon foi carregado — " +
+                      "o RenoDX está na pasta e nem teve chance de rodar. O problema é antes do DLSS 5.";
+
+            if (seg is not null)
+                detalhe += $" O jogo abriu a tela de erro {seg.Value.ToString("0.0", CultureInfo.InvariantCulture)} s " +
+                           "depois de o runtime do ReShade subir.";
+
             yield return new CheckResult(14, "DLSS 5 aplicado na imagem",
-                seg is null ? CheckStatus.Manual : CheckStatus.Fail,
-                seg is null
-                    ? "O ReShade.log atual foi gravado numa rodada SEM o RenoDX (teste de isolamento): não diz nada sobre o DLSS 5."
-                    : $"O ReShade.log atual é de uma rodada SEM o RenoDX — e mesmo assim o jogo abriu a tela de erro " +
-                      $"{seg.Value.ToString("0.0", CultureInfo.InvariantCulture)} s depois de o runtime do ReShade subir. " +
-                      "O RenoDX está fora de suspeita: é o ReShade dentro deste jogo.",
-                seg is null
+                desligadoPeloTeste && seg is null ? CheckStatus.Manual : CheckStatus.Fail,
+                detalhe,
+                desligadoPeloTeste
                     ? "Religue o RenoDX, abra o jogo e verifique de novo."
-                    : "\"Isolar a causa\" (sem o dxgi.dll) confirma. Rodando sem o ReShade: desligue todas as " +
-                      "sobreposições e teste de novo; persistindo, este jogo recusa esta versão do ReShade.");
+                    : viuSwapchain
+                        ? "Confira se o renodx-dlss5.addon64 está na pasta do exe e se o AddonPath do ini aponta para ela."
+                        : "Resolva o item 8 primeiro: sem swapchain não há DLSS 5. Se o jogo NEM ABRE, use " +
+                          "\"Isolar a causa\" para saber se é o ReShade ou o jogo nesta máquina.");
         }
 
         bool sawSwapchain = text.Contains("CreateSwapChain", StringComparison.OrdinalIgnoreCase)
@@ -595,7 +613,24 @@ public static class CheckpointVerifier
             sawSwapchain
                 ? "Log tem CreateSwapChain / Recreated runtime environment."
                 : "Log sem CreateSwapChain: o ReShade carregou mas não é a factory do renderizador.",
-            sawSwapchain ? null : "O dxgi.dll tem que estar na pasta do EXE. Overlays podem estar chegando antes.");
+            sawSwapchain
+                ? null
+                : hospedado
+                    ? $"O {ReFramework.ReShadePlugin} está em reframework\\plugins e carregou, mas não viu o swapchain. " +
+                      "Overlays podem estar chegando antes: desligue todas e teste de novo."
+                    : $"O {nomeDoReShade} tem que estar na pasta do EXE (é o nome escolhido na Detecção) " +
+                      "e ser o primeiro a pegar a API. Overlays podem estar chegando antes: desligue todas e teste de " +
+                      "novo. Se o jogo NEM ABRE com este arquivo na pasta, o problema não é ordem: é o jogo recusando " +
+                      "a DLL — use \"Isolar a causa\" para confirmar.");
+    }
+
+    /// <summary>O addon está na pasta mas RENOMEADO pelo teste de isolamento.</summary>
+    private static bool AddonRenodxDesligado(string exeFolder)
+    {
+        foreach (var pasta in new[] { exeFolder, Path.Combine(exeFolder, "host64") })
+            if (File.Exists(Path.Combine(pasta, "renodx-dlss5.addon64" + Isolamento.Sufixo)))
+                return true;
+        return false;
     }
 
     /// <summary>O addon do RenoDX está na pasta — ligado, ou desligado pelo isolamento.</summary>
