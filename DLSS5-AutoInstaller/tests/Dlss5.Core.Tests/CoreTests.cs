@@ -3536,3 +3536,31 @@ public class IsolamentoDoFeederTests
         Assert.Contains("Isolar a causa", texto);
     }
 }
+
+public class CarimboDoBuildTests
+{
+    [Fact]
+    public void SemCarimboDoCiOBuildEhLocal()
+    {
+        // Os testes rodam sem SourceRevisionId, então é este o caminho exercitado aqui:
+        // o importante é nunca devolver vazio nem explodir.
+        Assert.False(string.IsNullOrWhiteSpace(AppInfo.Build));
+        Assert.False(string.IsNullOrWhiteSpace(AppInfo.Versao));
+    }
+
+    [Fact]
+    public void VersaoComBuildJuntaOsDois()
+    {
+        var texto = AppInfo.VersaoComBuild;
+        Assert.Contains(AppInfo.Versao, texto);
+        Assert.Contains(AppInfo.Build, texto);
+        Assert.Contains("build", texto);
+    }
+
+    [Fact]
+    public void OBuildNuncaCarregaOSha40Inteiro()
+    {
+        // 7 caracteres é o que se lê num print sem esforço; o sha inteiro polui a tela.
+        Assert.True(AppInfo.Build.Length <= 7, $"Build longo demais: {AppInfo.Build}");
+    }
+}

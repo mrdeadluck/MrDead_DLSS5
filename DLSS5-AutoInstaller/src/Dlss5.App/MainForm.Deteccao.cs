@@ -273,6 +273,7 @@ public sealed partial class MainForm
         else if (kit.HasDrme && !kit.HasLaunchpad) _cboMv.SelectedIndex = 1;
 
         var notes = new List<string>(detection.Notes);
+        notes.Add($"Este executável: {AppInfo.Nome} {AppInfo.VersaoComBuild}.");
         if (_profile.LauncherExePath is not null)
             notes.Add($"Launcher detectado ({Path.GetFileName(_profile.LauncherExePath)}) — a instalação aponta para o exe real, não para ele.");
         if (kit.ReFrameworkDinput8 is null)

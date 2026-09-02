@@ -285,7 +285,7 @@ public sealed partial class MainForm : Form
         }, 0, 0);
         marca.Controls.Add(new Label
         {
-            Text = "AutoInstaller " + AppInfo.Versao,
+            Text = "AutoInstaller " + AppInfo.VersaoComBuild,
             Font = Ui.SmallFont,
             ForeColor = Ui.SidebarIdle,
             AutoSize = true,
