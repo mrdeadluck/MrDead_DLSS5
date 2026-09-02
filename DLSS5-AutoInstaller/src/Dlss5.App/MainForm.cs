@@ -85,6 +85,17 @@ public sealed class MainForm : Form
     private Button _btnPainelDg = new();
     private Button _btnTestarConf = new();
     private Button _btnRenodx = new();
+    // Caminho direto: a chave EnableHooks do RenoDX, trocada no ReShade.ini sem reinstalar.
+    private readonly Label _lblHooks = new()
+    {
+        Text = "Hooks do RenoDX:",
+        AutoSize = false,
+        Width = 115,
+        Height = 26,
+        TextAlign = ContentAlignment.MiddleLeft,
+    };
+    private readonly ComboBox _cboHooks = new();
+    private Button _btnHooks = new();
     private readonly CheckBox _chkTnL = new()
     {
         Text = "T&&L por hardware",
@@ -920,6 +931,18 @@ public sealed class MainForm : Form
         barraDg.Controls.Add(MakeButton("Isolar a causa", 4, 0, 130, (_, _) => IsolarCausa()));
         _btnRenodx = MakeButton("Testar sem o RenoDX", 4, 0, 160, (_, _) => TestarSemRenodx());
         barraDg.Controls.Add(_btnRenodx);
+        // EnableHooks do RenoDX: só aparece no caminho direto, onde o addon é quem trabalha.
+        barraDg.Controls.Add(_lblHooks);
+        _cboHooks.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cboHooks.Width = 360;
+        foreach (var v in RenodxIni.Valores) _cboHooks.Items.Add(RenodxIni.Descricao(v));
+        _cboHooks.SelectedIndex = 0;
+        barraDg.Controls.Add(_cboHooks);
+        _btnHooks = MakeButton("Aplicar hooks", 4, 0, 120, (_, _) => TrocarHooksDoRenodx());
+        barraDg.Controls.Add(_btnHooks);
+        _lblHooks.Visible = false;
+        _cboHooks.Visible = false;
+        _btnHooks.Visible = false;
         barraDg.Controls.Add(_lblDgVoodoo);
         _lblDgVoodoo.Visible = false;
         _cboPlaca.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -969,7 +992,9 @@ public sealed class MainForm : Form
         {
             var pergunta = _isolamento == EstadoIsolamento.SemDgVoodoo
                 ? "Com o dgVoodoo DESLIGADO, o jogo abriu?"
-                : "Com o ReShade DESLIGADO (e o dgVoodoo ligado), o jogo abriu?";
+                : _profile.NeedsDgVoodoo
+                    ? "Com o ReShade DESLIGADO (e o dgVoodoo ligado), o jogo abriu?"
+                    : "Com o ReShade DESLIGADO, o jogo abriu e rodou?";
             var abriu = MessageBox.Show(this, pergunta, "Resultado do teste",
                 MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
 
@@ -1011,14 +1036,16 @@ public sealed class MainForm : Form
             _status.Text = proximo switch
             {
                 EstadoIsolamento.SemDgVoodoo => "Teste 1 de 2: dgVoodoo desligado. Abra o jogo e volte aqui.",
-                EstadoIsolamento.SemReShade => "Teste 2 de 2: ReShade desligado. Abra o jogo e volte aqui.",
+                EstadoIsolamento.SemReShade => _profile.NeedsDgVoodoo
+                    ? "Teste 2 de 2: ReShade desligado. Abra o jogo e volte aqui."
+                    : "Teste único: ReShade desligado. Abra o jogo e volte aqui.",
                 _ => "Instalação religada por inteiro.",
             };
 
             var texto = proximo == EstadoIsolamento.Tudo
-                ? Isolamento.Veredito(_abriuSemDgVoodoo, _abriuSemReShade) +
-                  "\r\n\r\n" + Isolamento.Leitura(proximo)
-                : Isolamento.Leitura(proximo) +
+                ? Isolamento.Veredito(_abriuSemDgVoodoo, _abriuSemReShade, _profile.NeedsDgVoodoo) +
+                  "\r\n\r\n" + Isolamento.Leitura(proximo, _profile.NeedsDgVoodoo)
+                : Isolamento.Leitura(proximo, _profile.NeedsDgVoodoo) +
                   "\r\n\r\nDepois de abrir o jogo, clique em \"Isolar a causa\" de novo: " +
                   "ele pergunta o que aconteceu e passa ao próximo teste.";
 
@@ -1074,6 +1101,48 @@ public sealed class MainForm : Form
         _btnRenodx.Text = _isolamento == EstadoIsolamento.SemRenodx
             ? "Religar o RenoDX"
             : "Testar sem o RenoDX";
+
+    /// <summary>Mostra na lista o valor que o ReShade.ini da pasta tem de fato.</summary>
+    private void SincronizarHooksDoRenodx()
+    {
+        if (_profile is null) return;
+        var ini = Path.Combine(_profile.ExeFolder, "ReShade.ini");
+        int valor = RenodxIni.Padrao;
+        try { if (File.Exists(ini)) valor = RenodxIni.Ler(File.ReadAllText(ini)) ?? RenodxIni.Padrao; }
+        catch { /* sem leitura, fica o padrão */ }
+        int i = RenodxIni.Valores.ToList().IndexOf(valor);
+        _cboHooks.SelectedIndex = i < 0 ? 0 : i;
+    }
+
+    /// <summary>
+    /// Regrava só a chave EnableHooks na seção [RenoDX.DLSS5] do ReShade.ini. É o ajuste
+    /// que o próprio addon pede em jogo com Streamline (1) e o teste que deixa o addon
+    /// carregado sem gancho nenhum (0) — sem desinstalar e instalar a cada tentativa.
+    /// </summary>
+    private void TrocarHooksDoRenodx()
+    {
+        if (_profile is null) { Warn("Faça a detecção primeiro."); return; }
+
+        var rodando = ProcessoDoJogoRodando(_profile.RealExePath);
+        if (rodando is not null)
+        {
+            Warn($"Feche o jogo ({rodando}.exe) antes: o ReShade regrava o ReShade.ini ao sair e desfaria a troca.");
+            return;
+        }
+
+        var ini = Path.Combine(_profile.ExeFolder, "ReShade.ini");
+        if (!File.Exists(ini)) { Warn("ReShade.ini não está na pasta do exe — instale primeiro."); return; }
+
+        int valor = RenodxIni.Valores[Math.Max(0, _cboHooks.SelectedIndex)];
+        try
+        {
+            File.WriteAllText(ini, RenodxIni.Gravar(File.ReadAllText(ini), valor));
+            _status.Text = $"ReShade.ini: EnableHooks={valor}. Abra o jogo e verifique de novo.";
+            MessageBox.Show(this, RenodxIni.Leitura(valor), "Hooks do RenoDX",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex) { Warn(ex.Message); }
+    }
 
     /// <summary>
     /// Descobre se o dgVoodoo está mesmo lendo o dgVoodoo.conf que geramos.
@@ -1672,6 +1741,12 @@ public sealed class MainForm : Form
         _btnPainelDg.Visible = _profile.NeedsDgVoodoo;
         _chkTnL.Visible = _profile.NeedsDgVoodoo;
         _btnTestarConf.Visible = _profile.NeedsDgVoodoo;
+
+        bool direto = _profile.UsesRenodxDirectPath;
+        _lblHooks.Visible = direto;
+        _cboHooks.Visible = direto;
+        _btnHooks.Visible = direto;
+        if (direto) SincronizarHooksDoRenodx();
 
         _grid.Rows.Clear();
         var resultados = CheckpointVerifier.Verify(_profile, _manifest, NvngxDoKit(), _overrideNoBoot).ToList();

@@ -158,8 +158,29 @@ public sealed class Isolamento
     /// cada teste sozinho não distingue "o dgVoodoo é rejeitado" de "o ReShade atrapalha o
     /// dgVoodoo", e essas duas causas pedem correções completamente diferentes.
     /// </summary>
-    public static string Veredito(bool? abriuSemDgVoodoo, bool? abriuSemReShade)
+    public static string Veredito(bool? abriuSemDgVoodoo, bool? abriuSemReShade, bool temDgVoodoo = true)
     {
+        // Sem dgVoodoo (rotas A e B) só existe um teste, e ele responde sozinho.
+        if (!temDgVoodoo)
+        {
+            return abriuSemReShade switch
+            {
+                true => "CONCLUSÃO: o ReShade é quem derruba o jogo.\r\n\r\n" +
+                        "Sem o dxgi.dll do ReShade o jogo roda; com ele, cai — e, pelo ReShade.log, cai " +
+                        "antes de o RenoDX interceptar qualquer chamada de DLSS. Não é o addon nem o " +
+                        "override do registro: é o ReShade dentro deste jogo. O que muda isso é o que " +
+                        "roda junto dele — desligue TODAS as sobreposições (Steam, Xbox Game Bar, NVIDIA " +
+                        "App, Discord, RivaTuner/Afterburner) e teste de novo. Se persistir, este jogo " +
+                        "pede uma versão do ReShade diferente da que o kit traz.",
+                false => "CONCLUSÃO: o problema NÃO é a instalação.\r\n\r\n" +
+                         "O jogo cai mesmo sem o dxgi.dll do ReShade na pasta — com a pasta como antes " +
+                         "de qualquer coisa ser instalada. Verifique a integridade dos arquivos na loja, " +
+                         "o driver de vídeo e se o jogo abre sozinho; enquanto não abrir, não há o que " +
+                         "o DLSS 5 possa fazer.",
+                null => "Faltou responder o teste. Rode-o para chegar a uma conclusão.",
+            };
+        }
+
         if (abriuSemDgVoodoo is false)
             return "CONCLUSÃO: o problema NÃO é a instalação.\r\n\r\n" +
                    "O jogo recusou abrir mesmo com o dgVoodoo desligado, quando a pasta estava " +
@@ -187,8 +208,15 @@ public sealed class Isolamento
     }
 
     /// <summary>O que o resultado de cada teste significa, para não sobrar interpretação.</summary>
-    public static string Leitura(EstadoIsolamento estado) => estado switch
+    public static string Leitura(EstadoIsolamento estado, bool temDgVoodoo = true) => estado switch
     {
+        EstadoIsolamento.SemReShade when !temDgVoodoo =>
+            "ReShade DESLIGADO (dxgi.dll renomeado). Abra o jogo e jogue alguns segundos.\r\n\r\n" +
+            "• Se o jogo ABRIR e rodar: o ReShade é quem derruba este jogo — e o ReShade.log já " +
+            "mostrava que a queda vinha antes de o RenoDX interceptar qualquer DLSS.\r\n" +
+            "• Se AINDA cair: a instalação não tem nada a ver com isso — o jogo já cai sozinho " +
+            "nesta máquina (integridade dos arquivos, driver, configuração salva do jogo).",
+
         EstadoIsolamento.SemDgVoodoo =>
             "dgVoodoo DESLIGADO. Abra o jogo (pela Steam, se for da Steam).\r\n\r\n" +
             "• Se o jogo ABRIR: o dgVoodoo é quem está barrando. O overlay do ReShade NÃO vai " +

@@ -116,13 +116,18 @@ public static class ReShadeConfigWriter
     /// instalação manual do ReShade, que não liga isso, roda. No direto o Generic
     /// Depth fica desligado por inteiro.
     /// </param>
+    /// <param name="renodxHooks">
+    /// EnableHooks do addon do RenoDX, gravado explícito na seção [RenoDX.DLSS5] para a
+    /// tela de verificação poder trocá-lo depois (ver <see cref="RenodxIni"/>).
+    /// </param>
     public static string BuildReShadeIni(
         int overlayKey = KeyHome,
         bool ctrl = false,
         bool shift = false,
         bool alt = false,
         string presetFile = "ReShadePreset.ini",
-        bool feederUsed = true)
+        bool feederUsed = true,
+        int renodxHooks = RenodxIni.Padrao)
     {
         var sb = new StringBuilder();
         sb.AppendLine("[GENERAL]");
@@ -144,6 +149,9 @@ public static class ReShadeConfigWriter
             // Generic Depth costuma acertar sozinho; deixamos os overrides zerados e visíveis.
             sb.AppendLine("DepthCopyBeforeClears=1");
         }
+        sb.AppendLine();
+        sb.AppendLine(RenodxIni.Secao);
+        sb.AppendLine($"{RenodxIni.Chave}={renodxHooks}");
         return sb.ToString();
 
         static int Bit(bool b) => b ? 1 : 0;

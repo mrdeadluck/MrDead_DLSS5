@@ -421,6 +421,7 @@ public static class CheckpointVerifier
         {
             var estado = renodx.AssinaturaRecusada ? CheckStatus.Fail
                        : renodx.Ativo ? CheckStatus.Pass
+                       : renodx.CaiuAntesDoDlss ? CheckStatus.Fail
                        : renodx.HooksSemUso ? CheckStatus.Fail
                        : CheckStatus.Warning;
 
@@ -444,9 +445,21 @@ public static class CheckpointVerifier
                       "addon, na aba Complementos."
                     : renodx.AssinaturaRecusada
                         ? "Aplique o override no registro e reinicie o PC quando puder — o driver só lê essa chave na inicialização."
+                        : renodx.CaiuAntesDoDlss
+                            // RE9: três logs, a mesma assinatura — runtime recriado, 1 a 3 s
+                            // de silêncio, tela de erro do jogo, nenhum "feature create".
+                            // O gancho de DLSS nem foi chamado; o suspeito é quem roda antes.
+                            ? "Não é o gancho de DLSS. Bisseção, com o jogo fechado: 1) \"Testar sem o RenoDX\" e " +
+                              "abra o jogo — se ainda cair, 2) \"Isolar a causa\" desliga o ReShade (dxgi.dll). Se aí " +
+                              "o jogo roda, é o ReShade dentro deste jogo: desligue TODAS as sobreposições (Steam, Xbox " +
+                              "Game Bar, NVIDIA App, Discord, RivaTuner) e teste de novo. Se cair mesmo sem nada, é o " +
+                              "jogo nesta máquina (integridade dos arquivos, driver)."
                         : renodx.HooksSemUso
                             ? "O RenoDX só enxerga NGX em D3D12. Fora disso quem trabalha é o Feeder; " +
                               "confirme que o DLSS 5 Feed está marcado no preset."
+                        : renodx.PedeStreamlineHooks
+                            ? "Na barra abaixo, troque \"Hooks do RenoDX\" para 1 (NGX + Streamline), aplique e abra " +
+                              "o jogo de novo. Se com 1 o jogo cair na abertura, volte para 2."
                             : "Abra o jogo, jogue alguns segundos e verifique de novo.");
         }
 

@@ -260,6 +260,21 @@ public class ReShadeIniPorCaminhoTests
         Assert.Contains(@"AddonPath=.\", ini);
         Assert.Contains("PresetPath=", ini);
     }
+
+    [Fact]
+    public void OsDoisCaminhosGravamOEnableHooksDoRenodxExplicito()
+    {
+        // A tela de verificação troca a chave depois; para isso ela nasce explícita.
+        foreach (var feeder in new[] { true, false })
+        {
+            var ini = ReShadeConfigWriter.BuildReShadeIni(feederUsed: feeder);
+            Assert.Contains("[RenoDX.DLSS5]", ini);
+            Assert.Equal(2, RenodxIni.Ler(ini));
+        }
+
+        var custom = ReShadeConfigWriter.BuildReShadeIni(feederUsed: false, renodxHooks: 1);
+        Assert.Equal(1, RenodxIni.Ler(custom));
+    }
 }
 
 public class ApiDetectorTests
@@ -2742,5 +2757,220 @@ public class ReinicioPendenteTests
             Assert.Equal(CheckStatus.Pass, c14.State);
         }
         finally { Directory.Delete(dir, true); }
+    }
+}
+
+public class RenodxLogRe9Tests
+{
+    // Trechos fiéis ao terceiro ReShade.log do RE9 (build sem Generic Depth): o runtime
+    // sobe para a resolução final, 2,2 s de silêncio, e o jogo registra a janela da
+    // própria tela de erro — sem nenhum "feature create" antes.
+    private const string LogRe9 = """
+        00:33:51:039 [ 4524] | INFO  | Initializing crosire's ReShade version '6.8.0.2155' (64-bit) loaded from 'G:\RE9\dxgi.dll' into 'G:\RE9\re9.exe' (0x60F442AB) ...
+        00:33:52:679 [ 4524] | INFO  | Installing delayed hooks for 'C:\WINDOWS\system32\d3d12.dll' (Just loaded via LoadLibrary('G:\RE9\/sl.common.dll')) ...
+        00:33:53:713 [ 4524] | INFO  | Registered add-on "DLSS 5 Neural Rendering" v0.2026.828.517 using ReShade API version 18.
+        00:33:53:713 [ 4524] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: RenoDX DLSS5 Generic v4.1.5 (build Aug 30 2026 22:25:38) loaded (hotkeys: NR toggle F6, screenshot F5) | EnableHooks=2: NGX hooks only, Streamline modules left unpatched
+        00:33:53:718 [ 4524] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: D3D12 NGX hooks installed across 3 module copy(ies); inline DLSS contract capture armed
+        00:33:56:151 [35364] | INFO  | Redirecting IDXGIFactory2::CreateSwapChainForHwnd(this = 0000000058955B30, pDevice = 00000000773FAD20, hWnd = 00000000000B0DBE, ppSwapChain = ) ...
+        00:33:56:228 [35364] | INFO  | Recreated runtime environment on runtime 00000001207EDFE0 ('G:\RE9\ReShade.ini').
+        00:33:59:035 [35364] | INFO  | Recreated runtime environment on runtime 00000001207EDFE0 ('G:\RE9\ReShade.ini').
+        00:34:01:257 [35364] | INFO  | Redirecting RegisterClassExW(lpWndClassEx = 000000018F6B8AE0 { "DirectUIHWND", style = 0x4000 }) ...
+        00:34:01:259 [35364] | INFO  | Redirecting RegisterClassExW(lpWndClassEx = 000000018F6B87D0 { "CtrlNotifySink", style = 0x4000 }) ...
+        00:34:29:753 [35364] | INFO  | Unregistered add-on "DLSS 5 Neural Rendering".
+        00:34:30:141 [35364] | INFO  | Exiting ...
+        """;
+
+    [Fact]
+    public void Re9_CaiuAntesDeCriarODlss()
+    {
+        var s = RenodxLog.Ler(LogRe9);
+
+        Assert.NotNull(s);
+        Assert.False(s!.Ativo);
+        Assert.False(s.HooksSemUso);           // o addon nunca chegou a escrever HOOKS ARMED
+        Assert.True(s.HooksInstalados);
+        Assert.False(s.CriouFeature);
+        Assert.Equal(2, s.EnableHooks);
+        Assert.True(s.Streamline);
+        Assert.True(s.Encerrou);
+        Assert.Equal(2.2, s.SegundosAteDialogo);
+        Assert.True(s.CaiuAntesDoDlss);
+        Assert.Contains("ANTES", s.Resumo);
+        Assert.Contains("2.2 s", s.Resumo);
+    }
+
+    [Fact]
+    public void OnimushaCriouAFeatureENaoContaComoQueda()
+    {
+        var s = RenodxLog.Ler(
+            "INFO | [DLSS 5 Neural Rendering] DLSS5 Generic: D3D12 NGX hooks installed across 3 module copy(ies)\n" +
+            "INFO | [DLSS 5 Neural Rendering] DLSS5 Generic: NGX feature create intercepted: feature=1 (DLSS/DLAA), slot=0\n");
+
+        Assert.NotNull(s);
+        Assert.True(s!.CriouFeature);
+        Assert.Null(s.SegundosAteDialogo);
+        Assert.False(s.CaiuAntesDoDlss);
+        Assert.Contains("criou o DLSS", s.Resumo);
+    }
+
+    [Fact]
+    public void DialogoDepoisDaFeatureNaoEhQuedaAntesDoDlss()
+    {
+        // Caiu, mas depois de o DLSS existir: aí o gancho volta à lista de suspeitos.
+        var s = RenodxLog.Ler(
+            "10:00:00:000 [1] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: D3D12 NGX hooks installed across 1 module copy(ies)\n" +
+            "10:00:01:000 [1] | INFO  | Recreated runtime environment on runtime 1 ('ReShade.ini').\n" +
+            "10:00:05:000 [1] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: NGX feature create intercepted: feature=1 (DLSS/DLAA), slot=0\n" +
+            "10:00:09:500 [1] | INFO  | Redirecting RegisterClassExW(lpWndClassEx = 1 { \"DirectUIHWND\", style = 0x4000 }) ...\n");
+
+        Assert.NotNull(s);
+        Assert.Equal(8.5, s!.SegundosAteDialogo);
+        Assert.False(s.CaiuAntesDoDlss);
+    }
+
+    [Fact]
+    public void ViradaDeDiaEntreORuntimeEODialogo()
+    {
+        var s = RenodxLog.Ler(
+            "23:59:59:500 [1] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: D3D12 NGX hooks installed across 1 module copy(ies)\n" +
+            "23:59:59:500 [1] | INFO  | Recreated runtime environment on runtime 1 ('ReShade.ini').\n" +
+            "00:00:01:000 [1] | INFO  | Redirecting RegisterClassExW(lpWndClassEx = 1 { \"DirectUIHWND\", style = 0 }) ...\n");
+
+        Assert.Equal(1.5, s!.SegundosAteDialogo);
+    }
+
+    [Fact]
+    public void SemRuntimeContaDoSwapchainOuDoRegistroDoAddon()
+    {
+        var s = RenodxLog.Ler(
+            "10:00:00:000 [1] | INFO  | Registered add-on \"DLSS 5 Neural Rendering\" v1 using ReShade API version 18.\n" +
+            "10:00:03:000 [1] | INFO  | Redirecting RegisterClassExW(lpWndClassEx = 1 { \"DirectUIHWND\", style = 0 }) ...\n");
+
+        Assert.Equal(3.0, s!.SegundosAteDialogo);
+        Assert.True(s.CaiuAntesDoDlss);
+    }
+
+    [Fact]
+    public void PedidoDeStreamlineHooksDoProprioAddon()
+    {
+        var s = RenodxLog.Ler(
+            "[DLSS 5 Neural Rendering] DLSS5 Generic: NR skipped: the game's NGX contract has no guide (input) dimensions. " +
+            "If the game uses NVIDIA Streamline, set EnableHooks=1 in the [RenoDX.DLSS5] section of ReShade.ini and restart");
+
+        Assert.NotNull(s);
+        Assert.True(s!.PedeStreamlineHooks);
+        Assert.False(s.CaiuAntesDoDlss);
+        Assert.Contains("EnableHooks=1", s.Resumo);
+    }
+
+    [Fact]
+    public void ModoSeguroLeEnableHooksZero()
+    {
+        var s = RenodxLog.Ler("[DLSS 5 Neural Rendering] DLSS5 Generic: loaded | SAFE MODE: EnableHooks=0, all hooks off (no NR)");
+        Assert.Equal(0, s!.EnableHooks);
+        Assert.False(s.HooksInstalados);
+    }
+}
+
+public class RenodxIniTests
+{
+    [Fact]
+    public void SemSecaoOuSemChaveNaoHaValor()
+    {
+        Assert.Null(RenodxIni.Ler(null));
+        Assert.Null(RenodxIni.Ler(""));
+        Assert.Null(RenodxIni.Ler("[GENERAL]\r\nEnableHooks=1\r\n"));   // chave fora da seção não vale
+        Assert.Null(RenodxIni.Ler("[RenoDX.DLSS5]\r\nIntensity=1\r\n"));
+    }
+
+    [Fact]
+    public void LeSemLigarParaCaixaNemEspacos()
+    {
+        Assert.Equal(1, RenodxIni.Ler("[renodx.dlss5]\n enablehooks = 1 \n"));
+    }
+
+    [Fact]
+    public void GravarCriaASecaoNoFimQuandoNaoExiste()
+    {
+        var ini = "[GENERAL]\r\nPresetPath=.\\ReShadePreset.ini\r\n";
+        var novo = RenodxIni.Gravar(ini, 1);
+
+        Assert.StartsWith("[GENERAL]\r\nPresetPath=.\\ReShadePreset.ini\r\n", novo);
+        Assert.Contains("\r\n[RenoDX.DLSS5]\r\nEnableHooks=1\r\n", novo);
+        Assert.Equal(1, RenodxIni.Ler(novo));
+        Assert.EndsWith("\r\n", novo);
+    }
+
+    [Fact]
+    public void GravarTrocaSoALinhaDaChaveEPreservaOResto()
+    {
+        var ini = "[GENERAL]\r\nPresetPath=.\\ReShadePreset.ini\r\n\r\n" +
+                  "[RenoDX.DLSS5]\r\nIntensity=1.0\r\nEnableHooks=2\r\nStyle=0\r\n\r\n" +
+                  "[ADDON]\r\nAddonPath=.\\\r\n";
+        var novo = RenodxIni.Gravar(ini, 0);
+
+        Assert.Equal(0, RenodxIni.Ler(novo));
+        Assert.Equal(ini.Replace("EnableHooks=2", "EnableHooks=0"), novo);
+        Assert.Equal(1, novo.Split("EnableHooks=").Length - 1);
+    }
+
+    [Fact]
+    public void GravarAcrescentaAChaveDentroDaSecaoQueJaExiste()
+    {
+        var ini = "[RenoDX.DLSS5]\r\nIntensity=1.0\r\n\r\n[ADDON]\r\nAddonPath=.\\\r\n";
+        var novo = RenodxIni.Gravar(ini, 1);
+
+        Assert.Equal("[RenoDX.DLSS5]\r\nIntensity=1.0\r\nEnableHooks=1\r\n\r\n[ADDON]\r\nAddonPath=.\\\r\n", novo);
+    }
+
+    [Fact]
+    public void GravarNoIniGeradoTrocaOValorSemMexerNoResto()
+    {
+        var gerado = ReShadeConfigWriter.BuildReShadeIni(feederUsed: false);
+        var novo = RenodxIni.Gravar(gerado, 1);
+
+        Assert.Equal(1, RenodxIni.Ler(novo));
+        Assert.Equal(gerado.Replace("EnableHooks=2", "EnableHooks=1"), novo);
+        Assert.Contains("DisabledAddons=Generic Depth", novo);
+    }
+
+    [Fact]
+    public void ListaComecaPeloPadraoEDescreveOsTres()
+    {
+        Assert.Equal(RenodxIni.Padrao, RenodxIni.Valores[0]);
+        foreach (var v in RenodxIni.Valores)
+        {
+            Assert.StartsWith(v.ToString(), RenodxIni.Descricao(v));
+            Assert.Contains($"EnableHooks={v}", RenodxIni.Leitura(v));
+        }
+    }
+}
+
+public class IsolamentoRotaATests
+{
+    [Fact]
+    public void SemDgVoodooOTesteDoReShadeRespondeSozinho()
+    {
+        Assert.Contains("ReShade é quem derruba", Isolamento.Veredito(null, true, temDgVoodoo: false));
+        Assert.Contains("NÃO é a instalação", Isolamento.Veredito(null, false, temDgVoodoo: false));
+        Assert.Contains("Faltou responder", Isolamento.Veredito(null, null, temDgVoodoo: false));
+    }
+
+    [Fact]
+    public void ComDgVoodooOVereditoContinuaPrecisandoDosDoisTestes()
+    {
+        Assert.Contains("Faltou responder", Isolamento.Veredito(null, true));
+        Assert.Contains("sozinhos os dois funcionam", Isolamento.Veredito(true, true));
+    }
+
+    [Fact]
+    public void LeituraDoTesteSemReShadeNaoFalaDeDgVoodooNaRotaA()
+    {
+        var rotaA = Isolamento.Leitura(EstadoIsolamento.SemReShade, temDgVoodoo: false);
+        Assert.DoesNotContain("dgVoodoo", rotaA);
+        Assert.Contains("dxgi.dll", rotaA);
+
+        var rotaC = Isolamento.Leitura(EstadoIsolamento.SemReShade);
+        Assert.Contains("dgVoodoo", rotaC);
     }
 }
