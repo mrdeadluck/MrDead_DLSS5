@@ -15,3 +15,7 @@ DLSS[[:space:]]5[[:space:]]Files/**/*.md !filter !diff !merge text
 *.zip filter=lfs diff=lfs merge=lfs -text
 *.7z filter=lfs diff=lfs merge=lfs -text
 *.exe filter=lfs diff=lfs merge=lfs -text
+
+# Exceção: a pasta MGSV do kit guarda o patcher anti-hook do Phantom Pain, um exe de
+# poucos KB com o código-fonte junto. Fica fora do LFS (regras posteriores vencem).
+DLSS[[:space:]]5[[:space:]]Files/MGSV/** !filter !diff !merge -text
