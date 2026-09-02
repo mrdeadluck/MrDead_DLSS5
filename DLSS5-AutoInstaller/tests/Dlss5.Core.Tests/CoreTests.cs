@@ -3187,7 +3187,7 @@ public class Re9AtivoMasSemDiferencaTests
         "12:00:45:110 [29968] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: skipping NR on NGX evaluate: feature 11 (DLSSG/FrameGeneration) is not DLSS/DLSSD\n";
 
     [Fact]
-    public void NrAtivoNumJogoDeStreamlineNaoEhOkEnquantoOsGanchosForemSoNGX()
+    public void NrAtivoNumJogoDeStreamlineContinuaOkEApontaParaORuntime()
     {
         // O caso que fez o usuário perder rodadas: o addon anuncia "ACTIVE — NR INJECTED",
         // conta 7633 quadros, e a imagem não muda um fio. O painel do addon explicava o
@@ -3204,7 +3204,6 @@ public class Re9AtivoMasSemDiferencaTests
             Assert.True(s!.Ativo);
             Assert.True(s.Streamline);
             Assert.Equal(2, s.EnableHooks);
-            Assert.True(s.AtivoMasForaDoStreamline);
 
             var perfil = new GameProfile
             {
@@ -3215,17 +3214,18 @@ public class Re9AtivoMasSemDiferencaTests
                 HasNativeDlss = true,
             };
 
+            // Com o Streamline em jogo o veredito continua OK: o RHI não mexe no EnableHooks
+            // e funciona; o RE9 com hooks=1 provou que o modo não muda o resultado. O que
+            // muda é o runtime (item 18) — e o OK aponta para lá.
             var c14 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 14);
-            Assert.Equal(CheckStatus.Warning, c14.State);
-            Assert.Contains("descartado", c14.Detail);
-            Assert.Contains("Hooks do RenoDX", c14.FixHint!);
-            Assert.Contains("1 (NGX + Streamline)", c14.FixHint!);
+            Assert.Equal(CheckStatus.Pass, c14.State);
+            Assert.Contains("item 18", c14.FixHint!);
         }
         finally { Directory.Delete(dir, true); }
     }
 
     [Fact]
-    public void JogoDeStreamlineJaInstalaComOsGanchosNoStreamline()
+    public void JogoDeStreamlineInstalaComOPadraoDoAddon()
     {
         var comSl = new GameProfile
         {
@@ -3237,7 +3237,8 @@ public class Re9AtivoMasSemDiferencaTests
             },
         };
         Assert.True(comSl.UsaStreamline);
-        Assert.Equal(1, comSl.HooksDoRenodx);
+        // O padrão é o do addon, como no RHI: o modo 1 fica para a barra da verificação.
+        Assert.Equal(RenodxIni.Padrao, comSl.HooksDoRenodx);
 
         var semSl = new GameProfile
         {
@@ -3253,7 +3254,7 @@ public class Re9AtivoMasSemDiferencaTests
 
         // E o valor chega no ini que a instalação grava.
         var ini = ReShadeConfigWriter.BuildReShadeIni(renodxHooks: comSl.HooksDoRenodx);
-        Assert.Equal(1, RenodxIni.Ler(ini));
+        Assert.Equal(RenodxIni.Padrao, RenodxIni.Ler(ini));
     }
 
     [Fact]
@@ -3280,7 +3281,6 @@ public class Re9AtivoMasSemDiferencaTests
 
             var s = RenodxLog.Ler(semStreamline);
             Assert.True(s!.Ativo);
-            Assert.False(s.AtivoMasForaDoStreamline);
             Assert.True(s.FrameGeneration);
 
             var c14 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 14);
@@ -3335,6 +3335,144 @@ public class Re9AtivoMasSemDiferencaTests
                                        && c.State == CheckStatus.Pass);
         }
         finally { Directory.Delete(dir, true); }
+    }
+}
+
+public class RuntimeNrTests
+{
+    private static string Pasta()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-nr-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    [Fact]
+    public void OsQuatroBuildsSaoReconhecidosPeloHash()
+    {
+        // Hashes dos zips publicados em RankFTW/rhi-repo, mais o remendo que estava no kit.
+        Assert.Equal("310.8.SF-v2", RuntimeNr.PorHash("6eb209e764f39872625debd6abaf45e2bb6322f6f270f781f70c059ae30b3927")!.Nome);
+        Assert.Equal("310.8.SF", RuntimeNr.PorHash("4C5BD1171C7336B4B04FB394DE51DA285AB6EAD6F922D7AFDEC163F71C319D74")!.Nome);
+        Assert.True(RuntimeNr.PorHash("e16bcf15e16e13f527491cdf7845b2fe6521a738d8f7c9c721866a8496e1fc8e")!.SoRtx50);
+        var remendo = RuntimeNr.PorHash("368911e6865534edb9b82d803c1e5d3fa3292d9c832ee0a9ee3444ac58c96b82")!;
+        Assert.True(remendo.Remendo);
+        Assert.Null(RuntimeNr.PorHash("0000"));
+        Assert.Null(RuntimeNr.PorHash(null));
+    }
+
+    [Fact]
+    public void ORemendoDoKitAntigoEhFalhaEmQualquerPlaca()
+    {
+        var remendo = RuntimeNr.PorHash("368911e6865534edb9b82d803c1e5d3fa3292d9c832ee0a9ee3444ac58c96b82");
+        Assert.True(RuntimeNr.Avaliar(remendo, 40).Falha);
+        Assert.True(RuntimeNr.Avaliar(remendo, 50).Falha);
+        Assert.True(RuntimeNr.Avaliar(remendo, null).Falha);
+        Assert.Contains("untested build", RuntimeNr.Avaliar(remendo, 40).Texto);
+    }
+
+    [Fact]
+    public void OOriginalSoPassaEmRtx50EOShortFusePassaEmTodas()
+    {
+        var original = RuntimeNr.PorHash("e16bcf15e16e13f527491cdf7845b2fe6521a738d8f7c9c721866a8496e1fc8e");
+        Assert.False(RuntimeNr.Avaliar(original, 50).Falha);
+        Assert.True(RuntimeNr.Avaliar(original, 40).Falha);
+        Assert.True(RuntimeNr.Avaliar(original, null).Falha);
+
+        var sf = RuntimeNr.PorHash("6eb209e764f39872625debd6abaf45e2bb6322f6f270f781f70c059ae30b3927");
+        Assert.False(RuntimeNr.Avaliar(sf, 40).Falha);
+        Assert.False(RuntimeNr.Avaliar(sf, 20).Falha);
+        Assert.False(RuntimeNr.Avaliar(sf, null).Falha);
+
+        Assert.True(RuntimeNr.Avaliar(null, 40).Falha);   // desconhecido não merece confiança
+    }
+
+    [Fact]
+    public void APlacaSaiDoReShadeLog()
+    {
+        Assert.Equal(40, RuntimeNr.SerieRtxNoLog("11:59:28:727 [55796] | INFO  | Running on NVIDIA GeForce RTX 4070 Ti Driver 616.56."));
+        Assert.Equal(50, RuntimeNr.SerieRtxNoLog("INFO | Running on NVIDIA GeForce RTX 5090 Driver 616.56."));
+        Assert.Equal(30, RuntimeNr.SerieRtxNoLog("INFO | Running on NVIDIA GeForce RTX 3060 Driver 1."));
+        Assert.Null(RuntimeNr.SerieRtxNoLog("INFO | Running on AMD Radeon RX 7900 XTX."));
+        Assert.Null(RuntimeNr.SerieRtxNoLog(null));
+        Assert.True(RuntimeNr.AddonMarcouComoDesconhecido(
+            "WARN | [DLSS 5 Neural Rendering] DLSS5 Generic: signed runtime sha256 3689 (custom runtime accepted; untested build, NR failures may be specific to it)"));
+        Assert.False(RuntimeNr.AddonMarcouComoDesconhecido("INFO | signed DLSSNR 310.8.SF.0 D3D12 runtime initialized"));
+    }
+
+    [Fact]
+    public void Checkpoint18AcusaRuntimeDesconhecidoNaPastaDoJogo()
+    {
+        // Um nvngx_dlssnr.dll que não é nenhum build conhecido, com o log dizendo RTX 40.
+        var dir = Pasta();
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "nvngx_dlssnr.dll"), "não é nenhum dos builds");
+            File.WriteAllText(Path.Combine(dir, "ReShade.log"),
+                "INFO | Initializing crosire's ReShade version '6.8.0.2155' (64-bit) loaded from 'dxgi.dll' into 're9.exe' ...\n" +
+                "INFO | Running on NVIDIA GeForce RTX 4070 Ti Driver 616.56.\n" + new string(' ', 2000));
+
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "re9.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D12,
+                HasNativeDlss = true,
+            };
+
+            var c18 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 18);
+            Assert.Equal(CheckStatus.Fail, c18.State);
+            Assert.Contains("rhi-repo", c18.FixHint!);
+            Assert.Contains("310.8.SF-v2", c18.FixHint!);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void Checkpoint18NaoApareceSemOArquivo()
+    {
+        var dir = Pasta();
+        try
+        {
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "re9.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D12,
+                HasNativeDlss = true,
+            };
+            Assert.DoesNotContain(CheckpointVerifier.Verify(perfil, null), c => c.Number == 18);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void OPlanoAvisaQuandoORuntimeDoKitNaoEhConhecido()
+    {
+        var kitDir = Path.Combine(Path.GetTempPath(), "dlss5-kitnr-" + Guid.NewGuid().ToString("N"));
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-jogonr-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(kitDir); Directory.CreateDirectory(dir);
+        try
+        {
+            var kit = new KitInventory { KitRoot = kitDir, NvngxDlssnr = Path.Combine(kitDir, "nvngx_dlssnr.dll") };
+            File.WriteAllText(kit.NvngxDlssnr!, "runtime desconhecido");
+
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "jogo.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D12,
+                RendererFolder = dir,
+                HasNativeDlss = true,
+            };
+            var plan = InstallPlanBuilder.Build(perfil, kit, new InstallOptions());
+
+            Assert.Contains(plan.Warnings, w => w.Contains("nvngx_dlssnr.dll do kit", StringComparison.Ordinal)
+                                                && w.Contains("rhi-repo", StringComparison.Ordinal));
+        }
+        finally { Directory.Delete(dir, true); Directory.Delete(kitDir, true); }
     }
 }
 

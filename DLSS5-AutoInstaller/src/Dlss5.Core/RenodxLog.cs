@@ -60,30 +60,9 @@ public sealed record RenodxStatus(
     public bool FechouSemJanela =>
         Encerrou && CriouDevice && !CriouSwapchain && SegundosAteDialogo is null && !Ativo;
 
-    /// <summary>
-    /// O estado que engana o log E o programa: o addon diz "ACTIVE — NR INJECTED", conta
-    /// milhares de quadros processados com sucesso, e a imagem não muda um fio.
-    ///
-    /// O RE9 mostrou isso com 7633 quadros. A explicação está no próprio painel do addon:
-    /// "Streamline: DLSS/DLSSD evaluations 0 | all evaluations 0". O jogo entrega DLSS pelo
-    /// STREAMLINE, e com EnableHooks=2 o addon deixa os módulos do Streamline intocados —
-    /// ele engancha só no NGX. Aí ele intercepta a avaliação, roda a rede e escreve o
-    /// resultado no buffer do NGX; só que quem monta a imagem que vai para a tela é o
-    /// Streamline, com o buffer DELE. O trabalho acontece de verdade e é jogado fora.
-    ///
-    /// Nesse quadro chamar o item de "OK" é mentir com log na mão: o usuário olha a tela,
-    /// não vê nada, e o programa insiste que está funcionando. Vira aviso, com a troca que
-    /// resolve — EnableHooks=1, que engancha também no Streamline.
-    /// </summary>
-    public bool AtivoMasForaDoStreamline => Ativo && Streamline && EnableHooks == 2;
 
     public string Resumo => AssinaturaRecusada
         ? "O NGX recusou a runtime (0xBAD00007): falta o override no registro ou falta reiniciar o PC."
-        : AtivoMasForaDoStreamline
-        ? $"O addon diz ATIVO ({Avaliacoes} avaliação(ões)), mas este jogo entrega o DLSS pelo " +
-          "STREAMLINE e os ganchos estão em EnableHooks=2 — só no NGX. O addon processa a imagem e " +
-          "escreve num buffer que o Streamline não usa para montar o quadro: o trabalho é feito e " +
-          "descartado. É por isso que o log diz que aplicou e a tela não muda nada."
         : FechouSemJanela
         ? "O jogo criou o device de vídeo, carregou os addons e SAIU sozinho, sem chegar a criar a " +
           "swapchain (a janela). Não houve travamento nem tela de erro — foi o jogo que se fechou."

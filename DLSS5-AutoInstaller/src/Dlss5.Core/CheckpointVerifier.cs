@@ -196,6 +196,39 @@ public static class CheckpointVerifier
             }
         }
 
+        // 18 — QUAL nvngx_dlssnr.dll está no jogo. Foi o que faltou no RE9: todos os outros
+        // itens OK, o addon dizendo ACTIVE, e o arquivo era um remendo do original de RTX 50
+        // rodando numa RTX 4070 Ti — processava, dizia OK e não desenhava nada. O nome e a
+        // versão não separam os builds; o hash separa.
+        {
+            string? textoDoLog = null;
+            try { if (File.Exists(profile.ReShadeLogPath)) textoDoLog = ReadShared(profile.ReShadeLogPath); }
+            catch { }
+            var serie = RuntimeNr.SerieRtxNoLog(textoDoLog);
+
+            var pastas = route is InstallRoute.B or InstallRoute.C
+                ? new[] { Path.Combine(exe, "host64") }
+                : new[] { exe };
+            foreach (var pasta in pastas)
+            {
+                var caminho = Path.Combine(pasta, RuntimeNr.Arquivo);
+                if (!File.Exists(caminho)) continue;   // a ausência já é acusada pelo item de arquivos
+
+                var build = RuntimeNr.Identificar(caminho);
+                var (falha, texto) = RuntimeNr.Avaliar(build, serie);
+                if (!falha && RuntimeNr.AddonMarcouComoDesconhecido(textoDoLog))
+                {
+                    // O arquivo é bom mas o log é de uma rodada com o arquivo antigo: o
+                    // usuário trocou e ainda não abriu o jogo. Não é falha, é "abra e veja".
+                    texto += " (O ReShade.log atual ainda é de uma rodada com outro runtime.)";
+                }
+                r.Add(new CheckResult(18, "Runtime do DLSS 5 (nvngx_dlssnr.dll) é o certo para a placa",
+                    falha ? CheckStatus.Fail : CheckStatus.Pass,
+                    texto,
+                    falha ? RuntimeNr.ComoTrocar : null));
+            }
+        }
+
         // 6 — arquitetura do ReShade instalado. O nome muda com a API: num jogo OpenGL
         // procurar por dxgi.dll acusaria falha mesmo com a instalação correta.
         if (profile.UsarReFramework)
@@ -541,10 +574,6 @@ public static class CheckpointVerifier
         if (renodx is not null)
         {
             var estado = renodx.AssinaturaRecusada ? CheckStatus.Fail
-                       // "Ativo" com o Streamline fora do gancho não é OK: é trabalho feito
-                       // e descartado, e foi esse OK que mandou o usuário procurar diferença
-                       // numa imagem que nunca ia mudar.
-                       : renodx.AtivoMasForaDoStreamline ? CheckStatus.Warning
                        : renodx.Ativo ? CheckStatus.Pass
                        : renodx.CaiuAntesDoDlss ? CheckStatus.Fail
                        : renodx.FechouSemJanela ? CheckStatus.Fail
@@ -572,7 +601,8 @@ public static class CheckpointVerifier
                     ? "Está funcionando. É DLAA: mesma resolução de render e de saída, então não " +
                       "há ganho de FPS e a diferença é de imagem. No caminho direto (D3D12 com DLSS " +
                       "nativo) a aba Início do ReShade fica VAZIA de propósito — quem trabalha é o " +
-                      "addon, na aba Complementos.  |  NÃO ESTÁ VENDO DIFERENÇA? Compare parado, não " +
+                      "addon, na aba Complementos.  |  NÃO ESTÁ VENDO DIFERENÇA? Primeiro olhe o item 18: " +
+                      "com o runtime errado para a placa o addon diz ACTIVE e não desenha nada. Depois compare parado, não " +
                       "jogando: numa cena com rosto, cabelo ou vegetação perto, aperte F5 (salva " +
                       "print), F6 (desliga o NR), F5 de novo, e abra os dois prints lado a lado com " +
                       "zoom. Em movimento e a olho nu a diferença passa batida." +
@@ -589,13 +619,6 @@ public static class CheckpointVerifier
                       "estilos — Default, Natural e Cinematic — e 3 presets. O Natural é o mais " +
                       "discreto dos três: para ENXERGAR a diferença, troque para Cinematic e suba a " +
                       "intensidade; depois volte para o que você preferir."
-                    : renodx.AtivoMasForaDoStreamline
-                        ? "Na barra abaixo, em \"Hooks do RenoDX\", troque para 1 (NGX + Streamline), clique em " +
-                          "Aplicar hooks e abra o jogo. Não precisa reinstalar nada. Confira no painel do addon " +
-                          "(Home → Complementos): a linha \"Streamline: DLSS/DLSSD evaluations\" tem que sair do " +
-                          "ZERO. Enquanto ela estiver em 0, o addon está trabalhando num buffer que o jogo não " +
-                          "mostra — por isso a imagem não muda por mais que o log diga ATIVO. Se com 1 o jogo cair " +
-                          "na abertura, volte para 2 pela mesma barra."
                     : renodx.AssinaturaRecusada
                         ? "Aplique o override no registro e reinicie o PC quando puder — o driver só lê essa chave na inicialização."
                         : renodx.CaiuAntesDoDlss

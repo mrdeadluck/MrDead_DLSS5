@@ -140,16 +140,15 @@ public sealed class GameProfile
 
     /// <summary>
     /// O jogo entrega o DLSS pelo Streamline da NVIDIA (sl.*.dll ao lado do exe), e não
-    /// por chamadas cruas de NGX. A diferença decide o EnableHooks do addon: em modo 2 os
-    /// módulos do Streamline ficam intocados, e num jogo desses o addon processa a imagem
-    /// e escreve num buffer que o Streamline não usa — trabalho feito e descartado, com o
-    /// log dizendo ATIVO e a tela sem mudar nada (foi o que aconteceu no RE9).
+    /// por chamadas cruas de NGX. Informativo: o RHI, que é a referência que funciona,
+    /// não mexe no EnableHooks por causa disso, e o RE9 provou que o modo 1 não muda o
+    /// resultado quando o runtime está errado. O que decide é o item 18 da verificação.
     /// </summary>
     public bool UsaStreamline => NativeDlss?.Clues
         .Any(c => c.Texto.StartsWith("sl.", StringComparison.OrdinalIgnoreCase)) == true;
 
-    /// <summary>EnableHooks que este jogo pede na instalação.</summary>
-    public int HooksDoRenodx => UsaStreamline ? 1 : RenodxIni.Padrao;
+    /// <summary>EnableHooks gravado na instalação: o padrão do addon, como o RHI faz.</summary>
+    public int HooksDoRenodx => RenodxIni.Padrao;
 
     /// <summary>
     /// O Feeder entra sempre que o RenoDX não consegue pegar o DLSS do próprio jogo —

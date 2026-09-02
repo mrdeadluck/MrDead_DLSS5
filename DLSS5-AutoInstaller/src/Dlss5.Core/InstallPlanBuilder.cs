@@ -67,6 +67,16 @@ public static class InstallPlanBuilder
         foreach (var p in kit.Problems)
             plan.Blockers.Add(p);
 
+        // O runtime do kit, pelo hash. É aviso e não bloqueio porque o original serve em
+        // RTX 50 — mas é o aviso que teria poupado o RE9 de dias de teste.
+        if (kit.NvngxDlssnr is not null)
+        {
+            var build = RuntimeNr.Identificar(kit.NvngxDlssnr);
+            var (falha, texto) = RuntimeNr.Avaliar(build, serieRtx: null);
+            if (falha)
+                plan.Warnings.Add($"{RuntimeNr.Arquivo} do kit: {texto} {RuntimeNr.ComoTrocar}");
+        }
+
         var exe = profile.ExeFolder;
         var host64 = Path.Combine(exe, "host64");
         var shadersTarget = Path.Combine(exe, "reshade-shaders");
@@ -374,17 +384,6 @@ public static class InstallPlanBuilder
                 "DirectX 8 compatible display adapter\"). Se mesmo assim aparecer essa mensagem, use o " +
                 "botão \"Painel do dgVoodoo\" na tela de verificação e troque VideoCard para " +
                 "geforce_ti_4800 ou ati_radeon_8500 — não precisa reinstalar.");
-        }
-
-        if (profile.UsaStreamline)
-        {
-            plan.Warnings.Add(
-                "Este jogo entrega o DLSS pelo Streamline da NVIDIA (sl.*.dll na pasta). O ini vai " +
-                $"com {RenodxIni.Chave}={profile.HooksDoRenodx} — ganchos no NGX E no Streamline. No modo " +
-                "padrão (2) o addon processa a imagem e escreve num buffer que o Streamline não usa " +
-                "para montar o quadro: o log diz ATIVO, conta milhares de quadros, e a tela não muda " +
-                "nada. Se com este modo o jogo cair na abertura, troque para 2 na tela de verificação " +
-                "(\"Hooks do RenoDX\") — não precisa reinstalar.");
         }
 
         if (MotorFox.EhFoxEngine(profile.RealExePath))
