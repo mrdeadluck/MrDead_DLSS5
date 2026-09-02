@@ -1,0 +1,63 @@
+name: Trocar o runtime do kit (nvngx_dlssnr.dll)
+
+# O nvngx_dlssnr.dll do kit era um remendo do original de RTX 50: dizia "ACTIVE" e não
+# desenhava nada em RTX 40/30/20. O build certo é o do ShortFuse (310.8.SF-v2), que o RHI
+# instala. Este job baixa esse build, confere o hash e o commita no LFS — porque o objeto
+# do LFS não sobe a partir do ambiente de desenvolvimento (lfs.github.com bloqueado).
+# Roda só pelo botão "Run workflow". Consome ~166 MB da cota de armazenamento do LFS.
+on:
+  workflow_dispatch:
+    inputs:
+      versao:
+        description: "Versão do rhi-repo (dlssnr-<versão>)"
+        default: "310.8.SF-v2"
+        required: true
+      sha256:
+        description: "SHA-256 esperado do nvngx_dlssnr.dll"
+        default: "6eb209e764f39872625debd6abaf45e2bb6322f6f270f781f70c059ae30b3927"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  trocar:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout (só o ponteiro do LFS; o conteúdo antigo não interessa)
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - name: Baixar, conferir e trocar
+        shell: pwsh
+        run: |
+          $versao = "${{ github.event.inputs.versao }}"
+          $esperado = "${{ github.event.inputs.sha256 }}".ToLowerInvariant()
+          $url = "https://github.com/RankFTW/rhi-repo/releases/download/dlssnr-$versao/nvngx_dlssnr_$versao.zip"
+          Write-Host "Baixando $url"
+          Invoke-WebRequest -Uri $url -OutFile runtime.zip
+          Expand-Archive runtime.zip -DestinationPath runtime -Force
+          $dll = Get-ChildItem runtime -Recurse -Filter nvngx_dlssnr.dll | Select-Object -First 1
+          if (-not $dll) { throw "O zip não traz nvngx_dlssnr.dll" }
+          $hash = (Get-FileHash $dll.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          Write-Host "SHA-256: $hash ($($dll.Length) bytes)"
+          if ($hash -ne $esperado) { throw "Hash diferente do esperado ($esperado). Nada foi trocado." }
+          Copy-Item $dll.FullName "DLSS 5 Files\nvngx_dlssnr.dll" -Force
+          Remove-Item runtime.zip -Force
+          Remove-Item runtime -Recurse -Force
+
+      - name: Commitar no LFS
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git lfs install --local
+          git add "DLSS 5 Files/nvngx_dlssnr.dll"
+          if (-not (git diff --cached --quiet)) {
+            git commit -m "Kit: nvngx_dlssnr.dll passa a ser o ${{ github.event.inputs.versao }} (build do ShortFuse, RTX 20-50)`n`nBaixado de RankFTW/rhi-repo e conferido pelo SHA-256 ${{ github.event.inputs.sha256 }}.`nO arquivo anterior era um remendo do original de RTX 50: dizia ACTIVE e nao desenhava nada."
+            git push origin HEAD:${{ github.ref_name }}
+            Write-Host "Trocado e commitado."
+          } else {
+            Write-Host "O kit já tinha este arquivo; nada a commitar."
+          }
