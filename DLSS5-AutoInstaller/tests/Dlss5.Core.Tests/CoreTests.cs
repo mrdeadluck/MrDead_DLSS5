@@ -4272,6 +4272,27 @@ public class DeteccaoEscolheONomeDoReShadeTests
     }
 
     [Fact]
+    public void NaPastaDoPhantomPainOJogoGanhaDoMetalGearOnline()
+    {
+        // A pasta do MGS V tem mgsvtpp.exe (o jogo) e mgsvmgo.exe (Metal Gear Online),
+        // e o segundo é maior. O tamanho escolhia o MGO; a instalação ia para o jogo
+        // errado e o plano nem pedia o patch da Fox Engine.
+        var dir = PastaComExe("mgsvtpp.exe");
+        try
+        {
+            var mgo = ExeX64("D3D11CreateDevice").Concat(new byte[512 * 1024]).ToArray();
+            File.WriteAllBytes(Path.Combine(dir, "mgsvmgo.exe"), mgo);
+
+            var r = GameDetector.Detect(dir);
+
+            Assert.Equal("mgsvtpp.exe", Path.GetFileName(r.Profile.RealExePath));
+            Assert.True(MotorFox.EhFoxEngine(r.Profile.RealExePath));
+            Assert.Contains(r.Notes, n => n.Contains(MotorFox.NomeDoPatcher, StringComparison.Ordinal));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
     public void OPhantomPainComOBackupDoPatchSaiLiberado()
     {
         var dir = PastaComExe("mgsvtpp.exe");

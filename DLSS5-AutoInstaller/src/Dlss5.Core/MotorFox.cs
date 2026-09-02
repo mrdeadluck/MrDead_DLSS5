@@ -23,6 +23,7 @@ public static class MotorFox
     private static readonly string[] Executaveis =
     {
         "mgsvtpp", "mgsvgz", "MgsGroundZeroes",
+        "mgsvmgo",   // Metal Gear Online: mesma engine, mesma checagem
     };
 
     /// <summary>Sufixo do backup que o patcher cria ao lado do exe.</summary>

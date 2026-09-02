@@ -16,6 +16,15 @@ public sealed class DetectionResult
 /// </summary>
 public static class GameDetector
 {
+    /// <summary>
+    /// Exes conhecidos que dividem a pasta com o jogo e NÃO são o jogo: modos online,
+    /// editores, ferramentas. Sem esta lista o tamanho decide, e ele mente.
+    /// </summary>
+    private static readonly string[] SecondaryExeNames =
+    {
+        "mgsvmgo",   // Metal Gear Online, ao lado do mgsvtpp.exe
+    };
+
     private static readonly string[] LauncherNameHints =
     {
         "launcher", "play", "setup", "unins", "install", "crash", "report",
@@ -144,6 +153,12 @@ public static class GameDetector
                 score -= 140;
             if (HelperExeNames.Any(h => name.Equals(h, StringComparison.OrdinalIgnoreCase)))
                 score -= 200;
+            // Executável secundário que mora na MESMA pasta do jogo e é maior ou igual a ele:
+            // o mgsvmgo.exe (Metal Gear Online) ao lado do mgsvtpp.exe. Escolhido, ele levava
+            // a instalação para o jogo errado sem ninguém perceber — o plano nem pedia o patch
+            // da Fox Engine, porque o nome não era o do Phantom Pain.
+            if (SecondaryExeNames.Any(h => name.Equals(h, StringComparison.OrdinalIgnoreCase)))
+                score -= 150;
 
             list.Add(new ExeCandidate(exe, arch, size, score));
         }
