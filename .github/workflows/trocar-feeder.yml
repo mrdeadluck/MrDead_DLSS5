@@ -122,7 +122,11 @@ jobs:
             $hash = (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             Write-Host "$($f.Name): $($f.Length) bytes, FileVersion=$ver, sha256=$hash"
             if ($ver -and -not $ver.StartsWith($numerica)) { throw "$($f.Name) diz FileVersion $ver, e a tag pedida é $tag" }
-            $texto = [Text.Encoding]::ASCII.GetString($bytes)
+          }
+          # Os dois add-ons carregam FEED_VERSION em texto; o host não (só o número do protocolo
+          # IPC), então dele basta o PE e a release de origem.
+          foreach ($f in @($addon64, $addon32)) {
+            $texto = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($f.FullName))
             if ($texto -notmatch [regex]::Escape($numerica)) { throw "$($f.Name) não carrega a string de versão $numerica" }
           }
           $fxTexto = Get-Content $fx.FullName -Raw
