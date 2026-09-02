@@ -534,8 +534,22 @@ public static class CheckpointVerifier
                 ok ? null : "Instale de novo (Atualizar): o ini é regravado com o BasePath certo."));
         }
 
+        // O Feeder travou depois de o RenoDX dizer "ativo"? O item 14 precisa saber, senão
+        // ele vende como OK a única avaliação da janela inicial de 720p.
+        FeedStatus? feedStatus = null;
+        if (profile.NeedsFeeder)
+        {
+            try
+            {
+                var feedLogPath = Path.Combine(exe, "dlss5-feed.log");
+                if (File.Exists(feedLogPath)) feedStatus = FeedLog.Ler(ReadShared(feedLogPath));
+            }
+            catch { }
+        }
+
         r.AddRange(VerifyReShadeLog(exe, profile.GameFolder, reinicioPendente, profile.ReShadeLogPath,
-            profile.ReShadeHookName, profile.UsarReFramework, profile.RealExePath, profile.PastaDoReShade, profile.Api));
+            profile.ReShadeHookName, profile.UsarReFramework, profile.RealExePath, profile.PastaDoReShade, profile.Api,
+            feedStatus));
 
         // 14/15/16 — dependem do jogo rodando
         r.AddRange(VerifyFeedLogs(exe, route, profile.NeedsFeeder));
@@ -579,7 +593,8 @@ public static class CheckpointVerifier
     private static IEnumerable<CheckResult> VerifyReShadeLog(
         string exeFolder, string? gameFolder = null, bool reinicioPendente = false,
         string? logPath = null, string nomeDoReShade = "dxgi.dll", bool hospedado = false,
-        string? exePath = null, string? pastaDoReShade = null, GraphicsApi api = GraphicsApi.Unknown)
+        string? exePath = null, string? pastaDoReShade = null, GraphicsApi api = GraphicsApi.Unknown,
+        FeedStatus? feed = null)
     {
         // Hospedado no REFramework, o ReShade grava o log ao lado da própria DLL.
         var log = logPath ?? Path.Combine(exeFolder, "ReShade.log");
@@ -666,7 +681,14 @@ public static class CheckpointVerifier
             // reiniciar, o log registra "ativo" e a imagem não muda NADA — o driver só
             // carrega a chave no boot, e o que roda no lugar é um caminho vazio. Um
             // "OK" aqui nesse estado é mentira; vira aviso até o reinício acontecer.
-            if (estado == CheckStatus.Pass && reinicioPendente)
+            if (estado == CheckStatus.Pass && feed is { Travou: true })
+            {
+                yield return new CheckResult(14, "DLSS 5 aplicado na imagem", CheckStatus.Warning,
+                    renodx.Resumo + $" Porém o Feeder travou depois disso{(feed.CaiuNaTrocaDeResolucao ? $" — funcionou a {feed.ResolucaoQueFuncionou} e caiu ao reconstruir em {feed.ResolucaoQueFalhou}" : "")}: " +
+                    "o \"ativo\" é da janela inicial, não do jogo em si.",
+                    "Resolva o item 15 primeiro (Feeder).");
+            }
+            else if (estado == CheckStatus.Pass && reinicioPendente)
             {
                 yield return new CheckResult(14, "DLSS 5 aplicado na imagem", CheckStatus.Warning,
                     renodx.Resumo + " Porém o PC não foi reiniciado desde o override: esse \"ativo\" " +
@@ -843,15 +865,38 @@ public static class CheckpointVerifier
         string text;
         try { text = ReadShared(feedLog); } catch { text = ""; }
 
-        bool ready = text.Contains("feature ready", StringComparison.OrdinalIgnoreCase)
-                     || text.Contains("DLAA", StringComparison.OrdinalIgnoreCase);
-        bool delivered = text.Contains("delivered", StringComparison.OrdinalIgnoreCase);
-        yield return new CheckResult(15, "Feeder entregando frames",
-            ready && delivered ? CheckStatus.Pass : CheckStatus.Warning,
-            ready && delivered
-                ? "Log mostra feature pronta e frames entregues."
-                : "Log existe mas ainda sem 'feature ready ... DLAA' + 'frame N delivered'.",
-            ready && delivered ? null : "Veja o diagnóstico abaixo.");
+        var feed = FeedLog.Ler(text);
+        if (feed is { Travou: true })
+        {
+            // O NFS: "feature ready" a 1280x720 na janela inicial, e o CreateFeature
+            // estourando ao reconstruir em 3840x2160. Ler só o começo dizia OK.
+            var onde = feed.CaiuNaTrocaDeResolucao
+                ? $"O Feeder funcionou a {feed.ResolucaoQueFuncionou} (a janela inicial do jogo) e TRAVOU ao reconstruir em " +
+                  $"{feed.ResolucaoQueFalhou} — é aí que o jogo congela."
+                : $"O Feeder travou{(feed.ResolucaoQueFalhou is null ? "" : $" ao construir em {feed.ResolucaoQueFalhou}")}.";
+            var detalhe = onde
+                + (feed.UltimaAcao is null ? "" : $" Última ação: {feed.UltimaAcao}.")
+                + (feed.Motivo is null ? "" : $" Log: \"{feed.Motivo}\".");
+            yield return new CheckResult(15, "Feeder entregando frames", CheckStatus.Fail, detalhe,
+                "Na ordem: 1) na barra abaixo, \"Resolução de trabalho do Feeder\" → 67% e Aplicar — é o alívio de " +
+                "VRAM/custo que o próprio Feeder oferece em D3D11 (as texturas de trabalho ficam menores; a saída " +
+                "continua na resolução do jogo). 2) Se ainda travar, ponha o jogo em 1920x1080 em janela sem borda " +
+                "só para testar — em RTX 40 o 4K é o pior caso de VRAM, e tela cheia exclusiva recria a swapchain " +
+                "toda hora. 3) \"Testar sem o RenoDX\": se o jogo parar de travar, a queda está na criação do Neural " +
+                "Rendering nessa resolução, não no Feeder.");
+        }
+        else
+        {
+            bool ready = feed?.FeaturePronta == true
+                         || text.Contains("DLAA", StringComparison.OrdinalIgnoreCase);
+            bool delivered = (feed?.FramesEntregues ?? 0) > 0;
+            yield return new CheckResult(15, "Feeder entregando frames",
+                ready && delivered ? CheckStatus.Pass : CheckStatus.Warning,
+                ready && delivered
+                    ? $"Log mostra feature pronta{(feed?.ResolucaoQueFuncionou is null ? "" : $" a {feed.ResolucaoQueFuncionou}")} e {feed?.FramesEntregues} frame(s) entregue(s)."
+                    : "Log existe mas ainda sem 'feature ready ... DLAA' + 'frame N delivered'.",
+                ready && delivered ? null : "Veja o diagnóstico abaixo.");
+        }
 
         if (route is InstallRoute.B or InstallRoute.C)
         {

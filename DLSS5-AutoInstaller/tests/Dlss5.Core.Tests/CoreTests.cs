@@ -3843,6 +3843,105 @@ public class Titanfall2RenderizadorTests
     }
 }
 
+public class FeedLogTests
+{
+    // dlss5-feed.log real do NFS (2015): funcionou a 1280x720 e caiu ao reconstruir em 4K.
+    private const string LogNfs =
+        "15:38:28.311  dlss5-feed 0.5.0 (built Aug 30 2026 12:38:05) attached.\n" +
+        "15:38:34.443  [feed] building: 1280x720 backbuffer R8G8B8A8_UNORM (mv R16G16_FLOAT, depth R32_FLOAT, depth reversed=1)\n" +
+        "15:38:34.523  [feed] feature ready: 1280x720 DLAA, flags=74 (SDR MVLowRes DepthInverted AutoExposure), color R8G8B8A8_UNORM -> output R8G8B8A8_UNORM\n" +
+        "15:38:34.532  [feed] frame 1 delivered (1280x720, reset=1)\n" +
+        "15:38:35.083  [feed] frame 2 delivered (1280x720, reset=0)\n" +
+        "15:38:39.644  [feed] building: 3840x2160 backbuffer R8G8B8A8_UNORM (mv R16G16_FLOAT, depth R32_FLOAT, depth reversed=1)\n" +
+        "15:38:39.703  [feed] CreateFeature raised exception 0xC0000005 (caught; nothing was submitted)\n" +
+        "15:38:39.704  stopped: creating the DLSS feature crashed (the DLSS 5 add-on may be incompatible). The game renders normally. See dlss5-feed.log for the detail.\n" +
+        "15:38:39.704  [feed] failure: resource build\n" +
+        "15:38:39.705  ### CRASH RECORDED ###  exception 0xE06D7363 at 00007FFA6DBB3CFA in C:\\WINDOWS\\System32\\KERNELBASE.dll; this add-on was last doing: creating the DLSS feature\n";
+
+    [Fact]
+    public void LeOFimDoLogENaoSoOComeco()
+    {
+        var s = FeedLog.Ler(LogNfs)!;
+        Assert.True(s.FeaturePronta);
+        Assert.Equal(2, s.FramesEntregues);
+        Assert.True(s.Travou);
+        Assert.Equal("1280x720", s.ResolucaoQueFuncionou);
+        Assert.Equal("3840x2160", s.ResolucaoQueFalhou);
+        Assert.True(s.CaiuNaTrocaDeResolucao);
+        Assert.Equal("creating the DLSS feature", s.UltimaAcao);
+        Assert.StartsWith("stopped:", s.Motivo);
+    }
+
+    [Fact]
+    public void LogSaudavelNaoTravou()
+    {
+        var s = FeedLog.Ler("[feed] building: 2560x1440 backbuffer\n[feed] feature ready: 2560x1440 DLAA\n[feed] frame 1 delivered\n[feed] frame 300 delivered\n")!;
+        Assert.False(s.Travou);
+        Assert.False(s.CaiuNaTrocaDeResolucao);
+        Assert.Equal(300, s.FramesEntregues);
+        Assert.Null(FeedLog.Ler(""));
+    }
+
+    [Fact]
+    public void Checkpoint15AcusaAQuedaEO14NaoVendeAJanelaInicialComoOk()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-feedcp-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "dlss5-feed.log"), LogNfs);
+            File.WriteAllText(Path.Combine(dir, "renodx-dlss5.addon64"), "x");
+            File.WriteAllText(Path.Combine(dir, "ReShade.log"),
+                "INFO | Initializing crosire's ReShade version '6.8.0.2155' (64-bit) loaded from 'dxgi.dll' into 'NFS16.exe' ...\n" +
+                "INFO | Registered add-on \"DLSS 5 Neural Rendering\" v0.2026.828.517\n" +
+                "INFO | Redirecting IDXGIFactory::CreateSwapChain(...) ...\n" +
+                "INFO | [DLSS 5 Neural Rendering] DLSS5 Generic: inline feature 18 evaluation succeeded (count=1, NR input 1280x720 (guides 1280x720), output 1280x720 [native])\n" +
+                new string(' ', 2000));
+
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "NFS16.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D11,
+            };
+            var checagens = CheckpointVerifier.Verify(perfil, null);
+
+            var c15 = checagens.First(c => c.Number == 15);
+            Assert.Equal(CheckStatus.Fail, c15.State);
+            Assert.Contains("1280x720", c15.Detail);
+            Assert.Contains("3840x2160", c15.Detail);
+            Assert.Contains("Resolução de trabalho do Feeder", c15.FixHint!);
+            Assert.Contains("Testar sem o RenoDX", c15.FixHint!);
+
+            var c14 = checagens.First(c => c.Number == 14);
+            Assert.Equal(CheckStatus.Warning, c14.State);
+            Assert.Contains("janela inicial", c14.Detail);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void FeedCfgTrocaSoAChavePedidaEPreservaOResto()
+    {
+        var cfg = "# config\r\nenabled=1\r\nmode=2\r\nwork_resolution=100\r\nhdr=-1\r\n";
+        Assert.Equal(100, FeedCfg.Ler(cfg));
+        var novo = FeedCfg.Gravar(cfg, 67);
+        Assert.Equal(67, FeedCfg.Ler(novo));
+        Assert.Contains("enabled=1\r\n", novo);
+        Assert.Contains("hdr=-1\r\n", novo);
+        Assert.Contains("# config\r\n", novo);
+
+        // Sem a chave: acrescenta. Vazio: cria.
+        Assert.Equal(75, FeedCfg.Ler(FeedCfg.Gravar("enabled=1\n", 75)));
+        Assert.Equal(50, FeedCfg.Ler(FeedCfg.Gravar(null, 50)));
+        Assert.Null(FeedCfg.Ler("enabled=1"));
+        Assert.Equal(ResolucaoPadraoEsperado(), FeedCfg.ResolucaoPadrao);
+    }
+
+    private static int ResolucaoPadraoEsperado() => 100;
+}
+
 public class SemLogNaFrostbiteTests
 {
     [Fact]

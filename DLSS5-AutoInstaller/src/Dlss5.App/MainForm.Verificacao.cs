@@ -28,6 +28,11 @@ public sealed partial class MainForm
     // Caminho direto: a chave EnableHooks do RenoDX, trocada no ReShade.ini sem reinstalar.
     private readonly FlowLayoutPanel _barraHooks = Ui.Fila();
     private readonly ComboBox _cboHooks = new();
+
+    // Feeder em D3D11: work_resolution do dlss5-feed.cfg (50–100% das texturas de trabalho),
+    // o alívio de VRAM que o próprio Feeder oferece. O NFS em 4K travou na reconstrução.
+    private readonly FlowLayoutPanel _barraFeed = Ui.Fila();
+    private readonly ComboBox _cboFeedRes = new();
     private EstadoIsolamento _isolamento = EstadoIsolamento.Tudo;
     private bool? _abriuSemDgVoodoo;
     private bool? _abriuSemReShade;
@@ -174,13 +179,25 @@ public sealed partial class MainForm
         _barraHooks.Controls.Add(Botao("Aplicar hooks", (_, _) => TrocarHooksDoRenodx()));
         _barraHooks.Visible = false;
 
-        t.RowCount = 5;
+        _barraFeed.Controls.Add(new Label { Text = "Resolução de trabalho do Feeder:", AutoSize = true, Margin = new Padding(0, 10, 8, 0) });
+        _cboFeedRes.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cboFeedRes.Width = 380;
+        _cboFeedRes.Margin = new Padding(0, 4, 8, 4);
+        foreach (var v in FeedCfg.ResolucoesDeTrabalho) _cboFeedRes.Items.Add(FeedCfg.Descricao(v));
+        _cboFeedRes.SelectedIndex = 0;
+        _barraFeed.Controls.Add(_cboFeedRes);
+        _barraFeed.Controls.Add(Botao("Aplicar", (_, _) => TrocarResolucaoDoFeed()));
+        _barraFeed.Visible = false;
+
+        t.RowCount = 6;
+        t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         t.Controls.Add(_lblResumoVerificacao, 0, 0);
         t.Controls.Add(split, 0, 1);
         t.Controls.Add(bar, 0, 2);
         t.Controls.Add(_barraDgVoodoo, 0, 3);
         t.Controls.Add(_barraHooks, 0, 4);
+        t.Controls.Add(_barraFeed, 0, 5);
         _pVerificacao.Controls.Add(t);
     }
 
@@ -234,6 +251,9 @@ public sealed partial class MainForm
         _barraDgVoodoo.Visible = _profile.NeedsDgVoodoo;
         bool direto = _profile.UsesRenodxDirectPath;
         _barraHooks.Visible = direto;
+        // work_resolution é só D3D11 (o Feeder ignora noutras APIs): a barra segue a regra.
+        _barraFeed.Visible = !direto && _profile.Api == GraphicsApi.D3D11;
+        if (_barraFeed.Visible) SincronizarResolucaoDoFeed();
         if (direto) SincronizarHooksDoRenodx();
         AtualizarBotaoRenodx();
 
@@ -626,6 +646,45 @@ public sealed partial class MainForm
             Dialogos.Informar(this, "Hooks do RenoDX", $"EnableHooks = {valor} gravado", RenodxIni.Leitura(valor));
         }
         catch (Exception ex) { Erro("Não consegui gravar o ReShade.ini", ex); }
+    }
+
+    private void SincronizarResolucaoDoFeed()
+    {
+        if (_profile is null) return;
+        var cfg = Path.Combine(_profile.ExeFolder, FeedCfg.Arquivo);
+        int valor = FeedCfg.ResolucaoPadrao;
+        try { if (File.Exists(cfg)) valor = FeedCfg.Ler(File.ReadAllText(cfg)) ?? FeedCfg.ResolucaoPadrao; }
+        catch { /* sem leitura, fica o padrão */ }
+        int i = FeedCfg.ResolucoesDeTrabalho.ToList().IndexOf(valor);
+        _cboFeedRes.SelectedIndex = i < 0 ? 0 : i;
+    }
+
+    /// <summary>
+    /// Regrava só work_resolution no dlss5-feed.cfg. O Feeder relê o arquivo com o jogo
+    /// aberto, mas a troca vale de verdade na próxima construção — melhor com o jogo fechado.
+    /// </summary>
+    private void TrocarResolucaoDoFeed()
+    {
+        if (_profile is null) { Aviso("Faça a detecção primeiro."); return; }
+        var rodando = Preflight.JogoRodando(_profile.RealExePath);
+        if (rodando is not null) { Aviso("O jogo está aberto", $"Feche o jogo ({rodando}.exe) antes: a troca vale na próxima construção do Feeder."); return; }
+        var cfg = Path.Combine(_profile.ExeFolder, FeedCfg.Arquivo);
+        int valor = FeedCfg.ResolucoesDeTrabalho[Math.Max(0, _cboFeedRes.SelectedIndex)];
+        try
+        {
+            string? atual = null;
+            if (File.Exists(cfg)) atual = File.ReadAllText(cfg);
+            File.WriteAllText(cfg, FeedCfg.Gravar(atual, valor));
+            _diario.Info($"{FeedCfg.Arquivo}: {FeedCfg.ChaveResolucao}={valor}");
+            Status($"{FeedCfg.Arquivo}: {FeedCfg.ChaveResolucao}={valor}. Abra o jogo e verifique de novo.");
+            Dialogos.Informar(this, "Resolução de trabalho do Feeder", $"{FeedCfg.ChaveResolucao} = {valor} gravado",
+                valor == FeedCfg.ResolucaoPadrao
+                    ? "Texturas de trabalho na resolução cheia do jogo (padrão)."
+                    : $"As texturas de trabalho do Feeder (cor, profundidade, motion vectors) ficam em {valor}% dos eixos do " +
+                      "backbuffer; a saída continua na resolução do jogo. Menos VRAM e menos custo na criação da " +
+                      "feature — é o alívio para jogo em 4K que trava ao reconstruir depois da janela inicial.");
+        }
+        catch (Exception ex) { Erro($"Não consegui gravar o {FeedCfg.Arquivo}", ex); }
     }
 
     private string? ConfDoDgVoodoo()
