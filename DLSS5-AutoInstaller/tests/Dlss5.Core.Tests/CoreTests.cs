@@ -3210,6 +3210,9 @@ public class Re9AtivoMasSemDiferencaTests
             Assert.Equal(CheckStatus.Pass, c14.State);
             Assert.Contains("F6", c14.FixHint!);
             Assert.Contains("GERAÇÃO DE QUADROS ESTÁ LIGADA", c14.FixHint!);
+            // Os três estilos pelo nome: o RE9 estava no Natural, o mais discreto deles.
+            Assert.Contains("Cinematic", c14.FixHint!);
+            Assert.Contains("Natural", c14.FixHint!);
         }
         finally { Directory.Delete(dir, true); }
     }

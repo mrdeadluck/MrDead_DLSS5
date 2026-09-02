@@ -580,7 +580,11 @@ public static class CheckpointVerifier
                           : "") +
                       "  |  Também desligue, só para comparar, o granulado de filme (film grain), o " +
                       "desfoque de movimento e a aberração cromática: eles entram DEPOIS do DLSS 5 e " +
-                      "cobrem justamente o detalhe que ele acrescenta."
+                      "cobrem justamente o detalhe que ele acrescenta." +
+                      "  |  No painel do addon (aba Complementos → DLSS 5 Neural Rendering) existem 3 " +
+                      "estilos — Default, Natural e Cinematic — e 3 presets. O Natural é o mais " +
+                      "discreto dos três: para ENXERGAR a diferença, troque para Cinematic e suba a " +
+                      "intensidade; depois volte para o que você preferir."
                     : renodx.AssinaturaRecusada
                         ? "Aplique o override no registro e reinicie o PC quando puder — o driver só lê essa chave na inicialização."
                         : renodx.CaiuAntesDoDlss
@@ -594,7 +598,10 @@ public static class CheckpointVerifier
                               "jogo nesta máquina (integridade dos arquivos, driver). OBS.: jogo com proteção " +
                               "anti-adulteração (Denuvo/RE Engine, como o RE9) recusa a injeção direta do ReShade — " +
                               "renomear para dinput8.dll não muda isso; o caminho que funciona é carregar por dentro do " +
-                              "REFramework ou do Special K, fora do app."
+                              "REFramework ou do Special K, fora do app. Em jogo D3D12 ainda existe uma saída que " +
+                              "DISPENSA o ReShade inteiro: o OptiScaler com suporte a DLSSNR " +
+                              "(github.com/Dagherbou/OptiScaler_DLSSNR) — sem ReShade não há DLL para a proteção " +
+                              "recusar, e o desempenho é maior. Só serve em D3D12."
                         : renodx.FechouSemJanela
                             // MGS V Ground Zeroes: device criado, addons registrados, 27
                             // contextos adiados e saída limpa sem swapchain. Não é travamento
