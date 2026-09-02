@@ -143,11 +143,19 @@ public static class InstallPlanBuilder
                 : "Gerar ReShadePreset.ini (sem efeitos: com DLSS nativo em D3D12 o RenoDX se pendura na chamada do próprio jogo)",
             null, Path.Combine(exe, "ReShadePreset.ini")));
 
-        // Pasta de shaders.
-        if (kit.ShadersDir is not null)
+        // Pasta de shaders — só no caminho do Feeder. No direto nenhum efeito participa
+        // (o preset sai vazio), e cada .fx da pasta ainda seria compilado e alocado no
+        // device do jogo toda vez que o runtime do ReShade sobe. No RE9 a tela de erro do
+        // jogo vinha 1 a 3 s depois desse ponto, com ou sem o RenoDX; uma instalação
+        // manual do addon não leva shader nenhum. A pasta fica de fora.
+        if (kit.ShadersDir is not null && profile.NeedsFeeder)
             plan.Actions.Add(new PlanAction(PlanActionKind.CopyFile,
                 $"Copiar pasta reshade-shaders → {Rel(profile, shadersTarget)}",
                 kit.ShadersDir, shadersTarget));
+        else if (!profile.NeedsFeeder)
+            plan.Warnings.Add("Caminho direto: a pasta reshade-shaders NÃO é instalada. Nenhum efeito do " +
+                "ReShade participa (o RenoDX trabalha no contrato NGX do próprio jogo), e cada shader da " +
+                "pasta seria compilado e alocado no device do jogo à toa a cada vez que o runtime sobe.");
 
         if (route == InstallRoute.A)
         {
@@ -164,13 +172,24 @@ public static class InstallPlanBuilder
                 // outra). Nem quando o arquivo falta o kit põe o dele: faltar significa que
                 // uma desinstalação antiga apagou o do jogo, e o conserto é a verificação de
                 // integridade da Steam, não um transplante. O Feeder usa o do jogo.
-                if (!File.Exists(Path.Combine(exe, "nvngx_dlss.dll")))
+                var dllNaPasta = Path.Combine(exe, "nvngx_dlss.dll");
+                if (!File.Exists(dllNaPasta))
                     plan.Warnings.Add(
                         "O jogo tem DLSS próprio mas o nvngx_dlss.dll dele NÃO está na pasta — " +
                         "uma desinstalação antiga apagou. O kit NÃO põe o dele no lugar: a versão " +
                         "do kit não casa com o jogo e faz o jogo travar na abertura. Antes de jogar: " +
                         "Steam → clique direito no jogo → Propriedades → Arquivos instalados → " +
                         "Verificar integridade dos arquivos do jogo.");
+                else if (TransplanteDlss.EhDoKit(dllNaPasta, kit.NvngxDlss))
+                    // Pior que faltar: o arquivo presente é o DO KIT, transplantado por
+                    // instalação antiga. Instalar por cima não conserta nada — motor que
+                    // carrega o DLL na inicialização continua travando antes da janela.
+                    plan.Warnings.Add(
+                        "O nvngx_dlss.dll desta pasta é o DO KIT (byte a byte igual): uma instalação " +
+                        "antiga o pôs no lugar do DLL do jogo, e é isso que quebra o menu de DLSS e " +
+                        "faz motor que carrega a DLL na inicialização travar antes de abrir a janela. " +
+                        "Antes de jogar: use Desinstalar (ou Remover vestígios) — eles removem este " +
+                        "arquivo — e depois Steam → Verificar integridade para repor o original do jogo.");
             }
             else
             {
@@ -193,7 +212,46 @@ public static class InstallPlanBuilder
         {
             var renderer = profile.RendererFolder ?? exe;
             var wrapperSrc = profile.Api == GraphicsApi.D3D8 ? kit.DgVoodooD3D8X86 : kit.DgVoodooD3D9X86;
-            Copy(wrapperSrc, renderer, profile.DgVoodooWrapperName);
+
+            // O dgVoodoo só funciona com ESTE nome de arquivo — e ele pode já estar ocupado
+            // por outro wrapper que o usuário pôs ali de propósito. Foi o Dead Space 2: o
+            // jogo não abria em CPU com mais de 10 núcleos, o DxWrapper (d3d9.dll +
+            // dxwrapper.dll) resolvia, e a instalação copiou o dgVoodoo por cima em
+            // silêncio — o conserto sumiu e o jogo voltou a não abrir. Com o DxWrapper os
+            // dois convivem encadeados (ver DxWrapperChain); com um wrapper desconhecido,
+            // sobrescrever é apostar com o jogo do usuário, e o plano recusa.
+            var wrapper = profile.DgVoodooWrapperName;
+            switch (OcupanteDe(renderer, wrapper))
+            {
+                case Ocupante.Outro:
+                    plan.Blockers.Add(
+                        $"Já existe um {wrapper} nesta pasta que não é o dgVoodoo — outro wrapper, ou um " +
+                        "arquivo que veio com o jogo. O dgVoodoo precisa exatamente desse nome, e instalar " +
+                        "por cima substitui o que o jogo está usando hoje. Descubra de onde ele veio antes: " +
+                        "se for um conserto que você pôs ali, os dois não convivem; se for sobra de outra " +
+                        "ferramenta, remova-o e instale de novo.");
+                    return plan;
+
+                case Ocupante.DxWrapper:
+                    var encadeado = Path.Combine(renderer, profile.DgVoodooChainedName);
+                    var ini = Path.Combine(renderer, DxWrapperChain.IniPara(wrapper));
+                    Copy(wrapperSrc, renderer, profile.DgVoodooChainedName);
+                    plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
+                        $"Encadear DxWrapper → dgVoodoo: RealDllPath em {Rel(profile, ini)}",
+                        encadeado, ini));
+                    plan.Warnings.Add(
+                        $"O {wrapper} desta pasta é o DxWrapper (no Dead Space 2, é o conserto que faz o jogo " +
+                        "abrir em CPU com mais de 10 núcleos). Ele FICA. O dgVoodoo entra ao lado como " +
+                        $"{profile.DgVoodooChainedName}, e o {DxWrapperChain.IniPara(wrapper)} (o ini que o stub do " +
+                        "DxWrapper lê) ganha um RealDllPath apontando para " +
+                        "ele: o DxWrapper carrega o dgVoodoo em vez do d3d9 do Windows. A marca d'água do " +
+                        "dgVoodoo na tela continua sendo a prova de que a corrente fechou.");
+                    break;
+
+                default:
+                    Copy(wrapperSrc, renderer, wrapper);
+                    break;
+            }
             Copy(kit.DgVoodooCpl, renderer, "dgVoodooCpl.exe");
             if (kit.DgVoodooConf is not null)
                 plan.Actions.Add(new PlanAction(PlanActionKind.PatchDgVoodooConf,
@@ -215,21 +273,22 @@ public static class InstallPlanBuilder
         if (profile.HasNativeDlss && !profile.UsesRenodxDirectPath)
         {
             plan.Warnings.Add(
-                "O jogo tem DLSS próprio, e o kit NÃO sobrescreve o DLSS dele — o DLSS do jogo continua " +
-                "funcionando no menu, ligado ou desligado, do jeito que você preferir. O que o kit " +
-                "acrescenta é o Neural Rendering por cima. Se depois da instalação as opções de DLSS " +
-                "sumirem do menu ou o jogo travar ao ligar o DLSS, é sinal de que uma instalação ANTERIOR " +
-                "trocou o nvngx_dlss.dll do jogo: use Desinstalar (reverter) e, se preciso, a verificação " +
-                "de integridade da Steam para repor os arquivos originais do jogo.");
+                "Caminho do Feeder num jogo com DLSS próprio: o kit NÃO mexe no DLSS do jogo, mas o " +
+                "Feeder roda um NGX dele dentro do processo, e com o DLSS do jogo LIGADO os dois colidem " +
+                "— o jogo trava depois da tela inicial (Onimusha) ou ao aplicar o DLSS no menu (GTA 5). " +
+                "Antes de abrir: opções gráficas do jogo → DLSS desligado. O Neural Rendering entra pelo " +
+                "Feed. Se as opções de DLSS sumirem do menu, é sinal de instalação ANTERIOR que trocou o " +
+                "nvngx_dlss.dll do jogo: Desinstalar e verificação de integridade da Steam.");
         }
 
         if (profile.UsesRenodxDirectPath)
         {
             plan.Warnings.Add(
-                "Caminho direto (D3D12 + DLSS nativo): o RenoDX processa a chamada de DLSS que o próprio " +
-                "jogo faz, então o DLSS do jogo fica LIGADO no menu, no modo que você quiser. Confira o " +
-                "resultado alternando com F6 dentro do jogo. Se a imagem não mudar, marque a caixa " +
-                "experimental do caminho direto (na Detecção) para testar o Feeder em vez dele.");
+                "Caminho direto (D3D12 + DLSS nativo, o padrão neste caso): o RenoDX processa a chamada " +
+                "de DLSS que o próprio jogo faz, então o DLSS do jogo fica LIGADO no menu, no modo que " +
+                "você quiser. Sem o Feeder não há segundo NGX no processo — foi o que fez o Onimusha abrir " +
+                "e interceptar. Confira o resultado alternando com F6 dentro do jogo; a aba Complementos " +
+                "do ReShade mostra \"ACTIVE - NR INJECTED\" quando está aplicando.");
         }
 
 
@@ -304,6 +363,29 @@ public static class InstallPlanBuilder
             plan.Warnings.Add("Outros mods ou injetores na pasta: " + string.Join("; ", plan.OutrosMods) +
                               ". Eles não são tocados, mas podem disputar o mesmo gancho gráfico com o ReShade. " +
                               "Se o DLSS 5 não aparecer, desative-os para testar.");
+    }
+
+    private const long OrcamentoWrapper = 32L * 1024 * 1024;
+
+    /// <summary>Quem está com o nome que o dgVoodoo precisa.</summary>
+    private enum Ocupante { Ninguem, DxWrapper, Outro }
+
+    /// <summary>
+    /// Um dgVoodoo já instalado (nosso ou não) conta como ninguém: é o mesmo programa,
+    /// pode ser sobrescrito como sempre, e há backup.
+    /// </summary>
+    private static Ocupante OcupanteDe(string renderer, string wrapper)
+    {
+        var existente = Path.Combine(renderer, wrapper);
+        if (!File.Exists(existente)) return Ocupante.Ninguem;
+
+        // A varredura já cobre ASCII/UTF-16 e minúsculas: "DxWrapper" acha "dxwrapper.dll".
+        var marcas = ApiDetector.ScanForMarkers(existente, new[] { "dgVoodoo", "DxWrapper" }, OrcamentoWrapper);
+        if (marcas.Contains("dgVoodoo")) return Ocupante.Ninguem;
+
+        return marcas.Contains("DxWrapper") || DxWrapperChain.DxWrapperPresente(renderer)
+            ? Ocupante.DxWrapper
+            : Ocupante.Outro;
     }
 
     private static string DescribeUnsupported(GameProfile p)

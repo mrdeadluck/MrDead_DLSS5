@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Dlss5.Core;
 
 /// <summary>
@@ -9,7 +11,15 @@ public static class CheckpointVerifier
     /// <summary>ReShade.log menor que isso = placeholder "não fui carregado" (spec 8.3).</summary>
     public const long ReShadeLogPlaceholderSize = 982;
 
-    public static IReadOnlyList<CheckResult> Verify(GameProfile profile, InstallManifest? manifest)
+    /// <param name="overrideNoBoot">
+    /// O override estava no registro quando o Windows subiu (ver
+    /// <see cref="SignatureOverride.EstadoNoBoot"/>). Com esse dado, o checkpoint 2 só
+    /// acusa reinício pendente quando o estado de agora difere do que o driver leu no
+    /// boot. Sem ele, cai na heurística antiga do carimbo do manifesto.
+    /// </param>
+    public static IReadOnlyList<CheckResult> Verify(
+        GameProfile profile, InstallManifest? manifest, string? nvngxDlssDoKit = null,
+        bool? overrideNoBoot = null)
     {
         var r = new List<CheckResult>();
         var exe = profile.ExeFolder;
@@ -27,7 +37,23 @@ public static class CheckpointVerifier
 
         // 2 — reiniciou depois do override
         bool reinicioPendente = false;
-        if (manifest?.RegistryOverrideAppliedUtc is { } appliedUtc)
+        if (overrideNoBoot is bool noBoot)
+        {
+            // O dado bom: o driver lê a chave no boot, então o que importa é se o estado
+            // de agora é o mesmo que ele viu subindo — não quando o manifesto foi gravado.
+            reinicioPendente = status.AllSet && !noBoot;
+            r.Add(new CheckResult(2, "Reinício após aplicar o override",
+                !status.AllSet ? CheckStatus.Manual : reinicioPendente ? CheckStatus.Warning : CheckStatus.Pass,
+                !status.AllSet
+                    ? "Sem override aplicado."
+                    : reinicioPendente
+                        ? "O override foi aplicado depois que o Windows subiu: o driver ainda não leu a chave."
+                        : "O Windows já subiu com o override aplicado — desinstalar e reinstalar hoje não muda isso.",
+                reinicioPendente
+                    ? "Se quiser, reinicie o Windows quando for cômodo — o driver lê essa chave na inicialização. O programa nunca reinicia sozinho."
+                    : null));
+        }
+        else if (manifest?.RegistryOverrideAppliedUtc is { } appliedUtc)
         {
             bool rebooted = SignatureOverride.RebootedSinceEnable(appliedUtc);
             reinicioPendente = !rebooted;
@@ -95,29 +121,59 @@ public static class CheckpointVerifier
         // 3 — o DLSS do próprio jogo: o kit não mexe nele. O que este checkpoint vigia de
         // verdade é o nvngx_dlss.dll do jogo, que desinstalações antigas chegaram a apagar
         // (e sem ele o menu de DLSS some e o jogo pode nem abrir).
-        if (profile.HasNativeDlss && profile.NeedsFeeder)
+        if (profile.HasNativeDlss)
         {
-            bool dllDoJogo = File.Exists(Path.Combine(exe, "nvngx_dlss.dll"));
-            r.Add(dllDoJogo
-                ? new CheckResult(3, "DLSS do jogo: como você preferir", CheckStatus.Manual,
-                    "O jogo tem DLSS próprio e o kit NÃO mexe nele: pode deixar ligado ou desligado " +
-                    "no menu, inclusive baixando a qualidade para ganhar FPS. O Neural Rendering " +
-                    $"entra por cima, pelo Feeder (o jogo roda em {profile.Api}).")
-                : new CheckResult(3, "DLSS do jogo: nvngx_dlss.dll SUMIU da pasta", CheckStatus.Fail,
+            // Nos dois caminhos o DLSS do jogo precisa existir e ser o DELE: no direto o
+            // RenoDX se pendura na chamada que o jogo faz, e no Feeder o NGX é o mesmo.
+            var caminhoDll = Path.Combine(exe, "nvngx_dlss.dll");
+            if (!File.Exists(caminhoDll))
+            {
+                r.Add(new CheckResult(3, "DLSS do jogo: nvngx_dlss.dll SUMIU da pasta", CheckStatus.Fail,
                     "O jogo tem DLSS próprio mas o nvngx_dlss.dll não está na pasta — uma " +
                     "desinstalação antiga apagou. Sem ele as opções de DLSS somem do menu e o " +
                     "jogo pode travar na abertura. O kit não põe o dele no lugar: a versão do " +
                     "kit não casa com o jogo.",
                     "Steam → clique direito no jogo → Propriedades → Arquivos instalados → " +
                     "Verificar integridade dos arquivos do jogo. Depois clique em Verificar de novo."));
-        }
-        else if (profile.UsesRenodxDirectPath)
-        {
-            r.Add(new CheckResult(3, "DLSS do jogo tem que ficar LIGADO", CheckStatus.Manual,
-                "Aqui é o contrário: em D3D12 o RenoDX se pendura na chamada de DLSS que o próprio jogo faz. " +
-                "Sem o jogo pedir DLSS, não existe chamada para interceptar.",
-                "Opções gráficas do jogo → ligue o DLSS (qualquer modo). Sem isso o RenoDX fica em " +
-                "\"HOOKS ARMED / NO DLSS CREATE SEEN\"."));
+            }
+            else if (TransplanteDlss.EhDoKit(caminhoDll, nvngxDlssDoKit))
+            {
+                // O estágio final da saga do transplante: o arquivo EXISTE, então o
+                // checkpoint antigo dizia "tudo certo" — mas ele é byte a byte o DO KIT,
+                // posto ali por instalação antiga. É o estado que faz motor que carrega
+                // o DLL na inicialização congelar antes da janela (o demo do Onimusha
+                // nem abria), e a verificação de integridade sozinha nem sempre repõe o
+                // original — em demo o depot pode não cobrir o arquivo.
+                r.Add(new CheckResult(3, "DLSS do jogo: o nvngx_dlss.dll da pasta é o DO KIT", CheckStatus.Fail,
+                    "O arquivo é byte a byte igual ao nvngx_dlss.dll do kit: uma instalação " +
+                    "antiga o pôs no lugar do DLL do jogo. Com ele o menu de DLSS quebra e há " +
+                    "motor que trava ANTES de criar a janela — o jogo nem abre.",
+                    "Use Desinstalar (reverter) ou Desfazer tudo (forçado) — agora eles removem " +
+                    "este arquivo. Depois: Steam → Propriedades → Arquivos instalados → Verificar " +
+                    "integridade, abra o jogo sem instalar nada para confirmar, e só então reinstale."));
+            }
+            else if (profile.UsesRenodxDirectPath)
+            {
+                r.Add(new CheckResult(3, "DLSS do jogo tem que ficar LIGADO", CheckStatus.Manual,
+                    "Caminho direto: em D3D12 o RenoDX se pendura na chamada de DLSS que o próprio jogo faz. " +
+                    "Sem o jogo pedir DLSS, não existe chamada para interceptar.",
+                    "Opções gráficas do jogo → ligue o DLSS (qualquer modo). Sem isso o RenoDX fica em " +
+                    "\"HOOKS ARMED / NO DLSS CREATE SEEN\"."));
+            }
+            else
+            {
+                // A regra "como você preferir" caiu com evidência: Onimusha e GTA 5. O Feeder
+                // inicializa um NGX próprio dentro do processo; com o DLSS do jogo ligado, o
+                // NGX do jogo e o nosso colidem — trava depois da tela inicial, ou ao aplicar
+                // o DLSS no menu. Desligado, o jogo não chama o NGX e o Feeder trabalha como
+                // nos jogos sem DLSS.
+                r.Add(new CheckResult(3, "DLSS do jogo: DESLIGADO neste caminho", CheckStatus.Manual,
+                    "Caminho do Feeder num jogo com DLSS próprio: o Feeder roda um NGX dele dentro do " +
+                    "processo, e com o DLSS do jogo ligado os dois colidem — o jogo trava depois da tela " +
+                    $"inicial ou ao aplicar o DLSS no menu (o jogo roda em {profile.Api}).",
+                    "Opções gráficas do jogo → DLSS desligado (faça isso com o jogo limpo, ou com o ReShade " +
+                    "desligado pelo Isolar a causa). O Neural Rendering entra pelo Feed, sem o DLSS do jogo."));
+            }
         }
 
         // 6 — arquitetura do ReShade instalado. O nome muda com a API: num jogo OpenGL
@@ -174,14 +230,24 @@ public static class CheckpointVerifier
                     : null));
         }
 
-        // 11 — efeitos encontráveis
-        var feedFx = Path.Combine(exe, "reshade-shaders", "Shaders", "DLSS5_Feed.fx");
-        r.Add(new CheckResult(11, "Shaders no lugar",
-            File.Exists(feedFx) ? CheckStatus.Pass : CheckStatus.Fail,
-            File.Exists(feedFx)
-                ? "reshade-shaders\\Shaders\\DLSS5_Feed.fx presente."
-                : "DLSS5_Feed.fx não encontrado.",
-            File.Exists(feedFx) ? null : "Rode a instalação (ou reinstale: o desinstalador do ReShade apaga reshade-shaders\\)."));
+        // 11 — efeitos encontráveis. Só no caminho do Feeder: no direto a pasta de
+        // shaders não é instalada de propósito (nenhum efeito participa).
+        if (!profile.NeedsFeeder)
+        {
+            r.Add(new CheckResult(11, "Shaders", CheckStatus.NotApplicable,
+                "Não instalados neste caminho: nenhum efeito do ReShade participa — o RenoDX trabalha no contrato NGX do jogo.",
+                null));
+        }
+        else
+        {
+            var feedFx = Path.Combine(exe, "reshade-shaders", "Shaders", "DLSS5_Feed.fx");
+            r.Add(new CheckResult(11, "Shaders no lugar",
+                File.Exists(feedFx) ? CheckStatus.Pass : CheckStatus.Fail,
+                File.Exists(feedFx)
+                    ? "reshade-shaders\\Shaders\\DLSS5_Feed.fx presente."
+                    : "DLSS5_Feed.fx não encontrado.",
+                File.Exists(feedFx) ? null : "Rode a instalação (ou reinstale: o desinstalador do ReShade apaga reshade-shaders\\)."));
+        }
 
         // 13 — preset com o provedor acima do Feed
         //
@@ -233,13 +299,36 @@ public static class CheckpointVerifier
         {
             var renderer = profile.RendererFolder ?? exe;
             var wrapper = profile.DgVoodooWrapperName;
-            var d3d9 = Path.Combine(renderer, wrapper);
+            // Encadeado atrás do DxWrapper, o dgVoodoo tem outro nome — e o D3D9.dll da
+            // pasta é o DxWrapper, que passaria neste teste sem ser o que interessa.
+            bool encadeado = DxWrapperChain.Encadeado(renderer, wrapper);
+            var nomeDg = encadeado ? profile.DgVoodooChainedName : wrapper;
+            var d3d9 = Path.Combine(renderer, nomeDg);
             var conf = Path.Combine(renderer, "dgVoodoo.conf");
             bool d3d9Ok = File.Exists(d3d9) && PeFile.GetArchitecture(d3d9) == PeArchitecture.X86;
             r.Add(new CheckResult(5, "dgVoodoo2 na pasta do renderizador",
                 d3d9Ok ? CheckStatus.Pass : CheckStatus.Fail,
-                d3d9Ok ? $"{wrapper} (x86) em {renderer}" : $"{wrapper} x86 ausente em {renderer}",
+                d3d9Ok
+                    ? $"{nomeDg} (x86) em {renderer}" + (encadeado ? " — encadeado atrás do DxWrapper." : "")
+                    : $"{nomeDg} x86 ausente em {renderer}",
                 d3d9Ok ? null : $"No Source o {wrapper} vai em bin\\, não na raiz."));
+
+            if (encadeado)
+            {
+                var iniDxw = Path.Combine(renderer, DxWrapperChain.IniPara(wrapper));
+                string? real = null;
+                try { if (File.Exists(iniDxw)) real = DxWrapperChain.LerRealDllPath(ReadShared(iniDxw)); } catch { }
+                bool fechada = real is not null && Path.GetFileName(real)
+                    .Equals(nomeDg, StringComparison.OrdinalIgnoreCase);
+                r.Add(new CheckResult(5, "DxWrapper encadeado ao dgVoodoo (RealDllPath)",
+                    fechada ? CheckStatus.Pass : CheckStatus.Fail,
+                    fechada
+                        ? $"{Path.GetFileName(iniDxw)} aponta para {nomeDg}: o DxWrapper carrega o dgVoodoo, não o d3d9 do Windows."
+                        : real is null
+                            ? $"{Path.GetFileName(iniDxw)} sem RealDllPath: o DxWrapper carrega o d3d9 do Windows e o dgVoodoo fica fora."
+                            : $"RealDllPath aponta para {real}, não para {nomeDg}.",
+                    fechada ? null : $"Rode a instalação de novo — ela grava o RealDllPath no {Path.GetFileName(iniDxw)}."));
+            }
 
             if (File.Exists(conf))
             {
@@ -344,6 +433,7 @@ public static class CheckpointVerifier
         {
             var estado = renodx.AssinaturaRecusada ? CheckStatus.Fail
                        : renodx.Ativo ? CheckStatus.Pass
+                       : renodx.CaiuAntesDoDlss ? CheckStatus.Fail
                        : renodx.HooksSemUso ? CheckStatus.Fail
                        : CheckStatus.Warning;
 
@@ -367,10 +457,41 @@ public static class CheckpointVerifier
                       "addon, na aba Complementos."
                     : renodx.AssinaturaRecusada
                         ? "Aplique o override no registro e reinicie o PC quando puder — o driver só lê essa chave na inicialização."
+                        : renodx.CaiuAntesDoDlss
+                            // RE9: três logs, a mesma assinatura — runtime recriado, 1 a 3 s
+                            // de silêncio, tela de erro do jogo, nenhum "feature create".
+                            // O gancho de DLSS nem foi chamado; o suspeito é quem roda antes.
+                            ? "Não é o gancho de DLSS. Bisseção, com o jogo fechado: 1) \"Testar sem o RenoDX\" e " +
+                              "abra o jogo — se ainda cair, 2) \"Isolar a causa\" desliga o ReShade (dxgi.dll). Se aí " +
+                              "o jogo roda, é o ReShade dentro deste jogo: desligue TODAS as sobreposições (Steam, Xbox " +
+                              "Game Bar, NVIDIA App, Discord, RivaTuner) e teste de novo. Se cair mesmo sem nada, é o " +
+                              "jogo nesta máquina (integridade dos arquivos, driver)."
                         : renodx.HooksSemUso
                             ? "O RenoDX só enxerga NGX em D3D12. Fora disso quem trabalha é o Feeder; " +
                               "confirme que o DLSS 5 Feed está marcado no preset."
+                        : renodx.PedeStreamlineHooks
+                            ? "Na barra abaixo, troque \"Hooks do RenoDX\" para 1 (NGX + Streamline), aplique e abra " +
+                              "o jogo de novo. Se com 1 o jogo cair na abertura, volte para 2."
                             : "Abra o jogo, jogue alguns segundos e verifique de novo.");
+        }
+
+        // Log gravado numa rodada SEM o RenoDX (teste de isolamento): não diz nada sobre o
+        // DLSS 5, mas ainda diz se o jogo caiu — e uma queda sem o addon na jogada é a
+        // prova de que ele está fora de suspeita.
+        else if (loaded && AddonRenodxNaPasta(exeFolder))
+        {
+            var seg = RenodxLog.SegundosAteDialogo(text);
+            yield return new CheckResult(14, "DLSS 5 aplicado na imagem",
+                seg is null ? CheckStatus.Manual : CheckStatus.Fail,
+                seg is null
+                    ? "O ReShade.log atual foi gravado numa rodada SEM o RenoDX (teste de isolamento): não diz nada sobre o DLSS 5."
+                    : $"O ReShade.log atual é de uma rodada SEM o RenoDX — e mesmo assim o jogo abriu a tela de erro " +
+                      $"{seg.Value.ToString("0.0", CultureInfo.InvariantCulture)} s depois de o runtime do ReShade subir. " +
+                      "O RenoDX está fora de suspeita: é o ReShade dentro deste jogo.",
+                seg is null
+                    ? "Religue o RenoDX, abra o jogo e verifique de novo."
+                    : "\"Isolar a causa\" (sem o dxgi.dll) confirma. Rodando sem o ReShade: desligue todas as " +
+                      "sobreposições e teste de novo; persistindo, este jogo recusa esta versão do ReShade.");
         }
 
         bool sawSwapchain = text.Contains("CreateSwapChain", StringComparison.OrdinalIgnoreCase)
@@ -381,6 +502,17 @@ public static class CheckpointVerifier
                 ? "Log tem CreateSwapChain / Recreated runtime environment."
                 : "Log sem CreateSwapChain: o ReShade carregou mas não é a factory do renderizador.",
             sawSwapchain ? null : "O dxgi.dll tem que estar na pasta do EXE. Overlays podem estar chegando antes.");
+    }
+
+    /// <summary>O addon do RenoDX está na pasta — ligado, ou desligado pelo isolamento.</summary>
+    private static bool AddonRenodxNaPasta(string exeFolder)
+    {
+        foreach (var pasta in new[] { exeFolder, Path.Combine(exeFolder, "host64") })
+        {
+            if (File.Exists(Path.Combine(pasta, "renodx-dlss5.addon64"))) return true;
+            if (File.Exists(Path.Combine(pasta, "renodx-dlss5.addon64" + Isolamento.Sufixo))) return true;
+        }
+        return false;
     }
 
     private static IEnumerable<CheckResult> VerifyFeedLogs(

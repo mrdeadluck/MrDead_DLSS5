@@ -69,6 +69,13 @@ public sealed partial class InstallerEngine
     /// </summary>
     private Dictionary<string, OrigemDoArquivo> _origens = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Caminho do nvngx_dlss.dll DO KIT, usado como gabarito para reconhecer o
+    /// "transplante" (um nvngx_dlss.dll na pasta do jogo byte a byte igual ao do kit,
+    /// obra de versão antiga deste programa). Sem ele nada de nvngx_dlss.dll sai.
+    /// </summary>
+    public string? NvngxDlssDoKit { get; set; }
+
     public InstallerEngine(Action<string> log)
     {
         _log = log;
@@ -200,7 +207,7 @@ public sealed partial class InstallerEngine
 
                     case PlanActionKind.WriteGeneratedFile:
                     {
-                        var conteudo = ConteudoGerado(action.TargetPath!, plan);
+                        var conteudo = ConteudoGerado(action.TargetPath!, plan, action.SourcePath);
                         Gravar(action.TargetPath!, manifest, anterior, desfazer, resultado,
                             tmp => File.WriteAllText(tmp, conteudo), conteudoTexto: conteudo);
                         break;
@@ -335,12 +342,24 @@ public sealed partial class InstallerEngine
         }
     }
 
-    private static string ConteudoGerado(string target, InstallPlan plan)
+    /// <param name="realDllPath">
+    /// Só para o ini do stub do DxWrapper (d3d9.ini): o dgVoodoo encadeado que o RealDllPath
+    /// deve apontar. Um ini que já era do usuário é preservado — só essa linha muda (o
+    /// original vai para backup e a desinstalação devolve o arquivo dele).
+    /// </param>
+    private static string ConteudoGerado(string target, InstallPlan plan, string? realDllPath = null)
     {
+        if (realDllPath is not null)
+        {
+            string? existente = null;
+            try { if (File.Exists(target)) existente = File.ReadAllText(target); } catch { }
+            return DxWrapperChain.GerarIni(existente, realDllPath);
+        }
         var name = Path.GetFileName(target);
         return name.Equals("ReShade.ini", StringComparison.OrdinalIgnoreCase)
             ? ReShadeConfigWriter.BuildReShadeIni(
-                plan.Options.OverlayKey, plan.Options.OverlayCtrl, plan.Options.OverlayShift, plan.Options.OverlayAlt)
+                plan.Options.OverlayKey, plan.Options.OverlayCtrl, plan.Options.OverlayShift, plan.Options.OverlayAlt,
+                feederUsed: plan.Profile.NeedsFeeder)
             : ReShadeConfigWriter.BuildPresetIni(plan.Options.MvProvider, feederUsed: plan.Profile.NeedsFeeder);
     }
 
@@ -604,6 +623,7 @@ public sealed partial class InstallerEngine
         "renodx-dlss5.addon64", "nvngx_dlssnr.dll",
         "dlss5-feed.addon64", "dlss5-feed.addon32", "dlss5-feed.cfg", "dlss5-feed.log",
         "D3D9.dll", "D3D8.dll", "dgVoodoo.conf", "dgVoodooCpl.exe",
+        "dgVoodoo_D3D9.dll", "dgVoodoo_D3D8.dll",
     };
 
     /// <summary>
@@ -624,6 +644,15 @@ public sealed partial class InstallerEngine
                             || Propriedade.DgVoodooComEscolta.Any(p => p.Equals(nome, StringComparison.OrdinalIgnoreCase));
             if (!generico || Propriedade.EhNossoPorHeuristica(caminho)) sobras.Add(caminho);
         }
+
+        // O transplante que resistiu (arquivo em uso) é sobra como qualquer outra.
+        var transplante = Path.Combine(exeFolder, "nvngx_dlss.dll");
+        if (TransplanteDlss.EhDoKit(transplante, NvngxDlssDoKit)) sobras.Add(transplante);
+
+        // Um ini do DxWrapper ainda apontando para o dgVoodoo é sobra perigosa: com o
+        // dgVoodoo fora, o DxWrapper tentaria carregar um arquivo que não existe.
+        sobras.AddRange(InisEncadeadosEm(exeFolder));
+
         foreach (var pasta in Propriedade.PastasNossas)
         {
             var caminho = Path.Combine(exeFolder, pasta);
@@ -805,6 +834,22 @@ public sealed partial class InstallerEngine
             if (!string.Equals(exe, manifest.GameFolder, StringComparison.OrdinalIgnoreCase))
                 foreach (var devolvido in RestaurarBackupsOrfaos(manifest.GameFolder)) r.Restaurados.Add(devolvido);
             LimparTemporarios(exe);
+
+            // O transplante de instalação antiga não consta em manifesto nenhum: se o
+            // nvngx_dlss.dll que ficou é byte a byte o do kit, ele NÃO é do jogo — sai
+            // agora, para a verificação de integridade da Steam poder repor o original.
+            // Depois dos backups: um original recém-devolvido tem bytes diferentes e fica.
+            if (RemoverTransplante(exe))
+            {
+                r.Removidos.Add(Path.Combine(exe, "nvngx_dlss.dll"));
+                r.NaoRestaurados.Add(Path.Combine(exe, "nvngx_dlss.dll") + " — era o DO KIT (transplante de instalação antiga); o original do jogo não existe mais");
+            }
+
+            // Ini do DxWrapper que encadeava ao dgVoodoo: com o dgVoodoo fora, um
+            // RealDllPath pendurado faria o jogo voltar a não abrir, por culpa nossa.
+            foreach (var pasta in new[] { exe, manifest.RendererFolder }.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase))
+                foreach (var ini in InisEncadeadosEm(pasta!).ToList())
+                    if (DesencadearDxWrapper(ini)) r.Removidos.Add(ini);
 
             // 5. Pastas que criamos, se ficaram vazias.
             foreach (var dir in manifest.AddedDirectories.OrderByDescending(d => d.Length).ToList())

@@ -88,7 +88,7 @@ public sealed partial class MainForm
         _lblNativeWhy.Margin = new Padding(0, 0, 0, 6);
         form.Controls.Add(_lblNativeWhy, 1, linha++);
 
-        _chkDireto.Text = "Usar o caminho direto do RenoDX (sem Feeder) — avançado: só marque se já viu funcionar neste jogo";
+        _chkDireto.Text = "Usar o Feeder em vez do caminho direto — experimental: em jogo com DLSS nativo o Feeder colide com o NGX do jogo";
         _chkDireto.AutoSize = true;
         _chkDireto.Visible = false;
         _chkDireto.Margin = new Padding(0, 0, 0, 6);
@@ -222,7 +222,7 @@ public sealed partial class MainForm
         PopulateCandidates(_profile.RealExePath);
         _cboArch.SelectedItem = _profile.Architecture;
         _cboApi.SelectedItem = _profile.Api;
-        _chkDireto.Checked = _profile.PreferirCaminhoDireto;
+        _chkDireto.Checked = _profile.PreferirFeeder;
         _txtRenderer.Text = _profile.RendererFolder ?? _profile.ExeFolder;
         _cboMv.SelectedIndex = _options.MvProvider == MvProvider.Drme ? 1 : 0;
         _chkRegistry.Checked = _options.ApplyRegistryOverride;
@@ -340,7 +340,7 @@ public sealed partial class MainForm
         if (_cboApi.SelectedItem is GraphicsApi g) _profile.Api = g;
         if (!string.IsNullOrWhiteSpace(_txtRenderer.Text)) _profile.RendererFolder = _txtRenderer.Text;
         _profile.MvProvider = _options.MvProvider;
-        _profile.PreferirCaminhoDireto = _chkDireto.Visible && _chkDireto.Checked;
+        _profile.PreferirFeeder = _chkDireto.Visible && _chkDireto.Checked;
         UpdateMvAvailability();
         UpdateNativeLabel();
         UpdateRouteLabel();
@@ -361,8 +361,10 @@ public sealed partial class MainForm
     {
         if (_profile is null) return string.Empty;
         return _profile.UsesRenodxDirectPath
-            ? "Efeito: o Feeder não é instalado — em D3D12 o RenoDX se pendura no DLSS do próprio jogo."
-            : "Efeito: o Feeder é instalado (é ele quem roda o DLSS 5). Arquivos de DLSS do jogo nunca são apagados.";
+            ? "Efeito: caminho direto (padrão em D3D12 com DLSS nativo) — o RenoDX se pendura no DLSS do próprio jogo; deixe o DLSS do jogo LIGADO."
+            : _profile.HasNativeDlss
+                ? "Efeito: o Feeder é instalado e roda um NGX próprio; com DLSS nativo, deixe o DLSS do jogo DESLIGADO. Arquivos de DLSS do jogo nunca são apagados."
+                : "Efeito: o Feeder é instalado (é ele quem roda o DLSS 5). Arquivos de DLSS do jogo nunca são apagados.";
     }
 
     private void AjustarDlssNativo()

@@ -60,7 +60,7 @@ public sealed class InstallManifest
     public bool OverlayAlt { get; set; }
     public bool ApplyRegistryOverride { get; set; } = true;
     public bool DgVoodooWatermark { get; set; } = true;
-    public bool PreferirCaminhoDireto { get; set; }
+    public bool PreferirFeeder { get; set; }
 
     // Registro
     public bool RegistryOverrideApplied { get; set; }
@@ -245,7 +245,7 @@ public sealed class InstallManifest
             RendererFolder = RendererFolder,
             HasNativeDlss = HasNativeDlss,
             IsSourceEngine = IsSourceEngine,
-            PreferirCaminhoDireto = PreferirCaminhoDireto,
+            PreferirFeeder = PreferirFeeder,
         };
         if (Enum.TryParse<PeArchitecture>(Architecture, out var arch)) p.Architecture = arch;
         if (Enum.TryParse<GraphicsApi>(Api, out var api)) p.Api = api;
@@ -272,7 +272,7 @@ public sealed class InstallManifest
             Api = p.Api.ToString(),
             HasNativeDlss = p.HasNativeDlss,
             IsSourceEngine = p.IsSourceEngine,
-            PreferirCaminhoDireto = p.PreferirCaminhoDireto,
+            PreferirFeeder = p.PreferirFeeder,
             KitRoot = kit.KitRoot,
             KitVersion = kit.Fingerprint(),
             MvProvider = o.MvProvider.ToString(),

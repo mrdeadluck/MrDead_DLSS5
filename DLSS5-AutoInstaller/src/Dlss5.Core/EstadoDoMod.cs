@@ -148,7 +148,7 @@ public static class EstadoDoMod
             if (Enum.TryParse<GraphicsApi>(manifesto.Api, out var api) && api != GraphicsApi.Unknown) perfil.Api = api;
             perfil.RendererFolder = manifesto.RendererFolder ?? perfil.RendererFolder;
             perfil.HasNativeDlss = manifesto.HasNativeDlss;
-            perfil.PreferirCaminhoDireto = manifesto.PreferirCaminhoDireto;
+            perfil.PreferirFeeder = manifesto.PreferirFeeder;
         }
 
         r.ExeFolder = manifesto?.ExeFolder is { } ef && Directory.Exists(ef) ? ef : perfil?.ExeFolder ?? r.GameFolder;
@@ -158,7 +158,7 @@ public static class EstadoDoMod
         r.Route = perfil?.Route ?? InstallRoute.Unsupported;
 
         // Vestígios e backups (varredura por nome, conservadora).
-        var engine = new InstallerEngine(_ => { });
+        var engine = new InstallerEngine(_ => { }) { NvngxDlssDoKit = kit?.NvngxDlss };
         var achados = engine.EncontrarInstalacao(r.GameFolder, estrito: true);
         foreach (var a in achados)
         {

@@ -220,6 +220,12 @@ public sealed partial class MainForm
         {
             using var etapa = _diario.Etapa("Inspeção do estado do jogo");
             _diario.Tecnico($"Jogo: {pasta}; kit: {kitPasta}");
+            // Antes de qualquer instalação desta execução: o que o driver viu no boot.
+            if (OperatingSystem.IsWindows() && _overrideNoBoot is null)
+            {
+                _overrideNoBoot = SignatureOverride.EstadoNoBoot(_settings);
+                _settings.Save();
+            }
             var (estado, kit) = await Task.Run(() =>
             {
                 KitInventory? k = null;
@@ -577,8 +583,9 @@ public sealed partial class MainForm
         _fluxo = Fluxo.Desinstalar;
         _manifest = manifest;
         MostrarTela(Tela.Execucao);
+        var nvngxDoKit = NvngxDoKit();
         var resultado = await RodarOperacaoAsync("Desinstalação", cancelavel: false,
-            (ct, progresso) => new InstallerEngine(_diario).Revert(manifest, removerRegistro, ct, progresso));
+            (ct, progresso) => new InstallerEngine(_diario) { NvngxDlssDoKit = nvngxDoKit }.Revert(manifest, removerRegistro, ct, progresso));
         ConcluirReversao(resultado, "Desinstalação");
     }
 
@@ -591,8 +598,9 @@ public sealed partial class MainForm
 
         SetOcupado(true);
         Status("Procurando arquivos do mod na pasta do jogo…");
+        var nvngxDoKit = NvngxDoKit();
         IReadOnlyList<string> achados;
-        try { achados = await Task.Run(() => new InstallerEngine(_diario).EncontrarInstalacao(pasta)); }
+        try { achados = await Task.Run(() => new InstallerEngine(_diario) { NvngxDlssDoKit = nvngxDoKit }.EncontrarInstalacao(pasta)); }
         finally { SetOcupado(false); }
 
         if (achados.Count == 0)
@@ -616,7 +624,7 @@ public sealed partial class MainForm
         MostrarTela(Tela.Execucao);
         var resultado = await RodarOperacaoAsync("Remoção conservadora", cancelavel: false, (ct, progresso) =>
         {
-            var engine = new InstallerEngine(_diario);
+            var engine = new InstallerEngine(_diario) { NvngxDlssDoKit = nvngxDoKit };
             new Isolamento(_diario.Info).ReligarTudo(pasta);
             return engine.LimpezaConservadora(pasta, ct, progresso);
         });

@@ -30,6 +30,8 @@ public static class Propriedade
         "renodx-dlss5.addon64", "dlss5-feed.addon64", "dlss5-feed.addon32",
         "dlss5-feed-host64.exe", "dlss5-feed.cfg", "dlss5-feed.log", "dlss5-feed-host.log",
         "nvngx_dlssnr.dll",
+        // O dgVoodoo encadeado atrás do DxWrapper: nenhum jogo traz um arquivo com esse nome.
+        "dgVoodoo_D3D9.dll", "dgVoodoo_D3D8.dll",
         "ReShade.ini", "ReShade.log", "ReShadePreset.ini",
         "ReShade64.json", "ReShade32.json", "ReShade64_XR.json", "ReShade32_XR.json",
         InstallManifest.FileName,
@@ -135,7 +137,7 @@ public static class Propriedade
     {
         "renodx-dlss5.addon64", "dlss5-feed.addon64", "dlss5-feed.addon32",
         "dlss5-feed-host64.exe", "dlss5-feed.cfg", "dlss5-feed.log", "dlss5-feed-host.log",
-        "nvngx_dlssnr.dll", InstallManifest.FileName,
+        "nvngx_dlssnr.dll", "dgVoodoo_D3D9.dll", "dgVoodoo_D3D8.dll", InstallManifest.FileName,
     };
 
     /// <summary>Há peça do kit (não só ReShade) nesta pasta ou na de cima?</summary>

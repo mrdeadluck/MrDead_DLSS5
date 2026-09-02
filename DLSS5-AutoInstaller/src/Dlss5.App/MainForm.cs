@@ -46,6 +46,13 @@ public sealed partial class MainForm : Form
     private InstallManifest? _manifest;
     private IReadOnlyList<ExeCandidate> _candidates = Array.Empty<ExeCandidate>();
 
+    /// <summary>
+    /// O override de assinatura estava no registro quando o Windows subiu? É o que decide
+    /// se falta reiniciar — não o carimbo do manifesto, que cada Desinstalar/Instalar do
+    /// dia renova sem mudar nada no driver.
+    /// </summary>
+    private bool? _overrideNoBoot;
+
     private Fluxo _fluxo = Fluxo.Nenhum;
     private Tela _tela = Tela.Inicio;
     private bool _ocupado;
@@ -591,6 +598,21 @@ public sealed partial class MainForm : Form
     }
 
     private void AbrirPastaDeLogs() => OpenFolder(_diario.Pasta ?? Diario.PastaPadrao);
+
+    /// <summary>
+    /// Caminho do nvngx_dlss.dll DO KIT — o gabarito que permite reconhecer (e remover)
+    /// o transplante que instalações antigas deixaram na pasta do jogo. Desinstalação e
+    /// verificação podem rodar sem o kit apontado; aí o valor é nulo e nenhum
+    /// nvngx_dlss.dll é tocado.
+    /// </summary>
+    private string? NvngxDoKit()
+    {
+        if (_kit?.NvngxDlss is { } pronto) return pronto;
+        var pasta = _txtKit.Text.Trim();
+        if (string.IsNullOrWhiteSpace(pasta) || !Directory.Exists(pasta)) return null;
+        try { _kit = KitResolver.Resolve(pasta); } catch { return null; }
+        return _kit.NvngxDlss;
+    }
 
     private void ExportarDiagnostico()
     {
