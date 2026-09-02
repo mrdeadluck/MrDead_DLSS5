@@ -13,6 +13,12 @@ public sealed class AppSettings
     public bool OverlayShift { get; set; }
     public bool OverlayAlt { get; set; }
 
+    /// <summary>Boot (UTC) em que o override foi observado pela última vez.</summary>
+    public DateTime? BootObservadoUtc { get; set; }
+
+    /// <summary>O override estava aplicado na primeira observação daquele boot?</summary>
+    public bool? OverrideNoBoot { get; set; }
+
     private static string Dir => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "DLSS5-AutoInstaller");

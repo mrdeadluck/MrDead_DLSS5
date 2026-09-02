@@ -135,7 +135,7 @@ public sealed partial class InstallerEngine
                     break;
 
                 case PlanActionKind.WriteGeneratedFile:
-                    WriteGenerated(action.TargetPath!, plan, manifest);
+                    WriteGenerated(action.TargetPath!, plan, manifest, action.SourcePath);
                     break;
 
                 case PlanActionKind.PatchDgVoodooConf:
@@ -156,20 +156,37 @@ public sealed partial class InstallerEngine
         return manifest;
     }
 
-    private void WriteGenerated(string target, InstallPlan plan, InstallManifest manifest)
+    /// <param name="realDllPath">
+    /// Só para o ini do stub do DxWrapper (d3d9.ini): o dgVoodoo encadeado que o RealDllPath deve apontar. Um
+    /// ini que já era do usuário é preservado — só essa linha muda (o backup fica no
+    /// manifesto, e a reversão devolve o arquivo dele).
+    /// </param>
+    private void WriteGenerated(string target, InstallPlan plan, InstallManifest manifest, string? realDllPath = null)
     {
         EnsureDirFor(target, manifest);
         BackupIfExists(target, manifest);
         var name = Path.GetFileName(target);
-        string content = name.Equals("ReShade.ini", StringComparison.OrdinalIgnoreCase)
-            ? ReShadeConfigWriter.BuildReShadeIni(
+        string content;
+        if (realDllPath is not null)
+        {
+            var existente = File.Exists(target) ? File.ReadAllText(target) : null;
+            content = DxWrapperChain.GerarIni(existente, realDllPath!);
+        }
+        else if (name.Equals("ReShade.ini", StringComparison.OrdinalIgnoreCase))
+        {
+            content = ReShadeConfigWriter.BuildReShadeIni(
                 plan.Options.OverlayKey,
                 plan.Options.OverlayCtrl,
                 plan.Options.OverlayShift,
-                plan.Options.OverlayAlt)
-            : ReShadeConfigWriter.BuildPresetIni(
+                plan.Options.OverlayAlt,
+                feederUsed: plan.Profile.NeedsFeeder);
+        }
+        else
+        {
+            content = ReShadeConfigWriter.BuildPresetIni(
                 plan.Options.MvProvider,
                 feederUsed: plan.Profile.NeedsFeeder);
+        }
         File.WriteAllText(target, content);
         Track(manifest, target);
         _log($"Gerado: {target}");
@@ -201,6 +218,7 @@ public sealed partial class InstallerEngine
         "renodx-dlss5.addon64", "nvngx_dlssnr.dll",
         "dlss5-feed.addon64", "dlss5-feed.addon32", "dlss5-feed.cfg", "dlss5-feed.log",
         "D3D9.dll", "D3D8.dll", "dgVoodoo.conf", "dgVoodooCpl.exe",
+        "dgVoodoo_D3D9.dll", "dgVoodoo_D3D8.dll",
     };
 
     /// <summary>
@@ -217,6 +235,15 @@ public sealed partial class InstallerEngine
             var caminho = Path.Combine(exeFolder, nome);
             if (File.Exists(caminho)) sobras.Add(caminho);
         }
+
+        // O transplante que resistiu (arquivo em uso) é sobra como qualquer outra:
+        // listado aqui, ele entra no aviso e na oferta de faxina completa.
+        var transplante = Path.Combine(exeFolder, "nvngx_dlss.dll");
+        if (TransplanteDlss.EhDoKit(transplante, NvngxDlssDoKit)) sobras.Add(transplante);
+
+        // Um ini do DxWrapper ainda apontando para o dgVoodoo é sobra perigosa: com o
+        // dgVoodoo fora, o DxWrapper tentaria carregar um arquivo que não existe.
+        sobras.AddRange(InisEncadeadosEm(exeFolder));
         foreach (var pasta in new[] { "reshade-shaders", "host64" })
         {
             var caminho = Path.Combine(exeFolder, pasta);
@@ -459,6 +486,12 @@ public sealed partial class InstallerEngine
         // constar no manifesto. É o que salva uma instalação antiga ou interrompida.
         RestaurarBackupsOrfaos(manifest.ExeFolder);
         RestaurarBackupsOrfaos(manifest.GameFolder);
+
+        // O transplante de instalação antiga não consta em manifesto nenhum: se o
+        // nvngx_dlss.dll que ficou é byte a byte o do kit, ele NÃO é do jogo — sai
+        // agora, para a verificação de integridade da Steam poder repor o original.
+        // Depois dos backups: um original recém-devolvido tem bytes diferentes e fica.
+        RemoverTransplante(manifest.ExeFolder);
 
         // O ReShade e o addon criam estes depois de instalar, então não estão no
         // manifesto — e sem apagá-los a "desinstalação" deixa sujeira para trás.

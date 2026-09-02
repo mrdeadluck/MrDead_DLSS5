@@ -23,6 +23,8 @@ public sealed partial class InstallerEngine
         "renodx-dlss5.addon64", "dlss5-feed.addon64", "dlss5-feed.addon32",
         "dlss5-feed-host64.exe", "dlss5-feed.cfg", "dlss5-feed.log", "dlss5-feed-host.log",
         "nvngx_dlssnr.dll",
+        // O dgVoodoo encadeado atrás do DxWrapper: nenhum jogo traz um arquivo com esse nome.
+        "dgVoodoo_D3D9.dll", "dgVoodoo_D3D8.dll",
         "ReShade.ini", "ReShade.log", "ReShadePreset.ini",
         "ReShade64.json", "ReShade32.json", "ReShade64_XR.json", "ReShade32_XR.json",
         InstallManifest.FileName,
@@ -59,11 +61,20 @@ public sealed partial class InstallerEngine
         ("D3D8.dll", "dgVoodoo"),
     };
 
-    // O nvngx_dlss.dll NUNCA sai pela faxina. Desde que o kit deixou de sobrescrever o
-    // DLSS do próprio jogo, o arquivo ao lado dos nossos addons num jogo com DLSS nativo
-    // é o do JOGO — apagá-lo faz as opções de DLSS sumirem do menu e pode travar o jogo
-    // na abertura. No pior caso (sobra do kit num jogo sem DLSS) ele é um arquivo morto e
-    // inofensivo: sem os addons ninguém o carrega. O de host64\ sai junto com a pasta.
+    // O nvngx_dlss.dll só sai da faxina com prova ABSOLUTA de que é nosso: byte a byte
+    // igual ao do kit (o transplante que versões antigas fizeram por cima do DLL do
+    // jogo). Qualquer outro conteúdo é tratado como do JOGO e fica — apagá-lo faz as
+    // opções de DLSS sumirem do menu e pode travar o jogo na abertura. Sem o caminho do
+    // kit para comparar (NvngxDlssDoKit nulo) não há prova, e aí nada sai: no pior caso
+    // a sobra do kit num jogo sem DLSS é arquivo morto — sem os addons ninguém o
+    // carrega. O de host64\ sai junto com a pasta.
+
+    /// <summary>
+    /// Caminho do nvngx_dlss.dll DO KIT, usado como gabarito para reconhecer o
+    /// transplante. Sem ele a faxina volta ao comportamento conservador: não toca
+    /// em nenhum nvngx_dlss.dll.
+    /// </summary>
+    public string? NvngxDlssDoKit { get; set; }
 
     private static readonly string[] ProvasDoKit =
     {
@@ -87,6 +98,7 @@ public sealed partial class InstallerEngine
         foreach (var pasta in PastasParaVarrer(gameFolder))
         {
             achados.AddRange(NossosArquivosEm(pasta));
+            achados.AddRange(InisEncadeadosEm(pasta));
 
             foreach (var nome in PastasNossas)
             {
@@ -133,9 +145,11 @@ public sealed partial class InstallerEngine
         //    remove; decidir depois deixaria as duas pastas para trás.
         var arquivos = new List<string>();
         var pastas = new List<string>();
+        var inisEncadeados = new List<string>();
         foreach (var pasta in PastasParaVarrer(gameFolder).ToList())
         {
             arquivos.AddRange(NossosArquivosEm(pasta));
+            inisEncadeados.AddRange(InisEncadeadosEm(pasta));
             foreach (var nome in PastasNossas)
             {
                 var alvo = Path.Combine(pasta, nome);
@@ -152,8 +166,21 @@ public sealed partial class InstallerEngine
                 _log($"Mantido (é do jogo, acabou de ser restaurado): {arquivo}");
                 continue;
             }
-            if (Apagar(arquivo)) apagados++;
+            if (Apagar(arquivo))
+            {
+                apagados++;
+                if (Path.GetFileName(arquivo).Equals("nvngx_dlss.dll", StringComparison.OrdinalIgnoreCase))
+                    _log("   (era o DO KIT — byte a byte igual. A verificação de integridade da " +
+                         "Steam repõe o do jogo.)");
+            }
         }
+
+        // 3b. O ini do DxWrapper que encadeava ao dgVoodoo. O dgVoodoo acabou de
+        //     sair, e um RealDllPath pendurado faria o DxWrapper tentar carregar um arquivo
+        //     que não existe — o jogo voltaria a não abrir, por culpa nossa. Ini nosso sai
+        //     inteiro; ini do usuário só perde a linha.
+        foreach (var ini in inisEncadeados)
+            if (DesencadearDxWrapper(ini)) apagados++;
 
         // 4. Pastas nossas por inteiro, das mais fundas para as mais rasas.
         foreach (var alvo in pastas.OrderByDescending(d => d.Length))
@@ -208,8 +235,66 @@ public sealed partial class InstallerEngine
         }
     }
 
+    /// <summary>
+    /// Os inis do DxWrapper desta pasta cujo RealDllPath aponta para o nosso dgVoodoo:
+    /// o do stub (d3d9.ini / d3d8.ini) e o dxwrapper.ini que a primeira versão gravou.
+    /// </summary>
+    private static IEnumerable<string> InisEncadeadosEm(string pasta)
+    {
+        foreach (var nome in DxWrapperChain.NomesDeIni)
+        {
+            var ini = Path.Combine(pasta, nome);
+            bool aponta;
+            try { aponta = File.Exists(ini) && DxWrapperChain.ApontaParaODgVoodoo(File.ReadAllText(ini)); }
+            catch { aponta = false; }
+            if (aponta) yield return ini;
+        }
+    }
+
+    /// <summary>Tira o dgVoodoo do RealDllPath: apaga o ini se é nosso, senão só limpa a linha.</summary>
+    private bool DesencadearDxWrapper(string ini)
+    {
+        try
+        {
+            var texto = File.ReadAllText(ini);
+            if (!DxWrapperChain.ApontaParaODgVoodoo(texto)) return false;
+            if (DxWrapperChain.IniEhNosso(texto))
+            {
+                File.Delete(ini);
+                _log($"Apagado: {ini}");
+            }
+            else
+            {
+                File.WriteAllText(ini, DxWrapperChain.Desencadear(texto));
+                _log($"RealDllPath limpo em {ini} (o resto do arquivo é seu e ficou).");
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _log($"Aviso: {ini}: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Remove o nvngx_dlss.dll desta pasta SE ele for o transplante — byte a byte igual
+    /// ao do kit. A reversão com manifesto precisa disto em separado: o transplante é
+    /// obra de instalação antiga e não consta em manifesto nenhum.
+    /// </summary>
+    public bool RemoverTransplante(string? pasta)
+    {
+        if (string.IsNullOrWhiteSpace(pasta)) return false;
+        var alvo = Path.Combine(pasta, "nvngx_dlss.dll");
+        if (!TransplanteDlss.EhDoKit(alvo, NvngxDlssDoKit)) return false;
+        if (!Apagar(alvo)) return false;
+        _log("Este nvngx_dlss.dll era o DO KIT (transplante de instalação antiga) — removido. " +
+             "Steam → Propriedades → Arquivos instalados → Verificar integridade repõe o do jogo.");
+        return true;
+    }
+
     /// <summary>Arquivos desta pasta (só nela) que dá para afirmar que são nossos.</summary>
-    private static List<string> NossosArquivosEm(string pasta)
+    private List<string> NossosArquivosEm(string pasta)
     {
         var nossos = new List<string>();
 
@@ -218,6 +303,10 @@ public sealed partial class InstallerEngine
             var caminho = Path.Combine(pasta, nome);
             if (File.Exists(caminho)) nossos.Add(caminho);
         }
+
+        // O transplante: idêntico ao arquivo do kit, então provadamente nosso.
+        var nvngx = Path.Combine(pasta, "nvngx_dlss.dll");
+        if (TransplanteDlss.EhDoKit(nvngx, NvngxDlssDoKit)) nossos.Add(nvngx);
 
         foreach (var (nome, prova) in PrecisamDeProva)
         {

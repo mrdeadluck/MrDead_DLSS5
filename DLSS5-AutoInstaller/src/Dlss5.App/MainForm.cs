@@ -8,6 +8,13 @@ namespace Dlss5.App;
 public sealed class MainForm : Form
 {
     private readonly AppSettings _settings = AppSettings.Load();
+
+    /// <summary>
+    /// O override de assinatura estava no registro quando o Windows subiu? É o que decide
+    /// se falta reiniciar — não o carimbo do manifesto, que cada Desinstalar/Instalar do
+    /// dia renova sem mudar nada no driver.
+    /// </summary>
+    private bool? _overrideNoBoot;
     private readonly InstallOptions _options = new();
 
     private GameProfile? _profile;
@@ -36,7 +43,7 @@ public sealed class MainForm : Form
     private readonly Label _lblNativeWhy = new();
     private readonly CheckBox _chkDireto = new()
     {
-        Text = "Usar o caminho direto do RenoDX (sem Feeder) — experimental: só marque se já viu funcionar",
+        Text = "Usar o Feeder em vez do caminho direto — experimental: em jogo com DLSS nativo o Feeder colide com o NGX do jogo",
         AutoSize = false,
         Width = 680,
         Height = 22,
@@ -77,6 +84,18 @@ public sealed class MainForm : Form
     private Button _btnPlaca = new();
     private Button _btnPainelDg = new();
     private Button _btnTestarConf = new();
+    private Button _btnRenodx = new();
+    // Caminho direto: a chave EnableHooks do RenoDX, trocada no ReShade.ini sem reinstalar.
+    private readonly Label _lblHooks = new()
+    {
+        Text = "Hooks do RenoDX:",
+        AutoSize = false,
+        Width = 115,
+        Height = 26,
+        TextAlign = ContentAlignment.MiddleLeft,
+    };
+    private readonly ComboBox _cboHooks = new();
+    private Button _btnHooks = new();
     private readonly CheckBox _chkTnL = new()
     {
         Text = "T&&L por hardware",
@@ -714,7 +733,7 @@ public sealed class MainForm : Form
         if (_cboApi.SelectedItem is GraphicsApi g) _profile.Api = g;
         if (!string.IsNullOrWhiteSpace(_txtRenderer.Text)) _profile.RendererFolder = _txtRenderer.Text;
         _profile.MvProvider = _options.MvProvider;
-        _profile.PreferirCaminhoDireto = _chkDireto.Visible && _chkDireto.Checked;
+        _profile.PreferirFeeder = _chkDireto.Visible && _chkDireto.Checked;
         UpdateMvAvailability();
         UpdateNativeLabel();
         UpdateRouteLabel();
@@ -910,6 +929,20 @@ public sealed class MainForm : Form
         // desinstalar e instalar tudo de novo a cada tentativa.
         var barraDg = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 40, Padding = new Padding(0, 6, 0, 0) };
         barraDg.Controls.Add(MakeButton("Isolar a causa", 4, 0, 130, (_, _) => IsolarCausa()));
+        _btnRenodx = MakeButton("Testar sem o RenoDX", 4, 0, 160, (_, _) => TestarSemRenodx());
+        barraDg.Controls.Add(_btnRenodx);
+        // EnableHooks do RenoDX: só aparece no caminho direto, onde o addon é quem trabalha.
+        barraDg.Controls.Add(_lblHooks);
+        _cboHooks.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cboHooks.Width = 360;
+        foreach (var v in RenodxIni.Valores) _cboHooks.Items.Add(RenodxIni.Descricao(v));
+        _cboHooks.SelectedIndex = 0;
+        barraDg.Controls.Add(_cboHooks);
+        _btnHooks = MakeButton("Aplicar hooks", 4, 0, 120, (_, _) => TrocarHooksDoRenodx());
+        barraDg.Controls.Add(_btnHooks);
+        _lblHooks.Visible = false;
+        _cboHooks.Visible = false;
+        _btnHooks.Visible = false;
         barraDg.Controls.Add(_lblDgVoodoo);
         _lblDgVoodoo.Visible = false;
         _cboPlaca.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -953,12 +986,15 @@ public sealed class MainForm : Form
 
         // Antes de avançar, colhe o resultado do teste que estava em andamento. Sem isso o
         // usuário atravessa as etapas e chega ao fim sem conclusão nenhuma — foi o que
-        // aconteceu no primeiro uso: o teste 2 passou batido.
-        if (_isolamento != EstadoIsolamento.Tudo)
+        // aconteceu no primeiro uso: o teste 2 passou batido. O teste do RenoDX não entra
+        // aqui: ele é avulso (botão próprio) e não tem pergunta desta bisseção.
+        if (_isolamento is EstadoIsolamento.SemDgVoodoo or EstadoIsolamento.SemReShade)
         {
             var pergunta = _isolamento == EstadoIsolamento.SemDgVoodoo
                 ? "Com o dgVoodoo DESLIGADO, o jogo abriu?"
-                : "Com o ReShade DESLIGADO (e o dgVoodoo ligado), o jogo abriu?";
+                : _profile.NeedsDgVoodoo
+                    ? "Com o ReShade DESLIGADO (e o dgVoodoo ligado), o jogo abriu?"
+                    : "Com o ReShade DESLIGADO, o jogo abriu e rodou?";
             var abriu = MessageBox.Show(this, pergunta, "Resultado do teste",
                 MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
 
@@ -974,7 +1010,8 @@ public sealed class MainForm : Form
 
         var proximo = _isolamento switch
         {
-            EstadoIsolamento.Tudo => EstadoIsolamento.SemDgVoodoo,
+            // Vindo do teste avulso do RenoDX, a bisseção começa do zero (Aplicar religa).
+            EstadoIsolamento.Tudo or EstadoIsolamento.SemRenodx => EstadoIsolamento.SemDgVoodoo,
             EstadoIsolamento.SemDgVoodoo => EstadoIsolamento.SemReShade,
             _ => EstadoIsolamento.Tudo,
         };
@@ -999,18 +1036,109 @@ public sealed class MainForm : Form
             _status.Text = proximo switch
             {
                 EstadoIsolamento.SemDgVoodoo => "Teste 1 de 2: dgVoodoo desligado. Abra o jogo e volte aqui.",
-                EstadoIsolamento.SemReShade => "Teste 2 de 2: ReShade desligado. Abra o jogo e volte aqui.",
+                EstadoIsolamento.SemReShade => _profile.NeedsDgVoodoo
+                    ? "Teste 2 de 2: ReShade desligado. Abra o jogo e volte aqui."
+                    : "Teste único: ReShade desligado. Abra o jogo e volte aqui.",
                 _ => "Instalação religada por inteiro.",
             };
 
             var texto = proximo == EstadoIsolamento.Tudo
-                ? Isolamento.Veredito(_abriuSemDgVoodoo, _abriuSemReShade) +
-                  "\r\n\r\n" + Isolamento.Leitura(proximo)
-                : Isolamento.Leitura(proximo) +
+                ? Isolamento.Veredito(_abriuSemDgVoodoo, _abriuSemReShade, _profile.NeedsDgVoodoo) +
+                  "\r\n\r\n" + Isolamento.Leitura(proximo, _profile.NeedsDgVoodoo)
+                : Isolamento.Leitura(proximo, _profile.NeedsDgVoodoo) +
                   "\r\n\r\nDepois de abrir o jogo, clique em \"Isolar a causa\" de novo: " +
                   "ele pergunta o que aconteceu e passa ao próximo teste.";
 
             MessageBox.Show(this, texto, "Isolar a causa",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            AtualizarBotaoRenodx();
+        }
+        catch (Exception ex) { Warn(ex.Message); }
+    }
+
+    /// <summary>
+    /// Teste avulso do caso "abre, mas o DLSS do MENU do jogo trava ao ligar": desliga só
+    /// o addon do RenoDX — quem se pendura na chamada de NGX que o próprio jogo faz —
+    /// mantendo ReShade e Feeder ativos. Foi o padrão do GTA 5 depois da recuperação: DLL
+    /// original de volta e o travamento continuou, o que tira o arquivo da lista de
+    /// suspeitos e deixa a interceptação dentro do processo. O mesmo botão religa.
+    /// </summary>
+    private void TestarSemRenodx()
+    {
+        if (_profile is null) { Warn("Faça a detecção primeiro."); return; }
+
+        var rodando = ProcessoDoJogoRodando(_profile.RealExePath);
+        if (rodando is not null)
+        {
+            Warn($"Feche o jogo ({rodando}.exe) antes: arquivo em uso não é renomeado.");
+            return;
+        }
+
+        var proximo = _isolamento == EstadoIsolamento.SemRenodx
+            ? EstadoIsolamento.Tudo
+            : EstadoIsolamento.SemRenodx;
+
+        ShowStep(3);
+        _txtLog.Clear();
+        try
+        {
+            new Isolamento(Log).Aplicar(proximo, _profile.ExeFolder,
+                _profile.RendererFolder ?? _profile.ExeFolder);
+            _isolamento = proximo;
+            AtualizarBotaoRenodx();
+
+            _status.Text = proximo == EstadoIsolamento.SemRenodx
+                ? "RenoDX desligado. Abra o jogo e teste o DLSS no MENU do jogo."
+                : "RenoDX religado.";
+            MessageBox.Show(this, Isolamento.Leitura(proximo), "Testar sem o RenoDX",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex) { Warn(ex.Message); }
+    }
+
+    /// <summary>O texto do botão diz o que o clique fará, não o estado atual.</summary>
+    private void AtualizarBotaoRenodx() =>
+        _btnRenodx.Text = _isolamento == EstadoIsolamento.SemRenodx
+            ? "Religar o RenoDX"
+            : "Testar sem o RenoDX";
+
+    /// <summary>Mostra na lista o valor que o ReShade.ini da pasta tem de fato.</summary>
+    private void SincronizarHooksDoRenodx()
+    {
+        if (_profile is null) return;
+        var ini = Path.Combine(_profile.ExeFolder, "ReShade.ini");
+        int valor = RenodxIni.Padrao;
+        try { if (File.Exists(ini)) valor = RenodxIni.Ler(File.ReadAllText(ini)) ?? RenodxIni.Padrao; }
+        catch { /* sem leitura, fica o padrão */ }
+        int i = RenodxIni.Valores.ToList().IndexOf(valor);
+        _cboHooks.SelectedIndex = i < 0 ? 0 : i;
+    }
+
+    /// <summary>
+    /// Regrava só a chave EnableHooks na seção [RenoDX.DLSS5] do ReShade.ini. É o ajuste
+    /// que o próprio addon pede em jogo com Streamline (1) e o teste que deixa o addon
+    /// carregado sem gancho nenhum (0) — sem desinstalar e instalar a cada tentativa.
+    /// </summary>
+    private void TrocarHooksDoRenodx()
+    {
+        if (_profile is null) { Warn("Faça a detecção primeiro."); return; }
+
+        var rodando = ProcessoDoJogoRodando(_profile.RealExePath);
+        if (rodando is not null)
+        {
+            Warn($"Feche o jogo ({rodando}.exe) antes: o ReShade regrava o ReShade.ini ao sair e desfaria a troca.");
+            return;
+        }
+
+        var ini = Path.Combine(_profile.ExeFolder, "ReShade.ini");
+        if (!File.Exists(ini)) { Warn("ReShade.ini não está na pasta do exe — instale primeiro."); return; }
+
+        int valor = RenodxIni.Valores[Math.Max(0, _cboHooks.SelectedIndex)];
+        try
+        {
+            File.WriteAllText(ini, RenodxIni.Gravar(File.ReadAllText(ini), valor));
+            _status.Text = $"ReShade.ini: EnableHooks={valor}. Abra o jogo e verifique de novo.";
+            MessageBox.Show(this, RenodxIni.Leitura(valor), "Hooks do RenoDX",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex) { Warn(ex.Message); }
@@ -1171,6 +1299,21 @@ public sealed class MainForm : Form
         }
     }
 
+    /// <summary>
+    /// Caminho do nvngx_dlss.dll DO KIT — o gabarito que permite reconhecer (e remover)
+    /// o transplante que instalações antigas deixaram na pasta do jogo. A faxina e a
+    /// verificação podem rodar antes da detecção, então o kit é resolvido aqui sob
+    /// demanda a partir da pasta digitada.
+    /// </summary>
+    private string? NvngxDoKit()
+    {
+        if (_kit?.NvngxDlss is { } pronto) return pronto;
+        var pasta = _txtKit.Text.Trim();
+        if (string.IsNullOrWhiteSpace(pasta) || !Directory.Exists(pasta)) return null;
+        _kit = KitResolver.Resolve(pasta);
+        return _kit.NvngxDlss;
+    }
+
     private void RevertInstall()
     {
         if (_profile is null) return;
@@ -1208,7 +1351,7 @@ public sealed class MainForm : Form
                 MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
             return;
 
-        var engine = new InstallerEngine(Log);
+        var engine = new InstallerEngine(Log) { NvngxDlssDoKit = NvngxDoKit() };
         ShowStep(3);
         _txtLog.Clear();
         try
@@ -1294,7 +1437,7 @@ public sealed class MainForm : Form
             return;
         }
 
-        var engine = new InstallerEngine(Log);
+        var engine = new InstallerEngine(Log) { NvngxDlssDoKit = NvngxDoKit() };
 
         // Varrer a pasta de um jogo grande leva alguns segundos; sem isso a janela
         // parece travada.
@@ -1335,6 +1478,7 @@ public sealed class MainForm : Form
             var sobras = engine.LimpezaTotal(pasta);
             _manifest = null;
             _isolamento = EstadoIsolamento.Tudo;
+            AtualizarBotaoRenodx();
             if (sobras.Count > 0)
             {
                 _status.Text = $"{sobras.Count} item(ns) não saíram — veja o log.";
@@ -1422,6 +1566,8 @@ public sealed class MainForm : Form
 
         _settings.KitFolder = kitFolder;
         _settings.LastGameFolder = gameFolder;
+        // Antes de qualquer instalação desta execução: o que o driver viu no boot.
+        _overrideNoBoot = SignatureOverride.EstadoNoBoot(_settings);
         _settings.Save();
 
         _status.Text = "Analisando...";
@@ -1596,8 +1742,14 @@ public sealed class MainForm : Form
         _chkTnL.Visible = _profile.NeedsDgVoodoo;
         _btnTestarConf.Visible = _profile.NeedsDgVoodoo;
 
+        bool direto = _profile.UsesRenodxDirectPath;
+        _lblHooks.Visible = direto;
+        _cboHooks.Visible = direto;
+        _btnHooks.Visible = direto;
+        if (direto) SincronizarHooksDoRenodx();
+
         _grid.Rows.Clear();
-        var resultados = CheckpointVerifier.Verify(_profile, _manifest).ToList();
+        var resultados = CheckpointVerifier.Verify(_profile, _manifest, NvngxDoKit(), _overrideNoBoot).ToList();
         foreach (var c in resultados)
         {
             int i = _grid.Rows.Add(StateText(c.State), $"{c.Number}. {c.Title}",
