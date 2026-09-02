@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Dlss5.Core;
 
 /// <summary>
@@ -228,14 +230,24 @@ public static class CheckpointVerifier
                     : null));
         }
 
-        // 11 — efeitos encontráveis
-        var feedFx = Path.Combine(exe, "reshade-shaders", "Shaders", "DLSS5_Feed.fx");
-        r.Add(new CheckResult(11, "Shaders no lugar",
-            File.Exists(feedFx) ? CheckStatus.Pass : CheckStatus.Fail,
-            File.Exists(feedFx)
-                ? "reshade-shaders\\Shaders\\DLSS5_Feed.fx presente."
-                : "DLSS5_Feed.fx não encontrado.",
-            File.Exists(feedFx) ? null : "Rode a instalação (ou reinstale: o desinstalador do ReShade apaga reshade-shaders\\)."));
+        // 11 — efeitos encontráveis. Só no caminho do Feeder: no direto a pasta de
+        // shaders não é instalada de propósito (nenhum efeito participa).
+        if (!profile.NeedsFeeder)
+        {
+            r.Add(new CheckResult(11, "Shaders", CheckStatus.NotApplicable,
+                "Não instalados neste caminho: nenhum efeito do ReShade participa — o RenoDX trabalha no contrato NGX do jogo.",
+                null));
+        }
+        else
+        {
+            var feedFx = Path.Combine(exe, "reshade-shaders", "Shaders", "DLSS5_Feed.fx");
+            r.Add(new CheckResult(11, "Shaders no lugar",
+                File.Exists(feedFx) ? CheckStatus.Pass : CheckStatus.Fail,
+                File.Exists(feedFx)
+                    ? "reshade-shaders\\Shaders\\DLSS5_Feed.fx presente."
+                    : "DLSS5_Feed.fx não encontrado.",
+                File.Exists(feedFx) ? null : "Rode a instalação (ou reinstale: o desinstalador do ReShade apaga reshade-shaders\\)."));
+        }
 
         // 13 — preset com o provedor acima do Feed
         //
@@ -463,6 +475,25 @@ public static class CheckpointVerifier
                             : "Abra o jogo, jogue alguns segundos e verifique de novo.");
         }
 
+        // Log gravado numa rodada SEM o RenoDX (teste de isolamento): não diz nada sobre o
+        // DLSS 5, mas ainda diz se o jogo caiu — e uma queda sem o addon na jogada é a
+        // prova de que ele está fora de suspeita.
+        else if (loaded && AddonRenodxNaPasta(exeFolder))
+        {
+            var seg = RenodxLog.SegundosAteDialogo(text);
+            yield return new CheckResult(14, "DLSS 5 aplicado na imagem",
+                seg is null ? CheckStatus.Manual : CheckStatus.Fail,
+                seg is null
+                    ? "O ReShade.log atual foi gravado numa rodada SEM o RenoDX (teste de isolamento): não diz nada sobre o DLSS 5."
+                    : $"O ReShade.log atual é de uma rodada SEM o RenoDX — e mesmo assim o jogo abriu a tela de erro " +
+                      $"{seg.Value.ToString("0.0", CultureInfo.InvariantCulture)} s depois de o runtime do ReShade subir. " +
+                      "O RenoDX está fora de suspeita: é o ReShade dentro deste jogo.",
+                seg is null
+                    ? "Religue o RenoDX, abra o jogo e verifique de novo."
+                    : "\"Isolar a causa\" (sem o dxgi.dll) confirma. Rodando sem o ReShade: desligue todas as " +
+                      "sobreposições e teste de novo; persistindo, este jogo recusa esta versão do ReShade.");
+        }
+
         bool sawSwapchain = text.Contains("CreateSwapChain", StringComparison.OrdinalIgnoreCase)
                             || text.Contains("Recreated runtime environment", StringComparison.OrdinalIgnoreCase);
         yield return new CheckResult(8, "ReShade viu o swapchain",
@@ -471,6 +502,17 @@ public static class CheckpointVerifier
                 ? "Log tem CreateSwapChain / Recreated runtime environment."
                 : "Log sem CreateSwapChain: o ReShade carregou mas não é a factory do renderizador.",
             sawSwapchain ? null : "O dxgi.dll tem que estar na pasta do EXE. Overlays podem estar chegando antes.");
+    }
+
+    /// <summary>O addon do RenoDX está na pasta — ligado, ou desligado pelo isolamento.</summary>
+    private static bool AddonRenodxNaPasta(string exeFolder)
+    {
+        foreach (var pasta in new[] { exeFolder, Path.Combine(exeFolder, "host64") })
+        {
+            if (File.Exists(Path.Combine(pasta, "renodx-dlss5.addon64"))) return true;
+            if (File.Exists(Path.Combine(pasta, "renodx-dlss5.addon64" + Isolamento.Sufixo))) return true;
+        }
+        return false;
     }
 
     private static IEnumerable<CheckResult> VerifyFeedLogs(

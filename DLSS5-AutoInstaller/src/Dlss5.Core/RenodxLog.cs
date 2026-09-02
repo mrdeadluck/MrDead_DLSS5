@@ -133,7 +133,7 @@ public static class RenodxLog
     /// de diálogo do Windows (DirectUIHWND). Nulo sem diálogo. Quando o runtime nunca
     /// subiu, conta a partir do swapchain ou do registro do addon.
     /// </summary>
-    internal static double? SegundosAteDialogo(string logText)
+    public static double? SegundosAteDialogo(string logText)
     {
         var linhas = logText.Replace("\r\n", "\n").Split('\n');
 

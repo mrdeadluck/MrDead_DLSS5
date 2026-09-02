@@ -134,6 +134,11 @@ public static class ReShadeConfigWriter
         sb.AppendLine(@"EffectSearchPaths=.\reshade-shaders\Shaders\**");
         sb.AppendLine(@"TextureSearchPaths=.\reshade-shaders\Textures\**");
         sb.AppendLine($"PresetPath=.\\{presetFile}");
+        // Caminho direto: só efeitos marcados no preset são carregados — e o preset é
+        // vazio. Assim nenhum .fx que sobrou na pasta (de instalação antiga, ou do
+        // usuário) é compilado e alocado no device do jogo.
+        if (!feederUsed)
+            sb.AppendLine("EffectLoadSkipping=1");
         sb.AppendLine();
         sb.AppendLine("[INPUT]");
         sb.AppendLine($"KeyOverlay={overlayKey},{Bit(ctrl)},{Bit(shift)},{Bit(alt)}");

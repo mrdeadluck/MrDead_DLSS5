@@ -102,11 +102,19 @@ public static class InstallPlanBuilder
                 : "Gerar ReShadePreset.ini (sem efeitos: com DLSS nativo em D3D12 o RenoDX se pendura na chamada do próprio jogo)",
             null, Path.Combine(exe, "ReShadePreset.ini")));
 
-        // Pasta de shaders.
-        if (kit.ShadersDir is not null)
+        // Pasta de shaders — só no caminho do Feeder. No direto nenhum efeito participa
+        // (o preset sai vazio), e cada .fx da pasta ainda seria compilado e alocado no
+        // device do jogo toda vez que o runtime do ReShade sobe. No RE9 a tela de erro do
+        // jogo vinha 1 a 3 s depois desse ponto, com ou sem o RenoDX; uma instalação
+        // manual do addon não leva shader nenhum. A pasta fica de fora.
+        if (kit.ShadersDir is not null && profile.NeedsFeeder)
             plan.Actions.Add(new PlanAction(PlanActionKind.CopyFile,
                 $"Copiar pasta reshade-shaders → {Rel(profile, shadersTarget)}",
                 kit.ShadersDir, shadersTarget));
+        else if (!profile.NeedsFeeder)
+            plan.Warnings.Add("Caminho direto: a pasta reshade-shaders NÃO é instalada. Nenhum efeito do " +
+                "ReShade participa (o RenoDX trabalha no contrato NGX do próprio jogo), e cada shader da " +
+                "pasta seria compilado e alocado no device do jogo à toa a cada vez que o runtime sobe.");
 
         if (route == InstallRoute.A)
         {

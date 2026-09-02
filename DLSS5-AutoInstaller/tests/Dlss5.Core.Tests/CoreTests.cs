@@ -275,6 +275,14 @@ public class ReShadeIniPorCaminhoTests
         var custom = ReShadeConfigWriter.BuildReShadeIni(feederUsed: false, renodxHooks: 1);
         Assert.Equal(1, RenodxIni.Ler(custom));
     }
+
+    [Fact]
+    public void NoCaminhoDiretoSoEfeitosMarcadosCarregam()
+    {
+        // Preset vazio + EffectLoadSkipping: nenhum .fx que sobrou na pasta é compilado.
+        Assert.Contains("EffectLoadSkipping=1", ReShadeConfigWriter.BuildReShadeIni(feederUsed: false));
+        Assert.DoesNotContain("EffectLoadSkipping", ReShadeConfigWriter.BuildReShadeIni(feederUsed: true));
+    }
 }
 
 public class ApiDetectorTests
@@ -494,6 +502,24 @@ public class PlanBuilderTests
         Assert.False(Targets(plan, "dlss5-feed.addon64"));
         Assert.True(Targets(plan, "renodx-dlss5.addon64"));
         Assert.Contains(plan.Warnings, w => w.Contains("Caminho direto", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void CaminhoDiretoNaoInstalaAPastaDeShaders()
+    {
+        // RE9: a tela de erro do jogo vinha 1 a 3 s depois de o runtime do ReShade subir,
+        // com ou sem RenoDX — o ponto em que cada .fx da pasta é compilado e alocado no
+        // device do jogo. No direto nenhum efeito participa; a pasta fica de fora.
+        var direto = Profile(PeArchitecture.X64, GraphicsApi.D3D12);
+        direto.HasNativeDlss = true;
+        var planDireto = InstallPlanBuilder.Build(direto, FullKit(), new InstallOptions());
+        Assert.False(Targets(planDireto, "reshade-shaders"));
+        Assert.Contains(planDireto.Warnings, w => w.Contains("reshade-shaders NÃO é instalada", StringComparison.Ordinal));
+
+        // No Feeder o Feed.fx e o provedor de MV são a cadeia inteira: continua indo.
+        var feeder = Profile(PeArchitecture.X64, GraphicsApi.D3D12);
+        var planFeeder = InstallPlanBuilder.Build(feeder, FullKit(), new InstallOptions());
+        Assert.True(Targets(planFeeder, "reshade-shaders"));
     }
 
     [Fact]
@@ -2972,5 +2998,94 @@ public class IsolamentoRotaATests
 
         var rotaC = Isolamento.Leitura(EstadoIsolamento.SemReShade);
         Assert.Contains("dgVoodoo", rotaC);
+    }
+}
+
+public class VerificacaoSemRenodxNoLogTests
+{
+    private static string Pasta()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-cp14-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    private static GameProfile Perfil(string dir) => new()
+    {
+        GameFolder = dir,
+        RealExePath = Path.Combine(dir, "re9.exe"),
+        Architecture = PeArchitecture.X64,
+        Api = GraphicsApi.D3D12,
+        HasNativeDlss = true,
+    };
+
+    private const string LogSemAddonComQueda =
+        "00:33:51:039 [ 4524] | INFO  | Initializing crosire's ReShade version '6.8.0.2155' (64-bit) loaded from 'dxgi.dll' into 're9.exe' ...\n" +
+        "00:33:56:151 [35364] | INFO  | Redirecting IDXGIFactory2::CreateSwapChainForHwnd(this = 1, ppSwapChain = ) ...\n" +
+        "00:33:59:035 [35364] | INFO  | Recreated runtime environment on runtime 1 ('ReShade.ini').\n" +
+        "00:34:01:257 [35364] | INFO  | Redirecting RegisterClassExW(lpWndClassEx = 1 { \"DirectUIHWND\", style = 0x4000 }) ...\n" +
+        "00:34:30:141 [35364] | INFO  | Exiting ...\n";
+
+    [Fact]
+    public void LogSemOAddonMasComQuedaTiraORenodxDaSuspeita()
+    {
+        var dir = Pasta();
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "renodx-dlss5.addon64"), "x");
+            File.WriteAllText(Path.Combine(dir, "ReShade.log"), LogSemAddonComQueda + new string(' ', 2000));
+
+            var c14 = CheckpointVerifier.Verify(Perfil(dir), null).First(c => c.Number == 14);
+
+            Assert.Equal(CheckStatus.Fail, c14.State);
+            Assert.Contains("SEM o RenoDX", c14.Detail);
+            Assert.Contains("2.2 s", c14.Detail);
+            Assert.Contains("fora de suspeita", c14.Detail);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void LogSemOAddonESemQuedaSoPedeParaReligar()
+    {
+        var dir = Pasta();
+        try
+        {
+            // Addon desligado pelo isolamento também conta como "está na pasta".
+            File.WriteAllText(Path.Combine(dir, "renodx-dlss5.addon64" + Isolamento.Sufixo), "x");
+            File.WriteAllText(Path.Combine(dir, "ReShade.log"),
+                "00:33:51:039 [1] | INFO  | Initializing crosire's ReShade version '6.8.0.2155' (64-bit) ...\n" +
+                "00:33:59:035 [1] | INFO  | Recreated runtime environment on runtime 1 ('ReShade.ini').\n" + new string(' ', 2000));
+
+            var c14 = CheckpointVerifier.Verify(Perfil(dir), null).First(c => c.Number == 14);
+
+            Assert.Equal(CheckStatus.Manual, c14.State);
+            Assert.Contains("Religue o RenoDX", c14.FixHint);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void SemOAddonNaPastaNaoHaCheckpoint14()
+    {
+        var dir = Pasta();
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "ReShade.log"), LogSemAddonComQueda + new string(' ', 2000));
+            Assert.DoesNotContain(CheckpointVerifier.Verify(Perfil(dir), null), c => c.Number == 14);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void NoCaminhoDiretoOsShadersSaoNaoAplicaveis()
+    {
+        var dir = Pasta();
+        try
+        {
+            var c11 = CheckpointVerifier.Verify(Perfil(dir), null).First(c => c.Number == 11);
+            Assert.Equal(CheckStatus.NotApplicable, c11.State);
+        }
+        finally { Directory.Delete(dir, true); }
     }
 }
