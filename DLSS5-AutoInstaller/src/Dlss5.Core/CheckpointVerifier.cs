@@ -229,6 +229,20 @@ public static class CheckpointVerifier
             }
         }
 
+        // 19 — Fox Engine: o patch anti-hook está no executável? Sem ele nada abaixo importa.
+        if (MotorFox.EhFoxEngine(profile.RealExePath))
+        {
+            bool patch = MotorFox.PatchAplicado(profile.RealExePath);
+            r.Add(new CheckResult(19, "Patch anti-hook da Fox Engine (CheckModuleHook)",
+                patch ? CheckStatus.Pass : CheckStatus.Fail,
+                patch
+                    ? $"Existe {Path.GetFileName(MotorFox.CaminhoDoBackup(profile.RealExePath!))}: o exe passou pelo patcher. " +
+                      "Atenção: a verificação de integridade da Steam restaura o exe original e desfaz o patch."
+                    : "Não existe o backup .anti-hook-backup ao lado do exe: o jogo ainda confere os ganchos do D3D11 e se " +
+                      "fecha com qualquer ReShade — foi o que o teste \"só o ReShade\" mostrou.",
+                patch ? null : MotorFox.PatcherCobre(profile.RealExePath) ? MotorFox.ComoAplicarOPatch : MotorFox.SemPatcherParaGz));
+        }
+
         // 6 — arquitetura do ReShade instalado. O nome muda com a API: num jogo OpenGL
         // procurar por dxgi.dll acusaria falha mesmo com a instalação correta.
         if (profile.UsarReFramework)
@@ -641,7 +655,11 @@ public static class CheckpointVerifier
                             // contextos adiados e saída limpa sem swapchain. Não é travamento
                             // — é o jogo se fechando, que é o que a proteção da Fox Engine faz.
                             ? (MotorFox.EhFoxEngine(exePath)
-                                ? MotorFox.Aviso + " " + MotorFox.Ladeira
+                                ? MotorFox.Aviso + " " + (MotorFox.PatchAplicado(exePath)
+                                    ? "O backup do patch está na pasta, mas o jogo fechou assim mesmo: confira se o patcher " +
+                                      "aceitou o exe (ele só cobre o 1.0.15.4 Steam inglês) e se a Steam não restaurou o " +
+                                      "executável original por cima (verificação de integridade desfaz o patch)."
+                                    : MotorFox.PatcherCobre(exePath) ? MotorFox.ComoAplicarOPatch : MotorFox.SemPatcherParaGz)
                                 : "O jogo se fechou sozinho depois de criar o device — não travou. Isso é " +
                                   "proteção anti-adulteração recusando a DLL, ou uma sobreposição brigando " +
                                   "pela API. Com o jogo fechado: 1) \"Testar só o ReShade\" (desliga os dois " +

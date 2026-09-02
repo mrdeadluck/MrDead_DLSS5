@@ -79,7 +79,12 @@ public static class GameDetector
         if (profile.NomeDoReShadeEscolhido is { } nome)
             result.Notes.Add($"Este jogo recusa o dxgi.dll (proteção anti-adulteração): o ReShade entra como {nome}.");
         if (MotorFox.EhFoxEngine(profile.RealExePath))
+        {
             result.Notes.Add(MotorFox.Aviso);
+            result.Notes.Add(MotorFox.PatchAplicado(profile.RealExePath)
+                ? $"Patch anti-hook aplicado (existe {Path.GetFileName(MotorFox.CaminhoDoBackup(profile.RealExePath!))}): a instalação está liberada."
+                : MotorFox.PatcherCobre(profile.RealExePath) ? MotorFox.ComoAplicarOPatch : MotorFox.SemPatcherParaGz);
+        }
 
         return result;
     }

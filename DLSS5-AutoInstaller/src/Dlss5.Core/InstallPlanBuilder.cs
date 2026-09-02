@@ -386,11 +386,12 @@ public static class InstallPlanBuilder
                 "geforce_ti_4800 ou ati_radeon_8500 — não precisa reinstalar.");
         }
 
-        if (MotorFox.EhFoxEngine(profile.RealExePath))
+        if (MotorFox.EhFoxEngine(profile.RealExePath) && !MotorFox.PatchAplicado(profile.RealExePath))
         {
-            // Não é aviso de rotina: aqui o jogo não trava, ele FECHA — e sem esta linha o
-            // usuário reinstala variações do mesmo plano achando que errou alguma coisa.
-            plan.Warnings.Add(MotorFox.Aviso + " " + MotorFox.Ladeira);
+            // Bloqueio, não aviso: está provado (log + teste "só o ReShade") que sem o patch
+            // o jogo fecha com qualquer ReShade. Instalar de novo é rodada perdida.
+            plan.Blockers.Add(MotorFox.Aviso + " " +
+                (MotorFox.PatcherCobre(profile.RealExePath) ? MotorFox.ComoAplicarOPatch : MotorFox.SemPatcherParaGz));
         }
 
         if (profile.Api == GraphicsApi.Vulkan && profile.Architecture == PeArchitecture.X64)

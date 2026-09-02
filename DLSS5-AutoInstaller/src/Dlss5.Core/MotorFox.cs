@@ -3,25 +3,32 @@ namespace Dlss5.Core;
 /// <summary>
 /// O que se sabe da Fox Engine (Metal Gear Solid V: Ground Zeroes e The Phantom Pain).
 ///
-/// Este motor tem proteção anti-adulteração e é o único caso, até aqui, em que o jogo
-/// não trava: ele se FECHA. A prova está no ReShade.log do Ground Zeroes: o ReShade
-/// carrega como d3d11.dll, o jogo cria o device de vídeo, os dois addons registram, o
-/// renderizador chega a criar 27 contextos adiados — e o processo sai limpo, sem nunca
-/// criar a swapchain. Nenhum "crash", nenhuma tela de erro, nenhum log truncado. Só a
-/// saída. Sem os arquivos o mesmo jogo abre normalmente.
+/// O mecanismo, confirmado pelo Discord do RenoDX: a Fox Engine confere se as próprias
+/// interfaces D3D11 foram enganchadas — a função é fox::gr::dg::CheckModuleHook. O ReShade
+/// engancha o ID3D11DeviceContext, a checagem acusa, e o jogo SE FECHA de propósito antes
+/// de criar a swapchain. Parece o ReShade travando; é o jogo se encerrando. É exatamente a
+/// assinatura do ReShade.log do Ground Zeroes: device criado, addons registrados, 27
+/// contextos adiados, saída limpa. E o teste "só o ReShade" confirmou: sem addon nenhum
+/// o jogo também fecha. Não há nome de DLL que contorne isso — a checagem olha o gancho,
+/// não o arquivo.
 ///
-/// Por isso o programa para de vender esperança aqui: trocar o nome do ReShade entre
-/// dxgi.dll e d3d11.dll é trocar de porta na mesma casa — a proteção olha as duas. O que
-/// separa "a proteção recusa qualquer ReShade" de "são os nossos addons" é um teste só,
-/// o "Testar só o ReShade" da tela de verificação, e é ele que a orientação pede.
+/// A cura é um patch no executável: o MGSV-ReShade-AntiHook-Patcher (Discord do RenoDX)
+/// desvia o resultado do CheckModuleHook. Ele só aceita o mgsvtpp.exe 1.0.15.4 (Steam,
+/// inglês), cria mgsvtpp.exe.anti-hook-backup e não toca em executável desconhecido.
+/// Com o patch, o ReShade entra como dxgi.dll — o nome comum.
 /// </summary>
 public static class MotorFox
 {
-    /// <summary>Executáveis conhecidos da Fox Engine que carregam a proteção.</summary>
+    /// <summary>Executáveis conhecidos da Fox Engine que carregam a checagem.</summary>
     private static readonly string[] Executaveis =
     {
         "mgsvtpp", "mgsvgz", "MgsGroundZeroes",
     };
+
+    /// <summary>Sufixo do backup que o patcher cria ao lado do exe.</summary>
+    public const string SufixoDoBackup = ".anti-hook-backup";
+
+    public const string NomeDoPatcher = "MGSV-ReShade-AntiHook-Patcher.exe";
 
     public static bool EhFoxEngine(string? exePath)
     {
@@ -30,18 +37,38 @@ public static class MotorFox
         return Executaveis.Any(n => n.Equals(exe, StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>O patcher só cobre o The Phantom Pain (mgsvtpp.exe 1.0.15.4, Steam, inglês).</summary>
+    public static bool PatcherCobre(string? exePath) =>
+        !string.IsNullOrWhiteSpace(exePath) &&
+        Path.GetFileNameWithoutExtension(exePath).Equals("mgsvtpp", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Caminho do backup que o patcher deixa: a prova de que o exe foi remendado.</summary>
+    public static string CaminhoDoBackup(string exePath) => exePath + SufixoDoBackup;
+
+    /// <summary>O executável já passou pelo patcher (o backup dele está ao lado).</summary>
+    public static bool PatchAplicado(string? exePath) =>
+        !string.IsNullOrWhiteSpace(exePath) && File.Exists(CaminhoDoBackup(exePath));
+
     /// <summary>Frase da tela de detecção.</summary>
     public const string Aviso =
-        "Fox Engine (Metal Gear Solid V): este motor tem proteção anti-adulteração e ela olha " +
-        "tanto o dxgi.dll quanto o d3d11.dll. Quando ela recusa, o jogo não trava — ele fecha " +
-        "sozinho, sem mensagem nenhuma. Trocar o nome do ReShade não contorna isso.";
+        "Fox Engine (Metal Gear Solid V): o jogo confere se as interfaces D3D11 foram enganchadas " +
+        "(fox::gr::dg::CheckModuleHook) e, como o ReShade engancha o ID3D11DeviceContext, ele se " +
+        "FECHA de propósito antes de criar a swapchain — sem mensagem, parecendo travamento. " +
+        "Nenhum nome de DLL contorna isso: a checagem olha o gancho, não o arquivo.";
 
-    /// <summary>O que fazer, na ordem, quando o jogo fecha sozinho com os arquivos.</summary>
-    public const string Ladeira =
-        "Antes de mexer em mais nada, rode o teste que separa as duas causas: na tela de " +
-        "verificação, \"Testar só o ReShade\" (desliga os dois addons e deixa só o ReShade). " +
-        "Se o jogo ABRIR, quem derruba são os addons e o conserto é aqui dentro. Se NÃO abrir, " +
-        "é a proteção do jogo recusando o ReShade em si, e aí o caminho é outro: fazer o jogo " +
-        "rodar em Vulkan pelo DXVK, com o ReShade entrando como camada do Vulkan em vez de DLL " +
-        "na pasta — é assim que a comunidade usa ReShade no MGS V.";
+    /// <summary>O que fazer: o patch no executável, uma vez.</summary>
+    public const string ComoAplicarOPatch =
+        "Com o jogo fechado, baixe o MGSV-ReShade-AntiHook-Patcher (Discord do RenoDX, zip com o " +
+        "código-fonte), ponha o " + NomeDoPatcher + " ao lado do mgsvtpp.exe e rode UMA vez. Ele desvia o " +
+        "resultado do CheckModuleHook, cria o mgsvtpp.exe" + SufixoDoBackup + " e só aceita a versão 1.0.15.4 " +
+        "(Steam, inglês) — executável diferente não é tocado. O Windows pode mostrar o SmartScreen " +
+        "por ele não ser assinado. Depois gere o plano de novo: com o backup na pasta, o programa " +
+        "libera a instalação e o ReShade entra como dxgi.dll.";
+
+    /// <summary>Ground Zeroes não tem patcher conhecido.</summary>
+    public const string SemPatcherParaGz =
+        "O patcher conhecido cobre só o The Phantom Pain (mgsvtpp.exe 1.0.15.4). Para o Ground Zeroes " +
+        "não há patch publicado: o CheckModuleHook fecha o jogo com qualquer ReShade, e o programa não " +
+        "vai instalar para você testar de novo o que já está provado. Se surgir um patcher para o " +
+        "MgsGroundZeroes.exe, o backup .anti-hook-backup ao lado do exe libera a instalação.";
 }

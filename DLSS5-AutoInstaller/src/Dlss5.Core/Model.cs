@@ -209,13 +209,11 @@ public sealed class GameProfile
         if (string.IsNullOrWhiteSpace(exePath)) return null;
         if (api is not (GraphicsApi.D3D11 or GraphicsApi.D3D12)) return null;
 
-        var exe = Path.GetFileNameWithoutExtension(exePath);
-        bool foxEngine =
-            exe.Equals("mgsvtpp", StringComparison.OrdinalIgnoreCase) ||
-            exe.Equals("mgsvgz", StringComparison.OrdinalIgnoreCase) ||
-            exe.Equals("MgsGroundZeroes", StringComparison.OrdinalIgnoreCase);
-
-        return foxEngine ? "d3d11.dll" : null;
+        // Fox Engine já morou aqui pedindo d3d11.dll. Era lenda de fórum: a checagem do
+        // jogo (CheckModuleHook) olha o gancho no D3D11, não o nome do arquivo — d3d11.dll
+        // fechava o jogo igual. Com o patch anti-hook o ReShade entra como dxgi.dll, o
+        // nome comum, e é assim que as instruções do patcher mandam instalar.
+        return null;
     }
 
     /// <summary>Nomes oferecidos para o ReShade, na ordem em que a tela mostra.</summary>

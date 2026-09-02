@@ -643,33 +643,59 @@ public class PlanBuilderTests
     }
 
     [Fact]
-    public void PlanoDoMgsvAvisaSobreAProtecaoAntesDeInstalar()
+    public void PlanoDoMgsvSemOPatchBloqueia()
     {
-        // O usuário reinstalou o MGS V várias vezes trocando o nome do ReShade. O plano
-        // tem que dizer, ANTES de instalar, que a proteção olha os dois nomes e qual é o
-        // teste que decide — senão a próxima rodada é igual à anterior.
+        // Está provado (log + teste "só o ReShade") que sem o patch o jogo fecha com
+        // qualquer ReShade. Instalar de novo é rodada perdida: o plano bloqueia e diz o
+        // que fazer — o patcher, para o Phantom Pain; "não há patch", para o Ground Zeroes.
         var dir = Path.Combine(Path.GetTempPath(), "dlss5fox_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         try
         {
-            var profile = new GameProfile
+            GameProfile Perfil(string exe) => new()
             {
                 GameFolder = dir,
-                RealExePath = Path.Combine(dir, "MgsGroundZeroes.exe"),
+                RealExePath = Path.Combine(dir, exe),
                 Architecture = PeArchitecture.X64,
                 Api = GraphicsApi.D3D11,
                 RendererFolder = dir,
-                NomeDoReShadeEscolhido = "d3d11.dll",
+            };
+
+            var tpp = InstallPlanBuilder.Build(Perfil("mgsvtpp.exe"), FullKit(), new InstallOptions());
+            Assert.False(tpp.CanRun);
+            Assert.Contains(tpp.Blockers, b => b.Contains("CheckModuleHook", StringComparison.Ordinal)
+                                               && b.Contains(MotorFox.NomeDoPatcher, StringComparison.Ordinal));
+
+            var gz = InstallPlanBuilder.Build(Perfil("MgsGroundZeroes.exe"), FullKit(), new InstallOptions());
+            Assert.False(gz.CanRun);
+            Assert.Contains(gz.Blockers, b => b.Contains("não há patch publicado", StringComparison.Ordinal));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void PlanoDoMgsvComOPatchInstalaComoDxgi()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5fox_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "mgsvtpp.exe" + MotorFox.SufixoDoBackup), "exe original");
+            var profile = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "mgsvtpp.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D11,
+                RendererFolder = dir,
             };
 
             var plan = InstallPlanBuilder.Build(profile, FullKit(), new InstallOptions());
 
-            Assert.Contains(plan.Warnings, w => w.Contains("Fox Engine", StringComparison.Ordinal));
-            Assert.Contains(plan.Warnings, w => w.Contains("Testar só o ReShade", StringComparison.Ordinal));
-            // E o plano continua instalando: o aviso não é bloqueio.
+            Assert.DoesNotContain(plan.Blockers, b => b.Contains("CheckModuleHook", StringComparison.Ordinal));
             Assert.Contains(plan.Actions, a =>
                 a.Kind == PlanActionKind.CopyFile &&
-                a.TargetPath?.EndsWith("d3d11.dll", StringComparison.OrdinalIgnoreCase) == true);
+                a.TargetPath?.EndsWith("dxgi.dll", StringComparison.OrdinalIgnoreCase) == true);
         }
         finally { Directory.Delete(dir, true); }
     }
@@ -3512,13 +3538,46 @@ public class CheckpointFoxEngineTests
                 NomeDoReShadeEscolhido = "d3d11.dll",
             };
 
-            var c14 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 14);
+            var checagens = CheckpointVerifier.Verify(perfil, null);
+            var c14 = checagens.First(c => c.Number == 14);
 
             Assert.Equal(CheckStatus.Fail, c14.State);
             Assert.Contains("SAIU sozinho", c14.Detail);
-            Assert.Contains("Fox Engine", c14.FixHint!);
-            Assert.Contains("Testar só o ReShade", c14.FixHint!);
-            Assert.Contains("DXVK", c14.FixHint!);
+            Assert.Contains("CheckModuleHook", c14.FixHint!);
+            // Ground Zeroes: sem patcher, a dica diz isso e não manda reinstalar.
+            Assert.Contains("não há patch publicado", c14.FixHint!);
+
+            var c19 = checagens.First(c => c.Number == 19);
+            Assert.Equal(CheckStatus.Fail, c19.State);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void ComOBackupDoPatchOItem19PassaEADicaDo14MudaDeAssunto()
+    {
+        var dir = Pasta();
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "renodx-dlss5.addon64"), "x");
+            File.WriteAllText(Path.Combine(dir, "ReShade.log"), LogGz + new string(' ', 2000));
+            File.WriteAllText(Path.Combine(dir, "mgsvtpp.exe" + MotorFox.SufixoDoBackup), "exe original");
+
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "mgsvtpp.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D11,
+            };
+
+            var checagens = CheckpointVerifier.Verify(perfil, null);
+            Assert.Equal(CheckStatus.Pass, checagens.First(c => c.Number == 19).State);
+            // O jogo fechou MESMO com o backup na pasta: a suspeita vira a Steam ter
+            // restaurado o exe original, não "aplique o patch".
+            var c14 = checagens.First(c => c.Number == 14);
+            Assert.Contains("integridade", c14.FixHint!);
+            Assert.DoesNotContain("rode UMA vez", c14.FixHint!);
         }
         finally { Directory.Delete(dir, true); }
     }
@@ -4046,15 +4105,15 @@ public class NomeDoReShadeTests
     }
 
     [Fact]
-    public void MgsVJaNasceComONomeQueOJogoAceita()
+    public void FoxEngineNaoPedeMaisD3d11()
     {
-        // Fox Engine: com o dxgi.dll na pasta o executável não abre.
+        // A preferência por d3d11.dll na Fox Engine era lenda de fórum: a checagem do jogo
+        // (CheckModuleHook) olha o gancho no D3D11, não o nome do arquivo — o teste "só o
+        // ReShade" com d3d11.dll fechou o jogo igual. Com o patch anti-hook o ReShade entra
+        // como dxgi.dll, como as instruções do patcher mandam.
         static string Exe(string nome) => Path.Combine("jogo", nome);
-        Assert.Equal("d3d11.dll", GameProfile.NomeDeReShadePreferido(Exe("mgsvtpp.exe"), GraphicsApi.D3D11));
-        Assert.Equal("d3d11.dll", GameProfile.NomeDeReShadePreferido(Exe("MgsGroundZeroes.exe"), GraphicsApi.D3D11));
-        Assert.Equal("d3d11.dll", GameProfile.NomeDeReShadePreferido(Exe("mgsvgz.exe"), GraphicsApi.D3D11));
-
-        // Qualquer outro jogo segue no padrão.
+        Assert.Null(GameProfile.NomeDeReShadePreferido(Exe("mgsvtpp.exe"), GraphicsApi.D3D11));
+        Assert.Null(GameProfile.NomeDeReShadePreferido(Exe("MgsGroundZeroes.exe"), GraphicsApi.D3D11));
         Assert.Null(GameProfile.NomeDeReShadePreferido(Exe("re9.exe"), GraphicsApi.D3D12));
         Assert.Null(GameProfile.NomeDeReShadePreferido(null, GraphicsApi.D3D11));
     }
@@ -4195,19 +4254,33 @@ public class DeteccaoEscolheONomeDoReShadeTests
     }
 
     [Fact]
-    public void OGroundZeroesJaSaiDaDeteccaoComD3d11()
+    public void OGroundZeroesSaiDaDeteccaoComOMecanismoEOAvisoDoPatch()
     {
-        // A regressão que isto tranca: a preferência ficava na tela e era sobrescrita
-        // pelos eventos dos controles antes de valer, e o MGS V seguia em dxgi.dll.
         var dir = PastaComExe("MgsGroundZeroes.exe");
         try
         {
             var r = GameDetector.Detect(dir);
 
             Assert.Equal(PeArchitecture.X64, r.Profile.Architecture);
-            Assert.Equal("d3d11.dll", r.Profile.NomeDoReShadeEscolhido);
-            Assert.Equal("d3d11.dll", r.Profile.ReShadeHookName);
-            Assert.Contains(r.Notes, n => n.Contains("recusa o dxgi.dll", StringComparison.Ordinal));
+            Assert.Null(r.Profile.NomeDoReShadeEscolhido);
+            Assert.Equal("dxgi.dll", r.Profile.ReShadeHookName);
+            Assert.Contains(r.Notes, n => n.Contains("CheckModuleHook", StringComparison.Ordinal));
+            // Ground Zeroes: sem patcher conhecido, e a nota diz isso em vez de mandar instalar.
+            Assert.Contains(r.Notes, n => n.Contains("não há patch publicado", StringComparison.Ordinal));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void OPhantomPainComOBackupDoPatchSaiLiberado()
+    {
+        var dir = PastaComExe("mgsvtpp.exe");
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "mgsvtpp.exe" + MotorFox.SufixoDoBackup), "exe original");
+            var r = GameDetector.Detect(dir);
+            Assert.True(MotorFox.PatchAplicado(r.Profile.RealExePath));
+            Assert.Contains(r.Notes, n => n.Contains("instalação está liberada", StringComparison.Ordinal));
         }
         finally { Directory.Delete(dir, true); }
     }
