@@ -57,11 +57,37 @@ jobs:
           $size = [math]::Round((Get-Item $exe).Length / 1MB, 1)
           Write-Host "OK: DLSS5-AutoInstaller.exe ($size MB)"
 
+      # Versão leve: o mesmo programa, arquivo único, sem o runtime embutido — cabe no
+      # limite de envio do chat (30 MiB) e roda em qualquer PC com o .NET 8 Desktop
+      # Runtime instalado (o próprio exe mostra o link de download se faltar).
+      - name: Publicar executável leve (framework-dependent)
+        working-directory: DLSS5-AutoInstaller
+        run: >
+          dotnet publish src/Dlss5.App/Dlss5.App.csproj
+          -c Release
+          -r win-x64
+          --self-contained false
+          -p:PublishSingleFile=true
+          -p:DebugType=None
+          -o ${{ github.workspace }}\publish-leve
+
+      - name: Conferir o resultado (leve)
+        shell: pwsh
+        run: |
+          $dir = "${{ github.workspace }}\publish-leve"
+          $exe = Join-Path $dir "DLSS5-AutoInstaller.exe"
+          if (-not (Test-Path $exe)) { throw "Executável leve não foi gerado" }
+          Move-Item $exe (Join-Path $dir "DLSS5-AutoInstaller-leve.exe")
+          $size = [math]::Round((Get-Item (Join-Path $dir "DLSS5-AutoInstaller-leve.exe")).Length / 1MB, 1)
+          Write-Host "OK: DLSS5-AutoInstaller-leve.exe ($size MB)"
+
       - name: Publicar como artefato
         uses: actions/upload-artifact@v4
         with:
           name: DLSS5-AutoInstaller
-          path: publish/DLSS5-AutoInstaller.exe
+          path: |
+            publish/DLSS5-AutoInstaller.exe
+            publish-leve/DLSS5-AutoInstaller-leve.exe
           retention-days: 90
 
       # Cada sessão de desenvolvimento usa uma branch claude/... nova; o link fixo
@@ -79,5 +105,11 @@ jobs:
             **Como usar:** baixe `DLSS5-AutoInstaller.exe` abaixo e execute (ele pede
             permissão de administrador, necessária para gravar no registro e em
             pastas dentro de Program Files). Não precisa instalar o .NET.
+
+            `DLSS5-AutoInstaller-leve.exe` é o mesmo programa sem o runtime embutido
+            (~2 MB): precisa do .NET 8 Desktop Runtime instalado no Windows — se
+            faltar, o próprio exe mostra o link para baixar.
           prerelease: true
-          files: publish/DLSS5-AutoInstaller.exe
+          files: |
+            publish/DLSS5-AutoInstaller.exe
+            publish-leve/DLSS5-AutoInstaller-leve.exe
