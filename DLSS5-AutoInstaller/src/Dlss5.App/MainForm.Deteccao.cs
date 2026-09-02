@@ -249,12 +249,38 @@ public sealed partial class MainForm
         return l;
     }
 
+    /// <summary>
+    /// Enquanto a tela é preenchida a partir de uma detecção nova, os eventos dos controles
+    /// NÃO podem gravar no perfil: cada atribuição dispara SyncProfileFromUi, e os campos
+    /// ainda não preenchidos guardam o texto da rodada anterior. Foi assim que o MGS V
+    /// perdeu o d3d11.dll e o Titanfall 2 perdeu a pasta do renderizador — a detecção
+    /// acertava, a nota na tela dizia bin\x64_retail, e o campo "Pasta do renderizador"
+    /// gravava a raiz da rodada anterior por cima antes de ser preenchido.
+    /// </summary>
+    private bool _preenchendoDeteccao;
+
     private void PreencherDeteccao(DetectionResult detection, KitInventory kit)
     {
         _profile = detection.Profile;
         _candidates = detection.Candidates;
 
-        PopulateCandidates(_profile.RealExePath);
+        _preenchendoDeteccao = true;
+        try
+        {
+            PreencherControles(detection, kit);
+        }
+        finally
+        {
+            _preenchendoDeteccao = false;
+        }
+
+        SyncProfileFromUi();
+        _diario.Tecnico($"Detecção: {_profile.RealExePath} {_profile.Architecture} {_profile.Api} rota {_profile.Route} nativo={_profile.HasNativeDlss} renderizador={_profile.RendererFolder}");
+    }
+
+    private void PreencherControles(DetectionResult detection, KitInventory kit)
+    {
+        PopulateCandidates(_profile!.RealExePath);
         _cboArch.SelectedItem = _profile.Architecture;
         _cboApi.SelectedItem = _profile.Api;
         _chkDireto.Checked = _profile.PreferirFeeder;
@@ -289,9 +315,6 @@ public sealed partial class MainForm
         if (_manifest is not null)
             notes.Add($"Instalação anterior registrada em {_manifest.InstalledUtc.ToLocalTime():dd/MM/yyyy HH:mm} (rota {_manifest.Route}); os backups dos originais serão preservados.");
         _txtNotes.Lines = notes.ToArray();
-
-        SyncProfileFromUi();
-        _diario.Tecnico($"Detecção: {_profile.RealExePath} {_profile.Architecture} {_profile.Api} rota {_profile.Route} nativo={_profile.HasNativeDlss}");
     }
 
     private void BrowseExe()
@@ -382,7 +405,7 @@ public sealed partial class MainForm
 
     private void SyncProfileFromUi()
     {
-        if (_profile is null) return;
+        if (_profile is null || _preenchendoDeteccao) return;
         if (_cboArch.SelectedItem is PeArchitecture a) _profile.Architecture = a;
         if (_cboApi.SelectedItem is GraphicsApi g) _profile.Api = g;
         if (!string.IsNullOrWhiteSpace(_txtRenderer.Text)) _profile.RendererFolder = _txtRenderer.Text;

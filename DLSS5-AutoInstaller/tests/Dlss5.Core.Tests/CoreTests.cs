@@ -3638,6 +3638,36 @@ public class Titanfall2RenderizadorTests
     }
 
     [Fact]
+    public void OManifestoDaInstalacaoNaRaizNaoDesfazORenderizadorDetectado()
+    {
+        // Instalação anterior errada (dxgi.dll na raiz, manifesto dizendo raiz). Ao inspecionar
+        // de novo, a detecção acha bin\x64_retail — e é ela que vale, senão "Atualizar" repete o erro.
+        var dir = PastaComExe("Titanfall2.exe");
+        try
+        {
+            var retail = Path.Combine(dir, "bin", "x64_retail");
+            Directory.CreateDirectory(retail);
+            File.WriteAllText(Path.Combine(retail, "materialsystem_dx11.dll"), "x");
+
+            var manifesto = new InstallManifest
+            {
+                GameFolder = dir,
+                ExeFolder = dir,
+                RealExePath = Path.Combine(dir, "Titanfall2.exe"),
+                RendererFolder = dir,
+                Api = nameof(GraphicsApi.D3D11),
+            };
+            manifesto.Save(dir);
+
+            var estado = EstadoDoMod.Inspecionar(dir, null, null);
+
+            Assert.Equal(retail, estado.Deteccao!.Profile.RendererFolder);
+            Assert.Equal(retail, estado.Deteccao.Profile.PastaDoReShade);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
     public void SemAPastaDoRenderizadorADllFicaNaRaiz()
     {
         var dir = PastaComExe("jogo.exe");

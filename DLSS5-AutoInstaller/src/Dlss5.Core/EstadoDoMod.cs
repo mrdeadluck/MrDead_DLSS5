@@ -146,7 +146,15 @@ public static class EstadoDoMod
             var arch = PeFile.GetArchitecture(manifesto.RealExePath);
             if (arch != PeArchitecture.Unknown) perfil.Architecture = arch;
             if (Enum.TryParse<GraphicsApi>(manifesto.Api, out var api) && api != GraphicsApi.Unknown) perfil.Api = api;
-            perfil.RendererFolder = manifesto.RendererFolder ?? perfil.RendererFolder;
+            // O manifesto diz onde a instalação anterior pôs as coisas — mas se a detecção
+            // de agora achou um renderizador ESPECÍFICO (bin\x64_retail do Titanfall 2), a
+            // instalação anterior na raiz era a errada, e "Atualizar" tem que corrigi-la em
+            // vez de repeti-la. Só a raiz cede ao manifesto.
+            bool detectouEspecifico = perfil.RendererFolder is { } rf &&
+                !string.Equals(Path.GetFullPath(rf).TrimEnd('\\', '/'), Path.GetFullPath(perfil.ExeFolder).TrimEnd('\\', '/'),
+                    StringComparison.OrdinalIgnoreCase);
+            if (!detectouEspecifico)
+                perfil.RendererFolder = manifesto.RendererFolder ?? perfil.RendererFolder;
             perfil.HasNativeDlss = manifesto.HasNativeDlss;
             perfil.PreferirFeeder = manifesto.PreferirFeeder;
         }
