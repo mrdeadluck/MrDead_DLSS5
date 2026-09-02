@@ -3,9 +3,11 @@ DLSS 5 Neural Rendering — como usar
 
 O QUE É
    Aplica o passo neural do DLSS 5 em jogos que não têm suporte nativo.
-   Você aponta duas pastas no programa e ele faz o resto: descobre o
-   executável real do jogo, a arquitetura, a API gráfica, copia cada
-   arquivo para o lugar certo e já deixa o ReShade configurado.
+   Você aponta a pasta do jogo e o programa mostra o estado (instalado
+   ou não) e as ações possíveis. Para instalar ele descobre o executável
+   real do jogo, a arquitetura, a API gráfica, copia cada arquivo para o
+   lugar certo e já deixa o ReShade configurado. Para desinstalar, basta
+   abrir o programa e clicar em Desinstalar — não precisa reinstalar.
 
 O QUE VOCÊ PRECISA TER
    - Placa NVIDIA RTX (testado em RTX 40 / Ada)
@@ -21,10 +23,13 @@ PASSO A PASSO
       precisa mesmo: grava no registro e em pastas de Arquivos de
       Programas.
 
-   2. Pasta do kit  -> esta pasta aqui
-      Pasta do jogo -> onde o jogo está instalado
+   2. Pasta do jogo -> onde o jogo está instalado
+      Pasta do kit  -> esta pasta aqui (só para instalar/atualizar/reparar)
 
-   3. Detectar > Gerar plano > Instalar > Verificar
+   3. Instalar DLSS 5 > confira a detecção > confira o plano > acompanhe
+      a execução > verificação. Antes de gravar qualquer arquivo o
+      programa mostra tudo que vai fazer; se algo falhar no meio, ele
+      desfaz sozinho.
 
    4. REINICIE O WINDOWS depois de instalar pela primeira vez.
 
@@ -58,9 +63,13 @@ AVISOS
    - Desligue MSAA/SSAA nas opções gráficas do jogo. FXAA e SMAA podem
      continuar ligados.
 
-SE DER ERRADO
-   O botão "Desinstalar (reverter)" na última tela desfaz tudo que foi
-   colocado na pasta do jogo, inclusive restaurando arquivos movidos.
+SE DER ERRADO / PARA DESINSTALAR
+   Abra o programa, aponte a pasta do jogo e clique em "Desinstalar e
+   restaurar arquivos originais". Ele mostra antes o que vai remover e
+   o que vai restaurar, e no fim lista o que foi feito. Se a instalação
+   ficou pela metade (programa fechado no meio, antivírus), a tela
+   inicial mostra "Instalação incompleta" e oferece "Reparar". Os logs
+   ficam em %LOCALAPPDATA%\DLSS5-AutoInstaller\logs.
 
 Programa e código-fonte:
    https://github.com/mrdeadluck/MrDead_DLSS5

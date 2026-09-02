@@ -356,12 +356,13 @@ public class RouteTests
     [Fact]
     public void ExeFolder_IsDirectoryOfRealExe()
     {
+        var raiz = Path.Combine(Path.GetTempPath(), "game");
         var p = new GameProfile
         {
-            GameFolder = @"C:\game",
-            RealExePath = @"C:\game\Binaries\Win32\g.exe",
+            GameFolder = raiz,
+            RealExePath = Path.Combine(raiz, "Binaries", "Win32", "g.exe"),
         };
-        Assert.Equal(@"C:\game\Binaries\Win32", p.ExeFolder);
+        Assert.Equal(Path.Combine(raiz, "Binaries", "Win32"), p.ExeFolder);
     }
 }
 
@@ -387,17 +388,25 @@ public class PlanBuilderTests
         HasDrme = true,
     };
 
+    // Pasta com separador do sistema (o plano usa Path.Combine); o nome "game" é o que
+    // as asserções procuram no fim do caminho.
+    private static readonly string GameRoot = Path.Combine(Path.GetTempPath(), "game");
+
     private static GameProfile Profile(PeArchitecture arch, GraphicsApi api) => new()
     {
-        GameFolder = @"C:\game",
-        RealExePath = @"C:\game\g.exe",
+        GameFolder = GameRoot,
+        RealExePath = Path.Combine(GameRoot, "g.exe"),
         Architecture = arch,
         Api = api,
-        RendererFolder = @"C:\game",
+        RendererFolder = GameRoot,
     };
 
+    // Os caminhos do plano usam o separador do sistema; o teste compara sempre com '\\'
+    // para rodar igual no Windows e no Linux (CI local).
+    private static string Norm(string? p) => (p ?? "").Replace('/', '\\');
+
     private static bool Targets(InstallPlan plan, string relative) =>
-        plan.Actions.Any(a => a.TargetPath?.EndsWith(relative, StringComparison.OrdinalIgnoreCase) == true);
+        plan.Actions.Any(a => Norm(a.TargetPath).EndsWith(relative, StringComparison.OrdinalIgnoreCase));
 
     [Fact]
     public void NativeDlss_OutsideD3D12_StillInstallsTheFeeder()
@@ -588,12 +597,12 @@ public class PlanBuilderTests
     public void RouteC_AddsDgVoodooToRendererFolder()
     {
         var profile = Profile(PeArchitecture.X86, GraphicsApi.D3D9);
-        profile.RendererFolder = @"C:\game\bin";   // variante Source
+        profile.RendererFolder = Path.Combine(GameRoot, "bin");   // variante Source
         var plan = InstallPlanBuilder.Build(profile, FullKit(), new InstallOptions());
 
         Assert.True(Targets(plan, @"bin\D3D9.dll"));
         Assert.Contains(plan.Actions, a => a.Kind == PlanActionKind.PatchDgVoodooConf
-                                        && a.TargetPath!.EndsWith(@"bin\dgVoodoo.conf", StringComparison.OrdinalIgnoreCase));
+                                        && Norm(a.TargetPath).EndsWith(@"bin\dgVoodoo.conf", StringComparison.OrdinalIgnoreCase));
         // ReShade continua na pasta do EXE, nunca em bin\.
         Assert.True(Targets(plan, @"game\dxgi.dll"));
     }
@@ -1029,7 +1038,7 @@ public class ReversaoTests
         Directory.CreateDirectory(dir);
         try
         {
-            File.WriteAllText(Path.Combine(dir, "dxgi.dll"), "x");
+            File.WriteAllText(Path.Combine(dir, "dxgi.dll"), "...ReShade 6.8.0...");
             File.WriteAllText(Path.Combine(dir, "renodx-dlss5.addon64"), "x");
             File.WriteAllText(Path.Combine(dir, "forzahorizon6.exe"), "x");
             Directory.CreateDirectory(Path.Combine(dir, "reshade-shaders"));
@@ -1042,6 +1051,11 @@ public class ReversaoTests
 
             // O executável do jogo não é nosso e não pode entrar na lista.
             Assert.DoesNotContain(sobras, f => f.EndsWith("forzahorizon6.exe", StringComparison.Ordinal));
+
+            // Um dxgi.dll que NÃO é o ReShade (do jogo ou de outro mod) não é sobra nossa.
+            File.WriteAllText(Path.Combine(dir, "dxgi.dll"), "wrapper de outro mod");
+            Assert.DoesNotContain(new InstallerEngine(_ => { }).ConferirSobras(dir),
+                f => f.EndsWith("dxgi.dll", StringComparison.Ordinal));
         }
         finally { Directory.Delete(dir, true); }
     }

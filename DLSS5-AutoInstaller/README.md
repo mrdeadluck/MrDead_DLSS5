@@ -30,68 +30,78 @@ administrador** — necessário para gravar no registro (`HKLM`) e em pastas den
 
 ## Como usar
 
-1. **Pasta do kit** — a pasta com os arquivos do DLSS 5 (`nvngx_dlssnr.dll`,
-   `renodx-dlss5.addon64`, `dlss5-feed.*`, o dgVoodoo2 e a pasta `reshade-shaders`).
-   Pode estar bagunçada, com subpastas e cópias duplicadas: o programa varre tudo e acha
-   cada peça pelo nome **e pela arquitetura real** lida no cabeçalho PE.
-2. **Pasta do jogo** — a pasta onde o jogo está instalado.
-3. **Detectar** — confira o que ele encontrou. A API gráfica é procurada em três frentes
-   (imports do PE, texto dentro do binário e pistas na pasta), e a tela diz se o resultado
-   é **detectado** (evidência forte e sem empate) ou apenas **provável** — nesse segundo
-   caso vale confirmar. Em jogo 64-bit, errar entre D3D11 e D3D12 não muda nada: as duas
-   caem na mesma rota A, com os mesmos arquivos nos mesmos lugares.
-4. **Tecla do overlay** — qualquer tecla (F1–F12, letras, números, numpad, Insert, Delete,
-   Pause…) com **Ctrl/Shift/Alt** opcionais. Útil quando o jogo engole a tecla escolhida:
-   uma combinação como `Ctrl+Shift+Home` não colide com nada.
-5. **Gerar plano** — mostra exatamente o que será copiado e gerado, antes de tocar em
-   qualquer arquivo.
-6. **Instalar** → **Verificar**.
+Abra o programa e aponte **a pasta do jogo**. Ele verifica sozinho o estado e mostra só
+as ações que fazem sentido:
 
-No fim, a tela de verificação lista os checkpoints (o que passou, o que falhou e como
-corrigir), o roteiro dos passos manuais e um diagnóstico automático lido dos logs.
+| Estado detectado | Botão principal | O que faz |
+|---|---|---|
+| DLSS 5 não instalado | **Instalar DLSS 5** | Detecção → plano → execução → verificação |
+| Instalado e íntegro | **Desinstalar e restaurar arquivos originais** | Remove só o que o programa gravou e devolve os backups. **Não precisa do kit nem de reinstalar.** |
+| Instalado por versão anterior / kit diferente | **Atualizar ou reconfigurar** | Regrava com o kit atual sem refazer backups dos originais |
+| Instalação incompleta ou inconsistente | **Reparar instalação** | Compara o registro com a pasta e repõe só o que falta ou mudou |
+| Arquivos do mod sem registro (versão antiga) | **Remover vestígios (modo conservador)** | Lista o que é comprovadamente do mod, pede confirmação e remove |
+| Só backups `.dlss5bak` sobrando | **Devolver arquivos originais** | Move cada backup de volta ao nome original |
+| Pasta não existe / sem executável | **Selecionar outro jogo** | — |
+| Registro ilegível ou situação estranha | **Ver detalhes do problema** | Relatório arquivo por arquivo, exportável |
+
+A **pasta do kit** (`DLSS 5 Files`) só é pedida para instalar, atualizar ou reparar.
+
+### Instalar
+
+1. **Detecção** — confira executável real, arquitetura e API. A API é o único palpite que
+   pode errar; em 64-bit, D3D11 e D3D12 dão no mesmo. Cada opção (motion vectors, tecla do
+   painel, override no registro) tem a explicação do que muda logo abaixo do campo.
+2. **Plano** — tudo que será copiado, gerado e alterado, antes de tocar em qualquer
+   arquivo. Arquivos preexistentes que não são do programa aparecem como **conflito** e
+   exigem que você marque que entendeu que serão substituídos (com backup).
+3. **Execução** — etapa atual, barra de progresso e log. Dá para cancelar entre etapas; o
+   que já foi alterado é desfeito. Qualquer falha (arquivo em uso, antivírus, disco cheio)
+   também desfaz tudo e diz em que etapa parou e o que fazer.
+4. **Verificação** — checkpoints por arquivo, registro e logs, roteiro dos passos manuais
+   e diagnóstico automático.
+
+Instalar de novo por cima de uma instalação válida é seguro: arquivos iguais são pulados,
+nada é duplicado e o backup de um original **nunca** é sobrescrito por um arquivo do mod.
 
 ### Desinstalar
 
-Botão **Desinstalar (reverter)** na última tela. Toda instalação grava um manifesto
-(`dlss5-autoinstaller-manifest.json`) na pasta do executável do jogo, com a lista do que
-foi adicionado e os backups do que foi sobrescrito — a reversão desfaz tudo a partir dele.
+Abra o programa, aponte o jogo, clique em **Desinstalar e restaurar arquivos originais**.
+Antes de fazer qualquer coisa ele mostra o resumo: o que será removido, o que será
+restaurado do backup, o que será preservado e o que **não** poderá ser restaurado (backup
+ausente ou inválido — nesse caso ele não finge que restaurou: diz o arquivo e orienta a
+usar a verificação de integridade da loja). Também pergunta se o override de assinatura
+do registro deve sair (ele é global: desmarque se usa o DLSS 5 em outro jogo).
 
-### Deu errado? **Desfazer tudo nesta pasta**
+No fim, a tela de resultado lista exatamente o que foi removido, restaurado e preservado,
+e a tela inicial volta ao estado **"DLSS 5 não instalado"**.
 
-Esse botão está na **primeira tela**, ao lado das pastas, e também na tela de verificação
-(como *Desfazer tudo (forçado)*). Ele não depende de manifesto, de detecção nem de o
-programa lembrar do que fez: varre a pasta do jogo inteira, devolve ao lugar todo arquivo
-do jogo que tenha sido substituído (`.dlss5bak`) e remove o que for **comprovadamente**
-deste programa.
+### Como o programa garante que dá para voltar atrás
 
-O critério é conservador de propósito:
+- **Manifesto** (`dlss5-autoinstaller-manifest.json`, na pasta do executável): versão do
+  programa e do kit, opções escolhidas, e **tamanho + SHA-256** de cada arquivo gravado e
+  de cada original guardado. É gravado **antes** da primeira modificação e atualizado a
+  cada passo — se o programa cair no meio, a próxima abertura mostra "instalação
+  incompleta" e oferece reparar ou desinstalar.
+- **Backups** `.dlss5bak` só dos arquivos que já existiam e não eram do programa. Um
+  backup existente é o original de verdade e não é refeito.
+- **Troca atômica**: cada arquivo vai para um temporário ao lado e só então é movido por
+  cima.
+- **Rollback**: falha ou cancelamento desfaz tudo que a execução fez, na ordem inversa.
+- **Remoção só do que confere**: na desinstalação um arquivo só é apagado se ainda é o que
+  o manifesto diz ter gravado (hash). O que foi trocado por outro programa é preservado e
+  listado.
+- **Modo conservador** para instalações antigas sem manifesto: só sai o que não tem como
+  ser do jogo (nomes exclusivos do kit, ReShade identificado pelo conteúdo).
 
-| Arquivo | Sai? |
-|---|---|
-| `renodx-dlss5.addon64`, `dlss5-feed.*`, `nvngx_dlssnr.dll`, `ReShade.ini`/`.log`/`Preset.ini` | sempre — nenhum jogo traz isso |
-| `dxgi.dll` | só se o texto do ReShade estiver dentro dele |
-| `D3D9.dll`, `dgVoodoo.conf`, `dgVoodooCpl.exe` | só com prova **e** sinal de instalação nossa por perto (existe jogo antigo que já vem com dgVoodoo) |
-| `nvngx_dlss.dll` | só quando há um arquivo do kit na mesma pasta — senão pode ser o do jogo |
-| `sl.*.dll`, `nvngx_dlssg.dll` | **nunca**: são do jogo, e apagá-los faz o DLSS sumir do menu |
+### Logs e diagnóstico
 
-Antes de apagar qualquer coisa ele mostra a lista completa e pede confirmação. Se algum
-arquivo resistir (quase sempre é arquivo em uso), ele diz **qual** — feche o jogo e a
-Steam e repita.
-
-### "O jogo tem DLSS nativo" não é uma pergunta
-
-Na tela de detecção isso aparece como **veredito com o motivo do lado**, não como uma
-caixinha para você marcar. A evidência é só a que a instalação não consegue forjar: as
-DLLs do Streamline (`sl.*.dll`) e a de frame generation, que não existem no kit, e o texto
-dentro do executável do jogo, que o programa nunca modifica.
-
-O `nvngx_dlss.dll` sozinho **não** conta: ele existe no kit e a instalação copia ele para
-a pasta do jogo — bastava instalar uma vez para o mesmo jogo passar a "ter DLSS nativo" na
-detecção seguinte.
-
-E o que essa resposta muda é pouco: **só se o Feeder é instalado**, e só em jogo D3D12.
-Fora do D3D12 o Feeder entra dos dois jeitos. Nenhum arquivo do jogo é apagado em nenhum
-dos casos. Dá para contrariar a detecção no botão **Ajustar**, que explica isso antes.
+Tudo vai para `%LOCALAPPDATA%\DLSS5-AutoInstaller\logs\` (10 arquivos, 2 MB cada, os
+mais antigos saem sozinhos): versão, sistema, escala da tela, estado antes e depois de
+cada operação, cada arquivo criado/alterado/restaurado/removido, duração das etapas e
+stack traces. Botões **Copiar log**, **Abrir pasta de logs** e **Exportar diagnóstico**
+(zip com log, manifesto e relatório de estado — sem senhas nem dados de conta) ficam nas
+telas de execução, verificação e resultado. Se a pasta de logs não puder ser criada, o
+programa continua funcionando e mantém o log em memória.
 
 ---
 
@@ -176,9 +186,16 @@ dotnet publish src/Dlss5.App/Dlss5.App.csproj -c Release -r win-x64 --self-conta
 ```
 DLSS5-AutoInstaller/
 ├─ src/Dlss5.Core/     Lógica (sem interface): PE, detecção, plano, configs, verificação
-├─ src/Dlss5.App/      Interface WinForms (o assistente de 5 passos)
+├─ src/Dlss5.App/      Interface WinForms (tela de estado + fluxos separados de instalar/reparar/desinstalar)
 └─ tests/              Testes da lógica — rodam no CI a cada push
 ```
 
 Toda a regra de negócio fica no `Dlss5.Core`, sem dependência de interface gráfica, para
-poder ser testada. O `Dlss5.App` é só a casca.
+poder ser testada: `EstadoDoMod` (máquina de estados do mod), `InstallerEngine`
+(instalação idempotente com rollback, desinstalação por manifesto, remoção conservadora),
+`Manifest`, `Propriedade` (de quem é cada arquivo), `Preflight`, `Diario` (logs) e
+`Diagnostico`. O `Dlss5.App` é só a casca: `MainForm.*.cs` (uma tela por arquivo),
+`Textos.cs` (todos os textos), `Ui.cs` (paleta e fábricas responsivas), `Dialogos.cs`.
+
+Detalhes da revisão, problemas encontrados e decisões técnicas:
+[`docs/Diagnostico-e-Reengenharia.md`](../docs/Diagnostico-e-Reengenharia.md).

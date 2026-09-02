@@ -86,10 +86,13 @@ esse é automático.)
 
 ## Como usar, em resumo
 
-1. Baixe o `DLSS5-AutoInstaller.exe` acima e execute.
-2. **Pasta do kit** → a pasta `DLSS 5 Files` no seu PC.
-3. **Pasta do jogo** → onde o jogo está instalado.
-4. **Detectar** → **Gerar plano** → **Instalar** → **Verificar**.
+1. Baixe o `DLSS5-AutoInstaller.exe` acima e execute (um arquivo só, sem instalar nada).
+2. **Pasta do jogo** → onde o jogo está instalado. O programa mostra o estado (não
+   instalado, instalado, incompleto, vestígios de versão antiga…) e só as ações válidas.
+3. Para instalar: **Pasta do kit** → a pasta `DLSS 5 Files` → **Instalar DLSS 5** →
+   confira a detecção e o plano → acompanhe a execução → verificação.
+4. Para desinstalar: abra o programa, aponte o jogo, **Desinstalar e restaurar arquivos
+   originais**. Não precisa do kit nem de reinstalar.
 
 O programa descobre sozinho o executável real (incluindo o binário de verdade em
 jogos Unreal e o stub da engine Source), a arquitetura, a API gráfica e a rota de
