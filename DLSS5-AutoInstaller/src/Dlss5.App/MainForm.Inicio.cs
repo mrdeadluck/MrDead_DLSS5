@@ -557,12 +557,15 @@ public sealed partial class MainForm
             };
             _tooltip.SetToolTip(chk, Textos.RemoverOverrideDica);
         }
-        var extra = chk is null ? null : new Panel { AutoSize = true, Dock = DockStyle.Top };
-        if (extra is not null && chk is not null)
+        TableLayoutPanel? extra = null;
+        if (chk is not null)
         {
-            var dica = Ui.Paragrafo(Textos.RemoverOverrideDica, Ui.Muted, Ui.SmallFont);
-            extra.Controls.Add(dica);
+            // TableLayoutPanel de uma coluna: as linhas entram na ordem em que são adicionadas
+            // (caixa em cima, explicação embaixo) e a altura cresce com o conteúdo.
+            extra = new TableLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Dock = DockStyle.Top, ColumnCount = 1 };
+            extra.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             extra.Controls.Add(chk);
+            extra.Controls.Add(Ui.Paragrafo(Textos.RemoverOverrideDica, Ui.Muted, Ui.SmallFont));
         }
 
         bool ok = Dialogos.Confirmar(this, "Desinstalar DLSS 5",

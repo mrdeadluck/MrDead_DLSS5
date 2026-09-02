@@ -72,7 +72,8 @@ internal static class Dialogos
         corpo.ScrollBars = ScrollBars.Both;
         corpo.WordWrap = true;
 
-        var extraHost = new Panel { Dock = DockStyle.Top, AutoSize = true, Margin = new Padding(0) };
+        var extraHost = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, ColumnCount = 1, Margin = new Padding(0) };
+        extraHost.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         if (extra is not null)
         {
             extra.Dock = DockStyle.Top;
