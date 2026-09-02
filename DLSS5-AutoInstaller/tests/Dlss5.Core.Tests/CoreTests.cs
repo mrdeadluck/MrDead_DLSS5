@@ -3163,6 +3163,101 @@ public class IsolamentoRotaATests
     }
 }
 
+public class Re9AtivoMasSemDiferencaTests
+{
+    private static string Pasta()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-re9-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    // RE9 funcionando: 7633 quadros com NR, geração de quadros ligada, e o usuário sem
+    // ver diferença. O log confirma as duas coisas ao mesmo tempo.
+    private const string LogRe9Ativo =
+        "11:59:19:402 [45832] | INFO  | Initializing crosire's ReShade version '6.8.0.2155' (64-bit) loaded from 'dxgi.dll' into 're9.exe' ...\n" +
+        "11:59:25:774 [45832] | INFO  | Registered add-on \"DLSS 5 Neural Rendering\" v0.2026.828.517 using ReShade API version 18.\n" +
+        "11:59:25:779 [45832] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: D3D12 NGX hooks installed across 3 module copy(ies)\n" +
+        "11:59:28:706 [55796] | INFO  | Redirecting IDXGIFactory2::CreateSwapChainForHwnd(...) ...\n" +
+        "11:59:33:424 [53588] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: NGX feature create intercepted: feature=13 (DLSSD/RR), slot=0\n" +
+        "11:59:35:003 [37564] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: inline feature 18 evaluation succeeded (count=60, NR input 2560x1440, output 2560x1440 [native])\n" +
+        "12:00:44:716 [ 3560] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: NGX feature create intercepted: feature=11 (DLSSG/FrameGeneration), slot=0\n" +
+        "12:00:45:110 [29968] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: skipping NR on NGX evaluate: feature 11 (DLSSG/FrameGeneration) is not DLSS/DLSSD\n";
+
+    [Fact]
+    public void ComNrAtivoEGeracaoDeQuadrosADicaEnsinaAComparar()
+    {
+        var dir = Pasta();
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "renodx-dlss5.addon64"), "x");
+            File.WriteAllText(Path.Combine(dir, "ReShade.log"), LogRe9Ativo + new string(' ', 2000));
+
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "re9.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D12,
+                HasNativeDlss = true,
+            };
+
+            var s = RenodxLog.Ler(LogRe9Ativo);
+            Assert.True(s!.Ativo);
+            Assert.True(s.FrameGeneration);
+
+            var c14 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 14);
+            Assert.Equal(CheckStatus.Pass, c14.State);
+            Assert.Contains("F6", c14.FixHint!);
+            Assert.Contains("GERAÇÃO DE QUADROS ESTÁ LIGADA", c14.FixHint!);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void SemGeracaoDeQuadrosADicaNaoInventaQueElaEstaLigada()
+    {
+        var semFg = LogRe9Ativo.Replace(
+            "12:00:44:716 [ 3560] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: NGX feature create intercepted: feature=11 (DLSSG/FrameGeneration), slot=0\n" +
+            "12:00:45:110 [29968] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: skipping NR on NGX evaluate: feature 11 (DLSSG/FrameGeneration) is not DLSS/DLSSD\n", "");
+
+        var s = RenodxLog.Ler(semFg);
+        Assert.True(s!.Ativo);
+        Assert.False(s.FrameGeneration);
+    }
+
+    [Fact]
+    public void ComReFrameworkODxgiDoReShadeNaoEhAcusadoDeSobra()
+    {
+        // O veredito antigo dizia, na mesma tela, que o dxgi.dll está certo (item 6
+        // "REFramework ao lado do ReShade") e que ele é sobra a ser apagada. Quem
+        // seguisse a dica apagava a instalação que estava funcionando.
+        var dir = Pasta();
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "dinput8.dll"), "x");
+            File.WriteAllText(Path.Combine(dir, "dxgi.dll"), "x");
+
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "re9.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D12,
+                HasNativeDlss = true,
+                UsarReFramework = true,
+            };
+
+            var seis = CheckpointVerifier.Verify(perfil, null).Where(c => c.Number == 6).ToList();
+
+            Assert.DoesNotContain(seis, c => c.Title.Contains("Sobrou", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(seis, c => c.Title.Contains("REFramework ao lado", StringComparison.Ordinal)
+                                       && c.State == CheckStatus.Pass);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}
+
 public class CheckpointFoxEngineTests
 {
     private static string Pasta()

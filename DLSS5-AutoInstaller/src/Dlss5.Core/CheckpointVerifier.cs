@@ -257,16 +257,16 @@ public static class CheckpointVerifier
                               "(Propriedades → Segurança) e abra o jogo de novo."));
             }
 
-            // Um dxgi.dll sobrando aqui é a instalação antiga — e é justamente ele que a
-            // proteção do jogo derruba. Enquanto estiver na pasta, o teste não é limpo.
-            var dxgiVelho = Path.Combine(exe, "dxgi.dll");
-            if (File.Exists(dxgiVelho))
-                r.Add(new CheckResult(6, "Sobrou o dxgi.dll da injeção direta", CheckStatus.Fail,
-                    "Há um dxgi.dll na pasta do exe — resto da instalação anterior. É essa injeção " +
-                    "que a proteção do jogo recusa, e ela continua valendo mesmo com o REFramework no lugar.",
-                    "Clique em Desinstalar (reverter) e instale de novo, ou apague o dxgi.dll à mão."));
+            // Aqui morava um veredito que sobrou do desenho antigo, quando o ReShade ia
+            // DENTRO do REFramework: ele acusava "sobrou o dxgi.dll da injeção direta" e
+            // mandava apagar o arquivo. No desenho de hoje o REFramework entra AO LADO do
+            // ReShade, e esse dxgi.dll é o ReShade — a tela ficava dizendo, ao mesmo tempo,
+            // que ele está certo (item 6) e que precisa ser apagado. Quem seguisse a dica
+            // apagava a instalação que estava funcionando.
         }
-        else
+
+        // A arquitetura do ReShade vale nos dois casos: com REFramework ou sem ele, é a
+        // mesma DLL que o jogo carrega.
         {
             var hook = profile.ReShadeHookName;
             var dxgi = Path.Combine(exe, hook);
@@ -279,8 +279,9 @@ public static class CheckpointVerifier
                     $"{hook} é {arch}, exe é {profile.Architecture}.",
                     ok ? null : "Arquitetura trocada: reinstale para extrair a versão certa do ReShade."));
             }
-            else
+            else if (!profile.UsarReFramework)
             {
+                // Com REFramework o item acima já cobrou a ausência, e repetir vira ruído.
                 r.Add(new CheckResult(6, $"{hook} do jogo", CheckStatus.Fail,
                     $"{hook} não está na pasta do exe.", "Rode a instalação."));
             }
@@ -560,10 +561,26 @@ public static class CheckpointVerifier
             else
             yield return new CheckResult(14, "DLSS 5 aplicado na imagem", estado, renodx.Resumo,
                 estado == CheckStatus.Pass
+                    // "Está aplicando" e "eu vejo diferença" são coisas diferentes, e o
+                    // log não decide a segunda. Quando o addon confirma que está vivo e o
+                    // olho não acha nada, o que falta é COMO comparar — e o que atrapalha
+                    // a comparação está no próprio log.
                     ? "Está funcionando. É DLAA: mesma resolução de render e de saída, então não " +
                       "há ganho de FPS e a diferença é de imagem. No caminho direto (D3D12 com DLSS " +
                       "nativo) a aba Início do ReShade fica VAZIA de propósito — quem trabalha é o " +
-                      "addon, na aba Complementos."
+                      "addon, na aba Complementos.  |  NÃO ESTÁ VENDO DIFERENÇA? Compare parado, não " +
+                      "jogando: numa cena com rosto, cabelo ou vegetação perto, aperte F5 (salva " +
+                      "print), F6 (desliga o NR), F5 de novo, e abra os dois prints lado a lado com " +
+                      "zoom. Em movimento e a olho nu a diferença passa batida." +
+                      (renodx.FrameGeneration
+                          ? "  |  A GERAÇÃO DE QUADROS ESTÁ LIGADA neste jogo, e o addon avisa no log " +
+                            "que não encosta nela: os quadros gerados saem SEM o Neural Rendering. " +
+                            "Desligue a geração de quadros nas opções do jogo enquanto compara — com " +
+                            "ela ligada, metade do que você vê não passou pelo DLSS 5."
+                          : "") +
+                      "  |  Também desligue, só para comparar, o granulado de filme (film grain), o " +
+                      "desfoque de movimento e a aberração cromática: eles entram DEPOIS do DLSS 5 e " +
+                      "cobrem justamente o detalhe que ele acrescenta."
                     : renodx.AssinaturaRecusada
                         ? "Aplique o override no registro e reinicie o PC quando puder — o driver só lê essa chave na inicialização."
                         : renodx.CaiuAntesDoDlss

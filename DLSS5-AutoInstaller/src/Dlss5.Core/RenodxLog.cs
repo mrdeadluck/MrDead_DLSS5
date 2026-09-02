@@ -23,6 +23,10 @@ namespace Dlss5.Core;
 /// O jogo chegou a criar a swapchain — é ela que dá a imagem na tela e o runtime do
 /// ReShade. Sem swapchain o jogo morreu antes de ter janela.
 /// </param>
+/// <param name="FrameGeneration">
+/// O jogo ligou a geração de quadros (DLSSG, feature 11). O addon anuncia no log que
+/// NÃO encosta nela: os quadros gerados saem sem o Neural Rendering.
+/// </param>
 public sealed record RenodxStatus(
     bool Ativo,
     int Avaliacoes,
@@ -36,7 +40,8 @@ public sealed record RenodxStatus(
     double? SegundosAteDialogo = null,
     bool Encerrou = false,
     bool CriouDevice = false,
-    bool CriouSwapchain = false)
+    bool CriouSwapchain = false,
+    bool FrameGeneration = false)
 {
     /// <summary>
     /// O jogo abriu a própria tela de erro antes de criar qualquer DLSS. Nesse quadro o
@@ -156,9 +161,14 @@ public static class RenodxLog
                               || logText.Contains("vkCreateSwapchainKHR", StringComparison.OrdinalIgnoreCase)
                               || logText.Contains("Recreated runtime environment", StringComparison.OrdinalIgnoreCase);
 
+        // "feature 11 (DLSSG/FrameGeneration)": o addon diz, com todas as letras, que
+        // pula o NR nos quadros gerados. Quem está com geração de quadros ligada vê o
+        // efeito em metade dos quadros — e é aí que nasce o "não mudou nada".
+        bool frameGen = logText.Contains("DLSSG/FrameGeneration", StringComparison.OrdinalIgnoreCase);
+
         return new RenodxStatus(ativo, avaliacoes, hooksSemUso, recusada,
             hooksInstalados, criouFeature, enableHooks, streamline, pedeStreamline,
-            SegundosAteDialogo(logText), encerrou, criouDevice, criouSwapchain);
+            SegundosAteDialogo(logText), encerrou, criouDevice, criouSwapchain, frameGen);
     }
 
     /// <summary>
