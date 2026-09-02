@@ -183,7 +183,9 @@ public sealed class GameProfile
     {
         get
         {
-            if (IsSourceEngine || string.IsNullOrWhiteSpace(RendererFolder)) return ExeFolder;
+            // Só na rota A: na rota C o dgVoodoo mora na pasta do renderizador e cria o
+            // device D3D11 de lá, mas o ReShade continua entrando pela raiz (Source, DS2).
+            if (IsSourceEngine || Route != InstallRoute.A || string.IsNullOrWhiteSpace(RendererFolder)) return ExeFolder;
             static string N(string p) => Path.GetFullPath(p).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             return string.Equals(N(RendererFolder), N(ExeFolder), StringComparison.OrdinalIgnoreCase)
                 ? ExeFolder : RendererFolder;
