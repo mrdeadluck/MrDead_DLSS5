@@ -82,7 +82,10 @@ public sealed class Isolamento
             // Um dxgi.dll de instalação anterior também precisa sair: ele carrega o ReShade
             // por conta própria e estraga o teste do mesmo jeito.
             EstadoIsolamento.SemReShade =>
-                NomesDeReShade.Select(n => Path.Combine(exeFolder, n)).ToArray(),
+                NomesDeReShade
+                    .SelectMany(n => new[] { Path.Combine(exeFolder, n), Path.Combine(rendererFolder, n) })
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray(),
             // Só o addon: em jogo 64-bit ele está na raiz, em 32-bit dentro de host64\.
             EstadoIsolamento.SemRenodx => new[]
             {

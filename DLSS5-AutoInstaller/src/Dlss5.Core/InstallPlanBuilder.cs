@@ -179,26 +179,39 @@ public static class InstallPlanBuilder
             // pelo jogo e continua sendo ReShade. No MGS V, instalar como d3d11.dll e
             // deixar o dxgi.dll antigo é não consertar nada — o arquivo que impede o jogo
             // de abrir segue na pasta. Só sai o que o conteúdo prova ser ReShade.
+            var pastaDoHook = profile.PastaDoReShade;
+            bool hookForaDaRaiz = !string.Equals(pastaDoHook, exe, StringComparison.OrdinalIgnoreCase);
+            if (hookForaDaRaiz)
+                plan.Warnings.Add($"A DLL do ReShade ({hook}) vai para {Rel(profile, pastaDoHook)}, a pasta do " +
+                                  "renderizador — na raiz ela nunca carrega neste jogo. ReShade.ini, addons e " +
+                                  "shaders ficam na raiz, ao lado do exe, que é onde o ReShade procura o ini.");
+
+            // Sobra de ReShade em qualquer das duas pastas, com qualquer nome que não seja
+            // o hook no lugar certo, sai. Foi o Titanfall 2: o dxgi.dll da raiz, inerte,
+            // ficava lá enquanto o de bin\x64_retail entrava.
+            foreach (var pasta in new[] { pastaDoHook, exe }.Distinct(StringComparer.OrdinalIgnoreCase))
             foreach (var outro in Isolamento.NomesDeReShade)
             {
-                if (outro.Equals(hook, StringComparison.OrdinalIgnoreCase)) continue;
-                var caminho = Path.Combine(exe, outro);
+                bool ehOHook = outro.Equals(hook, StringComparison.OrdinalIgnoreCase)
+                               && string.Equals(pasta, pastaDoHook, StringComparison.OrdinalIgnoreCase);
+                if (ehOHook) continue;
+                var caminho = Path.Combine(pasta, outro);
                 if (!File.Exists(caminho) || !Propriedade.ContemTexto(caminho, "ReShade")) continue;
 
                 plan.Actions.Add(new PlanAction(PlanActionKind.DeleteForbiddenFile,
-                    $"Remover ReShade antigo com o nome {outro} (agora ele entra como {hook})",
+                    $"Remover ReShade antigo em {Rel(profile, caminho)} (agora ele entra como {Rel(profile, Path.Combine(pastaDoHook, hook))})",
                     null, caminho));
             }
 
             if (dxgiSrc is not null)
             {
-                Copy(dxgiSrc, exe, hook);
+                Copy(dxgiSrc, pastaDoHook, hook);
             }
             else if (kit.ReShadeSetup is not null)
             {
                 plan.Actions.Add(new PlanAction(PlanActionKind.ExtractReShadeDll,
-                    $"Extrair ReShade ({dxgiArch}) do instalador → {Rel(profile, Path.Combine(exe, hook))}",
-                    kit.ReShadeSetup, Path.Combine(exe, hook)));
+                    $"Extrair ReShade ({dxgiArch}) do instalador → {Rel(profile, Path.Combine(pastaDoHook, hook))}",
+                    kit.ReShadeSetup, Path.Combine(pastaDoHook, hook)));
             }
         }
 

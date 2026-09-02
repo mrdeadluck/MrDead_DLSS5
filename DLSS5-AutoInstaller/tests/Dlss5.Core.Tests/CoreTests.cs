@@ -3610,6 +3610,106 @@ public class RuntimeNrTests
     }
 }
 
+public class Titanfall2RenderizadorTests
+{
+    [Fact]
+    public void DeteccaoAchaORenderizadorEmX64Retail()
+    {
+        // Titanfall 2 instalado com dxgi.dll na raiz: o jogo abriu, o Home não fez nada e o
+        // ReShade.log nem nasceu. A DLL tem que ir para bin\x64_retail.
+        var dir = PastaComExe("Titanfall2.exe");
+        try
+        {
+            var retail = Path.Combine(dir, "bin", "x64_retail");
+            Directory.CreateDirectory(retail);
+            File.WriteAllText(Path.Combine(retail, "materialsystem_dx11.dll"), "x");
+
+            var r = GameDetector.Detect(dir);
+
+            Assert.Equal(retail, r.Profile.RendererFolder);
+            Assert.Equal(retail, r.Profile.PastaDoReShade);
+            Assert.Equal(dir, r.Profile.ExeFolder);
+            Assert.False(r.Profile.IsSourceEngine);
+            Assert.Contains(r.Notes, n => n.Contains("x64_retail", StringComparison.Ordinal));
+            // O ini continua na raiz: é por ele que o ReShade escolhe a base.
+            Assert.Equal(Path.Combine(dir, "ReShade.ini"), r.Profile.ReShadeIniPath);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void SemAPastaDoRenderizadorADllFicaNaRaiz()
+    {
+        var dir = PastaComExe("jogo.exe");
+        try
+        {
+            var r = GameDetector.Detect(dir);
+            Assert.Equal(dir, r.Profile.PastaDoReShade);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void OPlanoPoeADllNoRenderizadorETiraAInerteDaRaiz()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-tf2-" + Guid.NewGuid().ToString("N"));
+        var retail = Path.Combine(dir, "bin", "x64_retail");
+        Directory.CreateDirectory(retail);
+        try
+        {
+            // A sobra da instalação errada: um ReShade de verdade na raiz.
+            File.WriteAllText(Path.Combine(dir, "dxgi.dll"), "isto é ReShade 6.8");
+            var profile = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "Titanfall2.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D11,
+                RendererFolder = retail,
+            };
+
+            var plan = InstallPlanBuilder.Build(profile, PlanBuilderTests.KitCompleto(), new InstallOptions());
+
+            Assert.Contains(plan.Actions, a => a.Kind == PlanActionKind.CopyFile
+                && string.Equals(a.TargetPath, Path.Combine(retail, "dxgi.dll"), StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(plan.Actions, a => a.Kind == PlanActionKind.DeleteForbiddenFile
+                && string.Equals(a.TargetPath, Path.Combine(dir, "dxgi.dll"), StringComparison.OrdinalIgnoreCase));
+            // O ini e os addons seguem na raiz.
+            Assert.Contains(plan.Actions, a => a.Kind == PlanActionKind.WriteGeneratedFile
+                && string.Equals(a.TargetPath, Path.Combine(dir, "ReShade.ini"), StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(plan.Actions, a => a.Kind == PlanActionKind.CopyFile
+                && a.TargetPath!.EndsWith(Path.Combine(dir, "renodx-dlss5.addon64"), StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(plan.Warnings, w => w.Contains("renderizador", StringComparison.Ordinal));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void IsolarACausaDesligaOReShadeTambemNoRenderizador()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-tf2iso-" + Guid.NewGuid().ToString("N"));
+        var retail = Path.Combine(dir, "bin", "x64_retail");
+        Directory.CreateDirectory(retail);
+        try
+        {
+            var dll = Path.Combine(retail, "dxgi.dll");
+            File.WriteAllText(dll, "ReShade");
+            new Isolamento(_ => { }).Aplicar(EstadoIsolamento.SemReShade, dir, retail);
+            Assert.False(File.Exists(dll));
+            Assert.True(File.Exists(dll + Isolamento.Sufixo));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    private static string PastaComExe(string nomeExe)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-tf2det-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        File.WriteAllBytes(Path.Combine(dir, nomeExe), DeteccaoEscolheONomeDoReShadeTests.ExeX64("D3D11CreateDevice"));
+        return dir;
+    }
+}
+
 public class EaJavelinTests
 {
     private static string Pasta()
@@ -4407,7 +4507,7 @@ public class DeteccaoEscolheONomeDoReShadeTests
     /// "PE\0\0" e a máquina. O resto é preenchimento com o marcador da API enterrado
     /// dentro, que é como o ApiDetector reconhece D3D11.
     /// </summary>
-    private static byte[] ExeX64(string marcador)
+    internal static byte[] ExeX64(string marcador)
     {
         var buf = new byte[8 * 1024];
         buf[0] = (byte)'M'; buf[1] = (byte)'Z';

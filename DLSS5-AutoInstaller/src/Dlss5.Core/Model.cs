@@ -171,6 +171,25 @@ public sealed class GameProfile
     /// <summary>A pasta do jogo é RE Engine — só ali o REFramework tem função.</summary>
     public bool EhReEngine => ReFramework.EhReEngine(ExeFolder);
 
+    /// <summary>
+    /// Onde a DLL do ReShade (dxgi.dll etc.) entra. Quase sempre é a pasta do exe. No
+    /// Titanfall 2 (engine da Respawn) o renderizador mora em bin\x64_retail e a DLL na
+    /// raiz nunca carrega — o jogo abre, o Home não faz nada e o ReShade.log nem nasce.
+    /// Ali a DLL vai para a pasta do renderizador; o ReShade.ini, o log, os addons e os
+    /// shaders continuam na raiz, porque o ReShade escolhe a base pelo ini ao lado do exe.
+    /// Na Source clássica (bin\ com shaderapi*.dll, D3D9 via dgVoodoo) a DLL fica na raiz.
+    /// </summary>
+    public string PastaDoReShade
+    {
+        get
+        {
+            if (IsSourceEngine || string.IsNullOrWhiteSpace(RendererFolder)) return ExeFolder;
+            static string N(string p) => Path.GetFullPath(p).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            return string.Equals(N(RendererFolder), N(ExeFolder), StringComparison.OrdinalIgnoreCase)
+                ? ExeFolder : RendererFolder;
+        }
+    }
+
     /// <summary>Onde fica a configuração que o ReShade lê: ao lado do executável.</summary>
     public string ReShadeIniPath => Path.Combine(ExeFolder, "ReShade.ini");
 

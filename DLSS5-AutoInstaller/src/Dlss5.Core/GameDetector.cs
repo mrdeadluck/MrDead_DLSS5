@@ -200,7 +200,20 @@ public static class GameDetector
             return;
         }
 
-        profile.RendererFolder = exeDir;
+        // Engine da Respawn (Titanfall 2): exe na raiz, renderizador em bin\x64_retail.
+        // A DLL do ReShade na raiz nunca carrega; em bin\x64_retail carrega.
+        var respawn = Path.Combine(exeDir, "bin", "x64_retail");
+        if (File.Exists(Path.Combine(respawn, "materialsystem_dx11.dll")))
+        {
+            profile.RendererFolder = respawn;
+            notes.Add("Renderizador em bin\\x64_retail (materialsystem_dx11.dll — engine do Titanfall 2): o " +
+                      "dxgi.dll do ReShade vai LÁ. Na raiz ele nunca carrega: o jogo abre, o Home não faz nada e " +
+                      "o ReShade.log nem nasce. ReShade.ini, addons e shaders ficam na raiz, ao lado do exe.");
+        }
+        else
+        {
+            profile.RendererFolder = exeDir;
+        }
 
         var detection = ApiDetector.Detect(profile.RealExePath, exeDir);
         profile.ApiDetection = detection;

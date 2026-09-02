@@ -265,7 +265,7 @@ public static class CheckpointVerifier
         if (profile.UsarReFramework)
         {
             var dinput = ReFramework.CaminhoDinput8(exe);
-            var reshade = Path.Combine(exe, profile.ReShadeHookName);
+            var reshade = Path.Combine(profile.PastaDoReShade, profile.ReShadeHookName);
             bool temRef = File.Exists(dinput);
             bool temReShade = File.Exists(reshade);
 
@@ -333,7 +333,7 @@ public static class CheckpointVerifier
         // mesma DLL que o jogo carrega.
         {
             var hook = profile.ReShadeHookName;
-            var dxgi = Path.Combine(exe, hook);
+            var dxgi = Path.Combine(profile.PastaDoReShade, hook);
             if (File.Exists(dxgi))
             {
                 var arch = PeFile.GetArchitecture(dxgi);
