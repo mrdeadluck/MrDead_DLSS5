@@ -39,6 +39,21 @@ public sealed class KitInventory
 
     public List<string> Problems { get; } = new();
 
+    /// <summary>
+    /// Impressão digital do kit: tamanho das peças principais. Serve para saber se o mod
+    /// que está no jogo é o mesmo que está na pasta do kit (atualização pendente).
+    /// Tamanho, e não hash: o nvngx_dlssnr.dll tem 158 MB e isto roda a cada abertura.
+    /// </summary>
+    public string Fingerprint()
+    {
+        static string T(string? p)
+        {
+            try { return p is not null && File.Exists(p) ? new FileInfo(p).Length.ToString() : "-"; }
+            catch { return "?"; }
+        }
+        return $"dlssnr={T(NvngxDlssnr)};dlss={T(NvngxDlss)};renodx={T(RenodxAddon64)};feed64={T(FeedAddon64)};feed32={T(FeedAddon32)};host={T(FeedHost64Exe)};dxgi64={T(DxgiX64)};dxgi32={T(DxgiX86)}";
+    }
+
     /// <summary>Valida o inventário para uma rota específica; devolve o que falta.</summary>
     public IReadOnlyList<string> MissingFor(
         InstallRoute route, bool nativeDlss, GraphicsApi api = GraphicsApi.Unknown)
