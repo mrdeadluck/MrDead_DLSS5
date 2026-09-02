@@ -55,10 +55,10 @@ public static class ReFramework
     /// %APPDATA%\REFramework\&lt;nome do exe&gt; — e aí a pasta reframework\plugins que vale
     /// é a de lá, não a da pasta do jogo. Instalar na pasta errada é instalar no vácuo.
     /// </summary>
-    public static string PastaAppData(string exePath)
+    public static string PastaAppData(string? exePath)
     {
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        var nome = Path.GetFileNameWithoutExtension(exePath);
+        var nome = Path.GetFileNameWithoutExtension(exePath) ?? "";
         return Path.Combine(appData, "REFramework", nome);
     }
 
@@ -67,7 +67,7 @@ public static class ReFramework
     /// lá, a de %APPDATA% quando o log está lá. Nulo quando não há log em lugar nenhum —
     /// aí o REFramework não rodou.
     /// </summary>
-    public static string? PastaEmUso(string exeFolder, string exePath)
+    public static string? PastaEmUso(string exeFolder, string? exePath)
     {
         if (File.Exists(Path.Combine(exeFolder, LogDoFramework))) return exeFolder;
         var appData = PastaAppData(exePath);

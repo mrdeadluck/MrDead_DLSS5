@@ -118,25 +118,45 @@ public static class CheckpointVerifier
                 ". Elas carregam o DXGI antes do ReShade e ficam com a interceptação.",
                 string.Join("  |  ", overlays.Select(o => $"{o.Nome}: {o.ComoDesligar}"))));
 
-        // 3 — o DLSS do próprio jogo: o kit não mexe nele. O que este checkpoint vigia de
-        // verdade é o nvngx_dlss.dll do jogo, que desinstalações antigas chegaram a apagar
-        // (e sem ele o menu de DLSS some e o jogo pode nem abrir).
+        // 3 — o DLSS do próprio jogo: o kit não mexe nele. O que este checkpoint vigia é o
+        // nvngx_dlss.dll do jogo — e só acusa problema quando há PROVA de que este programa
+        // mexeu nele (backup guardado, ou o arquivo do kit posto no lugar do original).
+        // A ausência do arquivo, sozinha, não é problema nenhum: é o normal em jogo que
+        // carrega o DLSS pelo driver.
         if (profile.HasNativeDlss)
         {
-            // Nos dois caminhos o DLSS do jogo precisa existir e ser o DELE: no direto o
-            // RenoDX se pendura na chamada que o jogo faz, e no Feeder o NGX é o mesmo.
+            // Nos dois caminhos o DLSS do jogo precisa ser o DELE: no direto o RenoDX se
+            // pendura na chamada que o jogo faz, e no Feeder o NGX é o mesmo.
             var caminhoDll = Path.Combine(exe, "nvngx_dlss.dll");
-            if (!File.Exists(caminhoDll))
+            bool naPasta = File.Exists(caminhoDll);
+
+            // "Não está na pasta" NÃO é o mesmo que "sumiu". Jogo de Streamline (sl.dlss.dll,
+            // nvngx_dlssg.dll) carrega o runtime de DLSS pelo driver, e nunca traz esse arquivo
+            // no depot: o RE9 foi reinstalado do zero e continuou sem ele, abrindo normalmente.
+            // Acusar sumiço sem prova mandava o usuário verificar integridade para repor um
+            // arquivo que a Steam não tem para devolver. Prova de sumiço é uma só: o backup que
+            // ESTE programa guarda quando tira o original do lugar.
+            bool guardamosOOriginal =
+                File.Exists(caminhoDll + Propriedade.BackupSuffix) ||
+                (manifest?.BackedUpFiles.ContainsKey(caminhoDll) ?? false) ||
+                (manifest?.RemovedFiles.ContainsKey(caminhoDll) ?? false);
+
+            // Frase para colar nos vereditos de baixo quando o arquivo não está na pasta e
+            // isso é o normal do jogo — assim o usuário não fica procurando o que não falta.
+            const string VemDoDriver =
+                " O jogo não traz nvngx_dlss.dll na pasta, e não precisa: nesses jogos o runtime " +
+                "de DLSS vem do driver da NVIDIA (é o Streamline que pede). Não há o que repor aqui.";
+
+            if (!naPasta && guardamosOOriginal)
             {
-                r.Add(new CheckResult(3, "DLSS do jogo: nvngx_dlss.dll SUMIU da pasta", CheckStatus.Fail,
-                    "O jogo tem DLSS próprio mas o nvngx_dlss.dll não está na pasta — uma " +
-                    "desinstalação antiga apagou. Sem ele as opções de DLSS somem do menu e o " +
-                    "jogo pode travar na abertura. O kit não põe o dele no lugar: a versão do " +
-                    "kit não casa com o jogo.",
-                    "Steam → clique direito no jogo → Propriedades → Arquivos instalados → " +
-                    "Verificar integridade dos arquivos do jogo. Depois clique em Verificar de novo."));
+                r.Add(new CheckResult(3, "DLSS do jogo: fomos nós que tiramos o nvngx_dlss.dll", CheckStatus.Fail,
+                    "O nvngx_dlss.dll não está na pasta, e existe backup dele guardado por este " +
+                    "programa: quem o tirou do lugar fomos nós, e ele não voltou. Sem o arquivo as " +
+                    "opções de DLSS podem sumir do menu.",
+                    "Use Desinstalar (reverter) ou Desfazer tudo (forçado): os dois devolvem o " +
+                    "arquivo .dlss5bak ao lugar. Depois clique em Verificar de novo."));
             }
-            else if (TransplanteDlss.EhDoKit(caminhoDll, nvngxDlssDoKit))
+            else if (naPasta && TransplanteDlss.EhDoKit(caminhoDll, nvngxDlssDoKit))
             {
                 // O estágio final da saga do transplante: o arquivo EXISTE, então o
                 // checkpoint antigo dizia "tudo certo" — mas ele é byte a byte o DO KIT,
@@ -156,7 +176,7 @@ public static class CheckpointVerifier
             {
                 r.Add(new CheckResult(3, "DLSS do jogo tem que ficar LIGADO", CheckStatus.Manual,
                     "Caminho direto: em D3D12 o RenoDX se pendura na chamada de DLSS que o próprio jogo faz. " +
-                    "Sem o jogo pedir DLSS, não existe chamada para interceptar.",
+                    "Sem o jogo pedir DLSS, não existe chamada para interceptar." + (naPasta ? "" : VemDoDriver),
                     "Opções gráficas do jogo → ligue o DLSS (qualquer modo). Sem isso o RenoDX fica em " +
                     "\"HOOKS ARMED / NO DLSS CREATE SEEN\"."));
             }
@@ -170,7 +190,7 @@ public static class CheckpointVerifier
                 r.Add(new CheckResult(3, "DLSS do jogo: DESLIGADO neste caminho", CheckStatus.Manual,
                     "Caminho do Feeder num jogo com DLSS próprio: o Feeder roda um NGX dele dentro do " +
                     "processo, e com o DLSS do jogo ligado os dois colidem — o jogo trava depois da tela " +
-                    $"inicial ou ao aplicar o DLSS no menu (o jogo roda em {profile.Api}).",
+                    $"inicial ou ao aplicar o DLSS no menu (o jogo roda em {profile.Api})." + (naPasta ? "" : VemDoDriver),
                     "Opções gráficas do jogo → DLSS desligado (faça isso com o jogo limpo, ou com o ReShade " +
                     "desligado pelo Isolar a causa). O Neural Rendering entra pelo Feed, sem o DLSS do jogo."));
             }

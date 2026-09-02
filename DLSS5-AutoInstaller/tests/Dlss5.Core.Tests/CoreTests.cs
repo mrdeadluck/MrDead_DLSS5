@@ -2302,9 +2302,60 @@ public class TransplanteTests
             Assert.Contains("DO KIT", c3.Title);
 
             File.Delete(Path.Combine(dir, "nvngx_dlss.dll"));
-            var sumiu = CheckpointVerifier.Verify(perfil, null, kitDll).First(c => c.Number == 3);
-            Assert.Equal(CheckStatus.Fail, sumiu.State);
-            Assert.Contains("SUMIU", sumiu.Title);
+            var semArquivo = CheckpointVerifier.Verify(perfil, null, kitDll).First(c => c.Number == 3);
+            Assert.NotEqual(CheckStatus.Fail, semArquivo.State);
+        }
+        finally { Directory.Delete(dir, true); Directory.Delete(kit, true); }
+    }
+
+    [Fact]
+    public void Checkpoint3NaoAcusaSumicoDeArquivoQueOJogoNuncaTrouxe()
+    {
+        // O RE9 foi desinstalado e reinstalado do zero, e continuou sem nvngx_dlss.dll na
+        // pasta — abrindo normalmente. Prova de que o depot não traz esse arquivo: em jogo
+        // de Streamline o runtime de DLSS vem do driver. O veredito antigo dizia "SUMIU,
+        // uma desinstalação antiga apagou" e mandava verificar integridade para repor um
+        // arquivo que a Steam não tem para devolver.
+        var (dir, kit) = Pastas();
+        try
+        {
+            var kitDll = Path.Combine(kit, "nvngx_dlss.dll");
+            File.WriteAllText(kitDll, "bytes do kit");
+            File.WriteAllText(Path.Combine(dir, "sl.dlss.dll"), "streamline");
+
+            var perfil = PerfilComDlssNativo(dir);
+            var c3 = CheckpointVerifier.Verify(perfil, null, kitDll).First(c => c.Number == 3);
+
+            Assert.NotEqual(CheckStatus.Fail, c3.State);
+            Assert.DoesNotContain("SUMIU", c3.Title);
+            Assert.DoesNotContain("Verificar integridade", c3.FixHint ?? "");
+            // E explica por que não falta nada, para o usuário não sair procurando.
+            Assert.Contains("driver", c3.Detail);
+            // A orientação que importa no caminho direto continua de pé.
+            Assert.Contains("LIGADO", c3.Title);
+        }
+        finally { Directory.Delete(dir, true); Directory.Delete(kit, true); }
+    }
+
+    [Fact]
+    public void Checkpoint3AcusaSumicoQuandoOBackupProvaQueFomosNos()
+    {
+        // O outro lado: se existe .dlss5bak do arquivo, ele ESTAVA na pasta e este
+        // programa o tirou de lá. Aí sim é falha nossa — e a saída é reverter, não
+        // verificar integridade.
+        var (dir, kit) = Pastas();
+        try
+        {
+            var kitDll = Path.Combine(kit, "nvngx_dlss.dll");
+            File.WriteAllText(kitDll, "bytes do kit");
+            File.WriteAllText(Path.Combine(dir, "nvngx_dlss.dll" + Propriedade.BackupSuffix), "o do jogo");
+
+            var c3 = CheckpointVerifier.Verify(PerfilComDlssNativo(dir), null, kitDll)
+                .First(c => c.Number == 3);
+
+            Assert.Equal(CheckStatus.Fail, c3.State);
+            Assert.Contains("Desinstalar", c3.FixHint!);
+            Assert.DoesNotContain("Verificar integridade", c3.FixHint!);
         }
         finally { Directory.Delete(dir, true); Directory.Delete(kit, true); }
     }
