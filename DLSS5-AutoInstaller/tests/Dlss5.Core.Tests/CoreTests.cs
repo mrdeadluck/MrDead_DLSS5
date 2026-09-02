@@ -3368,3 +3368,45 @@ public class ReFrameworkForaDaReEngineTests
         finally { Directory.Delete(dir, true); }
     }
 }
+
+public class ReFrameworkLogTests
+{
+    [Fact]
+    public void PastaEmUsoEhADoJogoQuandoOLogEstaLa()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-refwlog-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var exe = Path.Combine(dir, "re9.exe");
+            Assert.Null(ReFramework.PastaEmUso(dir, exe));
+
+            File.WriteAllText(Path.Combine(dir, ReFramework.LogDoFramework), "REFramework entry");
+            Assert.Equal(dir, ReFramework.PastaEmUso(dir, exe));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void PastaAppDataUsaONomeDoExecutavel()
+    {
+        var caminho = ReFramework.PastaAppData(Path.Combine("G:", "jogo", "re9.exe"));
+        Assert.EndsWith(Path.Combine("REFramework", "re9"), caminho);
+    }
+
+    [Fact]
+    public void OLogDizSeOPluginEntrou()
+    {
+        // Linha real do PluginLoader do REFramework.
+        Assert.True(ReFramework.CarregouOPlugin(
+            @"[PluginLoader] Loaded G:\jogoeframework\plugins\ReShade64.dll"));
+        // Plugin sem o export do REFramework é PULADO, não descarregado — e a linha
+        // "Loaded" vem antes, então continua contando como carregado.
+        Assert.True(ReFramework.CarregouOPlugin(
+            "[PluginLoader] Loaded ReShade64.dll\n" +
+            "[PluginLoader] ReShade64 has no reframework_plugin_required_version function, skipping..."));
+
+        Assert.False(ReFramework.CarregouOPlugin("[PluginLoader] No plugins loaded."));
+        Assert.False(ReFramework.CarregouOPlugin(null));
+    }
+}

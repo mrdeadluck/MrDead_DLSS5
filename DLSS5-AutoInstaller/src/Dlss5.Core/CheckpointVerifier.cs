@@ -197,6 +197,46 @@ public static class CheckpointVerifier
                     ? null
                     : "Rode a instalação. Neste modo o ReShade NÃO é o dxgi.dll: quem o carrega é o REFramework."));
 
+            // 17 — o log do PRÓPRIO REFramework. Quando "o jogo abre e o Home não faz
+            // nada", é este arquivo que separa as três causas possíveis, e nenhuma delas
+            // dá para adivinhar olhando a pasta: (a) o REFramework não carregou; (b) ele
+            // carregou mas guarda os dados em %APPDATA% porque não conseguiu escrever na
+            // pasta do jogo — e aí varre um reframework\plugins que não é o nosso; (c) ele
+            // carregou o ReShade e o problema é adiante.
+            var pastaRef = ReFramework.PastaEmUso(exe, profile.RealExePath);
+            if (pastaRef is null)
+            {
+                r.Add(new CheckResult(17, "REFramework carregou no jogo", CheckStatus.Fail,
+                    $"O {ReFramework.LogDoFramework} não existe nem na pasta do jogo nem em " +
+                    $"{ReFramework.PastaAppData(profile.RealExePath)} — o REFramework não chegou a rodar.",
+                    "Abra o jogo uma vez e verifique de novo. Se continuar assim, o jogo não está " +
+                    "carregando o dinput8.dll da pasta: confira se ele está junto do exe que renderiza."));
+            }
+            else
+            {
+                bool naPastaDoJogo = string.Equals(pastaRef, exe, StringComparison.OrdinalIgnoreCase);
+                string textoRefLog;
+                try { textoRefLog = ReadShared(Path.Combine(pastaRef, ReFramework.LogDoFramework)); }
+                catch { textoRefLog = ""; }
+                bool carregou = ReFramework.CarregouOPlugin(textoRefLog);
+
+                r.Add(new CheckResult(17, "REFramework carregou o ReShade",
+                    carregou ? CheckStatus.Pass : CheckStatus.Fail,
+                    carregou
+                        ? $"O log do REFramework registra o {ReFramework.ReShadePlugin} carregado."
+                        : naPastaDoJogo
+                            ? $"O REFramework rodou, mas o log dele não registra o {ReFramework.ReShadePlugin}."
+                            : $"O REFramework NÃO consegue escrever na pasta do jogo e caiu para {pastaRef}. " +
+                              "É lá que ele procura os plugins — o nosso, na pasta do jogo, nunca é lido.",
+                    carregou
+                        ? null
+                        : naPastaDoJogo
+                            ? "Abra o jogo uma vez com esta instalação e verifique de novo."
+                            : $"Copie a pasta reframework\\plugins da pasta do jogo para {pastaRef}, ou " +
+                              "dê permissão de escrita na pasta do jogo ao seu usuário do Windows " +
+                              "(Propriedades → Segurança) e abra o jogo de novo."));
+            }
+
             // Um dxgi.dll sobrando aqui é a instalação antiga — e é justamente ele que a
             // proteção do jogo derruba. Enquanto estiver na pasta, o teste não é limpo.
             var dxgiVelho = Path.Combine(exe, "dxgi.dll");

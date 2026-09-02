@@ -42,6 +42,44 @@ public static class ReFramework
     /// <summary>Log que esse ReShade grava.</summary>
     public const string ReShadeLog = "ReShade64.log";
 
+    /// <summary>
+    /// O log do próprio REFramework. É o arquivo que responde tudo quando "nada acontece":
+    /// se ele não existe, o REFramework nem carregou (o jogo não puxou o dinput8.dll da
+    /// pasta); se existe, ele diz em "[PluginLoader] Loaded ..." se o ReShade entrou.
+    /// </summary>
+    public const string LogDoFramework = "re2_framework_log.txt";
+
+    /// <summary>
+    /// Onde o REFramework guarda tudo. Ele testa se dá para escrever na pasta do
+    /// executável; conseguindo, é ali. Se NÃO conseguir, ele cai para
+    /// %APPDATA%\REFramework\&lt;nome do exe&gt; — e aí a pasta reframework\plugins que vale
+    /// é a de lá, não a da pasta do jogo. Instalar na pasta errada é instalar no vácuo.
+    /// </summary>
+    public static string PastaAppData(string exePath)
+    {
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var nome = Path.GetFileNameWithoutExtension(exePath);
+        return Path.Combine(appData, "REFramework", nome);
+    }
+
+    /// <summary>
+    /// A pasta que o REFramework está realmente usando: a do jogo quando o log dele está
+    /// lá, a de %APPDATA% quando o log está lá. Nulo quando não há log em lugar nenhum —
+    /// aí o REFramework não rodou.
+    /// </summary>
+    public static string? PastaEmUso(string exeFolder, string exePath)
+    {
+        if (File.Exists(Path.Combine(exeFolder, LogDoFramework))) return exeFolder;
+        var appData = PastaAppData(exePath);
+        return File.Exists(Path.Combine(appData, LogDoFramework)) ? appData : null;
+    }
+
+    /// <summary>O log diz que este plugin foi carregado?</summary>
+    public static bool CarregouOPlugin(string? textoDoLog) =>
+        textoDoLog is not null
+        && textoDoLog.Contains("Loaded", StringComparison.OrdinalIgnoreCase)
+        && textoDoLog.Contains(ReShadePlugin, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Pasta que o REFramework varre atrás de plugins.</summary>
     public static string PastaPlugins(string exeFolder) =>
         Path.Combine(exeFolder, "reframework", "plugins");
