@@ -1,5 +1,5 @@
 # Gravado pelo workflow trocar-extras.yml. Não edite: mude extras-desejado.txt.
-data=2026-09-04 22:38 UTC
+data=2026-09-04 23:47 UTC
 renodx-dlss5.addon64=d5adf82eb44b065f4c590ac91fe824bab07afea0eb9f994bde936710c8593952 1732608 https://github.com/RankFTW/rhi-repo/releases/download/renodx-dlss5-4.70/renodx-dlss5_4.70.zip
 renodx-dlss-SF-0.52 (alternativa ShortFuse)/renodx-dlss.addon64=fba3271626587f8b1f49c4fb40bbe23fd969282da6fe48be2da9b17beb708ee6 2520576 https://github.com/RankFTW/rhi-repo/releases/download/renodx-dlss-SF-0.52/renodx-dlss_SF_0.52.zip
 dgVoodoo2/MS/x86/D3D9.dll=db1c445f7bcf699df1e175e974c779bdc7e19a468680a44884b1ab7078888d04 482304 https://github.com/dege-diosg/dgVoodoo2/releases/download/v2.87.4/dgVoodoo2_87_4.zip
