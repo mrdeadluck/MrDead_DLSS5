@@ -1,3 +1,4 @@
+using System.IO.Compression;
 namespace Dlss5.Core;
 
 /// <summary>
@@ -123,7 +124,101 @@ public static class ReFramework
     /// ("Could not find conditional_jmp for DD2", "stack destroyer") e o jogo cai na tela
     /// inicial, com o crash registrado pelo próprio REFramework.
     /// </summary>
-    private static readonly string[] ExesQuePrecisam = { "re9.exe" };
+    /// <remarks>
+    /// O Dragon's Dogma 2 entrou na lista em 04/09/2026: a atualização que o levou ao TDB 83
+    /// (a engine do RE9) trouxe a mesma recusa — sem o REFramework o jogo abre a própria tela
+    /// de erro 3 s depois de o runtime subir, antes de criar qualquer DLSS. E a nightly de
+    /// 28/08 que o kit trazia caía DENTRO do REFramework nessa versão do jogo; a de 02/09
+    /// ("Initial fix for DD2" e os fixes seguintes) é a que serve.
+    /// </remarks>
+    private static readonly string[] ExesQuePrecisam = { "re9.exe", "DD2.exe" };
+
+    /// <summary>A nightly universal (um dinput8.dll para todos os jogos) do praydog.</summary>
+    public const string UrlNightly = "https://github.com/praydog/REFramework-nightly/releases/latest/download/REFramework.zip";
+
+    /// <summary>A revisão (hash do commit) que o kit traz; null sem o arquivo.</summary>
+    public static string? RevisaoDoKit(string? pastaReFramework)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(pastaReFramework)) return null;
+            var f = Path.Combine(pastaReFramework, RevisionFile);
+            return File.Exists(f) ? File.ReadAllText(f).Trim() : null;
+        }
+        catch { return null; }
+    }
+
+    /// <summary>
+    /// Baixa a nightly mais nova e troca o dinput8.dll (e o reframework_revision.txt) da pasta
+    /// do kit, guardando o anterior como .dlss5prev. Devolve a revisão baixada. Confere que
+    /// o que veio é um PE x64 com a assinatura do REFramework antes de trocar.
+    /// </summary>
+    public static async Task<string> BaixarParaOKit(
+        string pastaReFramework, IProgress<string>? progresso = null, CancellationToken ct = default)
+    {
+        Directory.CreateDirectory(pastaReFramework);
+        var dllNoKit = Path.Combine(pastaReFramework, Dinput8);
+        var revNoKit = Path.Combine(pastaReFramework, RevisionFile);
+        var zipTemp = dllNoKit + ".zip" + Propriedade.TempSuffix;
+        var dllTemp = dllNoKit + Propriedade.TempSuffix;
+        var revTemp = revNoKit + Propriedade.TempSuffix;
+        try
+        {
+            progresso?.Report("Baixando a nightly do REFramework (~10 MB)...");
+            using (var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(10) })
+            using (var resposta = await http.GetAsync(UrlNightly, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false))
+            {
+                resposta.EnsureSuccessStatusCode();
+                await using var origem = await resposta.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+                await using var destino = new FileStream(zipTemp, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16);
+                await origem.CopyToAsync(destino, ct).ConfigureAwait(false);
+            }
+
+            progresso?.Report("Extraindo o dinput8.dll do zip...");
+            string revisao = "";
+            using (var zip = System.IO.Compression.ZipFile.OpenRead(zipTemp))
+            {
+                var dll = zip.Entries.FirstOrDefault(e => e.Name.Equals(Dinput8, StringComparison.OrdinalIgnoreCase))
+                          ?? throw new InvalidOperationException($"O zip da nightly não traz {Dinput8}.");
+                dll.ExtractToFile(dllTemp, overwrite: true);
+                var rev = zip.Entries.FirstOrDefault(e => e.Name.Equals(RevisionFile, StringComparison.OrdinalIgnoreCase));
+                if (rev is not null)
+                {
+                    rev.ExtractToFile(revTemp, overwrite: true);
+                    revisao = File.ReadAllText(revTemp).Trim();
+                }
+            }
+
+            if (PeFile.GetArchitecture(dllTemp) != PeArchitecture.X64)
+                throw new InvalidOperationException("O dinput8.dll baixado não é um executável x64. Nada foi trocado.");
+            if (!ContemTexto(dllTemp, "REFramework"))
+                throw new InvalidOperationException("O dinput8.dll baixado não parece ser o REFramework. Nada foi trocado.");
+
+            Trocar(dllNoKit, dllTemp);
+            if (File.Exists(revTemp)) Trocar(revNoKit, revTemp);
+            progresso?.Report($"REFramework do kit agora é a nightly {(revisao.Length >= 8 ? revisao[..8] : revisao)}.");
+            return revisao;
+        }
+        finally
+        {
+            foreach (var t in new[] { zipTemp, dllTemp, revTemp })
+                try { if (File.Exists(t)) File.Delete(t); } catch { }
+        }
+
+        static void Trocar(string alvo, string novo)
+        {
+            if (File.Exists(alvo))
+            {
+                var anterior = alvo + Propriedade.PrevSuffix;
+                if (File.Exists(anterior)) File.Delete(anterior);
+                File.Move(alvo, anterior);
+            }
+            File.Move(novo, alvo);
+        }
+
+        static bool ContemTexto(string path, string texto) =>
+            ApiDetector.ScanForMarkers(path, new[] { texto }, 64L * 1024 * 1024).Contains(texto);
+    }
 
     /// <summary>O jogo precisa do REFramework para o ReShade entrar.</summary>
     public static bool PrecisaDoBypass(string? exePath)
@@ -136,9 +231,10 @@ public static class ReFramework
 
     public const string QuandoMarcar =
         "Marque só em jogo da RE Engine que abre a própria tela de erro logo depois do ReShade subir " +
-        "(Resident Evil Requiem). Dragon's Dogma 2, RE4, RE Village e Monster Hunter Wilds aceitam o " +
-        "ReShade direto — neles o REFramework, quando não consegue desarmar a checagem desta versão do " +
-        "jogo, é quem derruba o jogo.";
+        "(Resident Evil Requiem e, desde a atualização de 2026, Dragon's Dogma 2). RE4, RE Village e " +
+        "Monster Hunter Wilds aceitam o ReShade direto — neles o REFramework, quando não consegue desarmar " +
+        "a checagem desta versão do jogo, é quem derruba o jogo. Se o jogo cair COM o REFramework, o " +
+        "remédio é a nightly mais nova dele (botão \"Baixar REFramework nightly\" na verificação).";
 
     /// <summary>
     /// O dinput8.dll da pasta é o REFramework que este kit traz? Byte a byte, a mesma

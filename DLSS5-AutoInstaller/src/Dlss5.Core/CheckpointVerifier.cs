@@ -338,8 +338,9 @@ public static class CheckpointVerifier
                               ": é a checagem do jogo derrubando quem mexeu na memória dele."
                             : ""),
                         precisa
-                            ? "Este jogo precisa do REFramework, e a nightly do kit não cobre esta versão dele. Troque o dinput8.dll do kit " +
-                              "por uma nightly mais nova (github.com/praydog/REFramework-nightly) quando houver uma com o patch."
+                            ? "Este jogo precisa do REFramework, e a nightly do kit não cobre esta versão dele. Clique em \"Baixar " +
+                              "REFramework nightly\" aqui embaixo (troca o dinput8.dll do kit pela nightly mais nova do praydog) e " +
+                              "depois em Instalar de novo. Se a nightly mais nova ainda não cobrir, é esperar o autor dele."
                             : "Este jogo aceita o ReShade direto: clique em Desinstalar e depois em Instalar com a caixa \"Instalar o " +
                               "REFramework junto\" DESMARCADA. " + ReFramework.QuandoMarcar));
                 }

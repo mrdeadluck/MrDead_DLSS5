@@ -102,8 +102,8 @@ public sealed partial class MainForm
         // RE Engine com proteção anti-adulteração: o ReShade injetado como dxgi.dll faz o
         // jogo abrir a própria tela de erro antes de criar qualquer DLSS. Hospedado no
         // REFramework ele passa — foi assim que o RE9 abriu com o painel funcionando.
-        _chkReFramework.Text = "Instalar o REFramework junto — só para jogo que recusa o ReShade na abertura (RE Requiem). " +
-                               "Em DD2, RE4, RE Village e MH Wilds deixe DESMARCADO: ali ele derruba o jogo.";
+        _chkReFramework.Text = "Instalar o REFramework junto — só para jogo que recusa o ReShade na abertura (RE Requiem, Dragon's Dogma 2). " +
+                               "Em RE4, RE Village e MH Wilds deixe DESMARCADO: ali ele derruba o jogo.";
         _chkReFramework.AutoSize = true;
         _chkReFramework.Visible = false;
         _chkReFramework.Margin = new Padding(0, 0, 0, 6);

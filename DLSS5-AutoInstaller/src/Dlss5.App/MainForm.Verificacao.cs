@@ -25,6 +25,7 @@ public sealed partial class MainForm
     // O runtime do DLSS 5 pelo hash: quando o do kit é remendo/original-só-RTX-50, este
     // botão baixa o build do ShortFuse que o RHI instala e o põe no kit, conferido.
     private readonly Button _btnRuntime = Ui.Secondary("Baixar o runtime do RHI (166 MB)");
+    private readonly Button _btnReFramework = Ui.Secondary("Baixar REFramework nightly (23 MB)");
     // Caminho direto: a chave EnableHooks do RenoDX, trocada no ReShade.ini sem reinstalar.
     private readonly FlowLayoutPanel _barraHooks = Ui.Fila();
     private readonly ComboBox _cboHooks = new();
@@ -145,6 +146,12 @@ public sealed partial class MainForm
         _btnRuntime.Margin = new Padding(0, 4, 8, 4);
         _btnRuntime.Click += (_, _) => _ = BaixarRuntimeDoRhiAsync();
         bar.Controls.Add(_btnRuntime);
+        // Jogo da RE Engine que caiu COM o REFramework: a nightly mais nova é o remédio
+        // (Dragon's Dogma 2 atualizado x nightly de 28/08). Só aparece em RE Engine.
+        _btnReFramework.Margin = new Padding(0, 4, 8, 4);
+        _btnReFramework.Visible = false;
+        _btnReFramework.Click += (_, _) => _ = BaixarReFrameworkAsync();
+        bar.Controls.Add(_btnReFramework);
         bar.Controls.Add(Botao("Reiniciar o PC (opcional)…", (_, _) => ReiniciarSeOUsuarioQuiser()));
         bar.Controls.Add(Botao(Textos.BotaoAbrirLogs, (_, _) => AbrirPastaDeLogs()));
         bar.Controls.Add(Botao(Textos.BotaoExportarDiagnostico, (_, _) => ExportarDiagnostico()));
@@ -253,6 +260,7 @@ public sealed partial class MainForm
         _barraHooks.Visible = direto;
         // work_resolution é só D3D11 (o Feeder ignora noutras APIs): a barra segue a regra.
         _barraFeed.Visible = !direto && _profile.Api == GraphicsApi.D3D11;
+        _btnReFramework.Visible = _profile.EhReEngine;
         if (_barraFeed.Visible) SincronizarResolucaoDoFeed();
         if (direto) SincronizarHooksDoRenodx();
         AtualizarBotaoRenodx();
@@ -554,6 +562,53 @@ public sealed partial class MainForm
     /// arquivo novo e atualiza o manifesto. Foi o que faltou no RE9 — o kit trazia um
     /// remendo do original de RTX 50, e a RTX 4070 Ti rodava, dizia OK e não desenhava.
     /// </summary>
+    /// <summary>
+    /// Troca o dinput8.dll do REFramework do kit pela nightly mais nova do praydog. O caso:
+    /// o Dragon's Dogma 2 atualizado caía dentro do REFramework de 28/08; o de 02/09 traz
+    /// os fixes. O anterior fica como .dlss5prev na pasta do kit.
+    /// </summary>
+    private async Task BaixarReFrameworkAsync()
+    {
+        if (_ocupado) { Status(Textos.OperacaoEmAndamento); return; }
+        var pastaKit = _txtKit.Text.Trim();
+        if (string.IsNullOrWhiteSpace(pastaKit) || !Directory.Exists(pastaKit))
+        {
+            Aviso("Aponte a pasta do kit primeiro", "O REFramework é gravado na pasta do kit (DLSS 5 Files\\REFramework), na tela inicial.");
+            return;
+        }
+
+        KitInventory? kit = null;
+        try { kit = KitResolver.Resolve(pastaKit); } catch { }
+        var pastaRef = kit?.ReFrameworkDinput8 is { } atual
+            ? Path.GetDirectoryName(atual) ?? Path.Combine(pastaKit, "REFramework")
+            : Path.Combine(pastaKit, "REFramework");
+        var revisaoAtual = ReFramework.RevisaoDoKit(pastaRef);
+
+        if (!Dialogos.Confirmar(this, "Baixar a nightly do REFramework",
+                revisaoAtual is null ? "O kit não tem o REFramework (ou não tem a revisão gravada)" : $"O kit traz a revisão {revisaoAtual[..Math.Min(8, revisaoAtual.Length)]}",
+                $"Baixar a nightly mais nova de {ReFramework.UrlNightly} (~10 MB compactado) e gravar em:\r\n{pastaRef}\r\n\r\n" +
+                "O dinput8.dll atual fica guardado como .dlss5prev. Depois, clique em Instalar de novo (Atualizar) para o " +
+                "jogo receber o arquivo novo. Use isto quando um jogo da RE Engine cai COM o REFramework marcado — o item 17 " +
+                "da verificação diz quando é o caso.",
+                "Baixar"))
+            return;
+
+        SetOcupado(true);
+        try
+        {
+            using var etapa = _diario.Etapa("Baixar a nightly do REFramework");
+            var progresso = new Progress<string>(Status);
+            var revisao = await ReFramework.BaixarParaOKit(pastaRef, progresso);
+            _kit = null;   // o inventário do kit mudou: quem precisar resolve de novo
+            _diario.Info($"REFramework do kit trocado para a nightly {revisao}");
+            Status($"Kit atualizado: REFramework {revisao[..Math.Min(8, revisao.Length)]}. Agora instale de novo para o jogo receber o arquivo.");
+            Dialogos.Informar(this, "REFramework baixado", $"dinput8.dll do kit agora é a nightly {revisao[..Math.Min(8, revisao.Length)]}",
+                "Próximo passo: volte à tela inicial e clique em Instalar (Atualizar), com a caixa \"Instalar o REFramework junto\" marcada.");
+        }
+        catch (Exception ex) { Erro("Não consegui baixar a nightly do REFramework", ex); }
+        finally { SetOcupado(false); }
+    }
+
     private async Task BaixarRuntimeDoRhiAsync()
     {
         if (_ocupado) { Status(Textos.OperacaoEmAndamento); return; }

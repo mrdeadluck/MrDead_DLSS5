@@ -1,0 +1,12 @@
+# Qual nightly do REFramework (github.com/praydog/REFramework-nightly) o kit deve trazer.
+#
+# Mudar a linha "tag=" e commitar dispara o workflow trocar-reframework.yml, que baixa o
+# REFramework.zip dessa release, confere o dinput8.dll (PE x64 com a assinatura do
+# REFramework), grava a revisão em REFramework\reframework_revision.txt e commita no LFS.
+# "tag=latest" pega a nightly mais nova no momento da execução.
+#
+# Por que trocar em 04/09/2026: o Dragon's Dogma 2 atualizado (TDB 83) recusa o ReShade
+# sem o REFramework, e a nightly de 28/08 que o kit trazia caía dentro do próprio
+# REFramework nessa versão do jogo. A de 02/09 traz "Initial fix for DD2" e os fixes
+# seguintes.
+tag=nightly-01414-849c35a041fa4d748b42a2fb5ebe53f402875311
