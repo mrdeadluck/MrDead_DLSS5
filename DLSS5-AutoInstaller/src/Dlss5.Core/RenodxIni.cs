@@ -45,8 +45,18 @@ public static class RenodxIni
              "em que o GTA 5 e o Onimusha rodaram.",
     };
 
+    /// <summary>
+    /// NeuralUplift: o liga/desliga do Neural Rendering do próprio addon (1 ligado, 0 desligado).
+    /// O F6 grava aqui. No Max Payne 3 (32-bit) o host64 subiu com NeuralUplift=0 depois de uma
+    /// troca de configuração, e o feed entregava 30 mil quadros para um NR desligado.
+    /// </summary>
+    public const string ChaveNeuralUplift = "NeuralUplift";
+
     /// <summary>Valor gravado, ou nulo quando a seção ou a chave não existem.</summary>
-    public static int? Ler(string? ini)
+    public static int? Ler(string? ini) => Ler(ini, Chave);
+
+    /// <summary>Uma chave qualquer da seção [RenoDX.DLSS5].</summary>
+    public static int? Ler(string? ini, string chave)
     {
         if (string.IsNullOrWhiteSpace(ini)) return null;
         bool dentro = false;
@@ -61,7 +71,7 @@ public static class RenodxIni
             if (!dentro) continue;
             int eq = linha.IndexOf('=');
             if (eq < 0) continue;
-            if (!linha[..eq].Trim().Equals(Chave, StringComparison.OrdinalIgnoreCase)) continue;
+            if (!linha[..eq].Trim().Equals(chave, StringComparison.OrdinalIgnoreCase)) continue;
             return int.TryParse(linha[(eq + 1)..].Trim(), out var v) ? v : null;
         }
         return null;
