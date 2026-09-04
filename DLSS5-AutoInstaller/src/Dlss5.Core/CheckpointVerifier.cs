@@ -775,6 +775,12 @@ public static class CheckpointVerifier
                             "Desligue a geração de quadros nas opções do jogo enquanto compara — com " +
                             "ela ligada, metade do que você vê não passou pelo DLSS 5."
                           : "") +
+                      (renodx.RecriacoesSemToggle >= 5
+                          ? $"  |  O ADDON RECRIOU A FEATURE DO NR {renodx.RecriacoesSemToggle} VEZES SEM VOCÊ APERTAR F6 " +
+                            "(\"feature 18 created\" repetido no log): ele está zerando o próprio estado a cada poucos segundos. " +
+                            "Abra o painel do addon (Complementos → DLSS 5 Neural Rendering) e olhe o texto de estado embaixo: " +
+                            "\"Latest NR NGX result\" e os contadores de falha dizem por quê. Mande um print dele junto com o log."
+                          : "") +
                       (renodx.RayReconstruction
                           ? "  |  O NR ESTÁ PENDURADO NO RAY RECONSTRUCTION (DLSSD) deste jogo, não no DLSS " +
                             "comum — o log diz \"after DLSSD/RR\". Foi o quadro do Alan Wake 2: sucesso em todo " +

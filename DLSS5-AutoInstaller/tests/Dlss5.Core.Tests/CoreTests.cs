@@ -5580,3 +5580,66 @@ public class ReFrameworkNoDragonsDogma2Tests
         finally { Directory.Delete(dir, true); }
     }
 }
+
+public class RecriacoesDoNrTests
+{
+    [Fact]
+    public void ContaAsRecriacoesQueNaoVieramDoF6()
+    {
+        var linhas = new List<string>
+        {
+            "00:52:01:620 [16480] | INFO  | Registered add-on \"DLSS 5 Neural Rendering\" v0.2026.828.517 using ReShade API version 18.",
+            "00:52:07:723 [31872] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: NGX feature create intercepted: feature=1 (DLSS/DLAA), slot=0",
+            "00:52:08:342 [23872] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: feature 18 created via the signed snippet after DLSS/DLAA for NR input 2560x1440 -> output 2560x1440 with guides 2560x1440",
+            "00:52:09:363 [31872] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: inline feature 18 evaluation succeeded (count=60, NR input 2560x1440 (guides 1708x960), output 2560x1440 [native])",
+        };
+        // Sete recriações espontâneas + duas do F6 (o Onimusha demo).
+        for (int i = 0; i < 7; i++)
+            linhas.Add($"00:52:{20 + i * 5}:000 [31872] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: feature 18 created via the signed snippet after DLSS/DLAA for NR input 2560x1440 -> output 2560x1440 with guides 2560x1440");
+        for (int i = 0; i < 2; i++)
+        {
+            linhas.Add("00:53:17:333 [31872] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: NR toggled OFF via F6");
+            linhas.Add("00:53:17:992 [31872] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: NR toggled ON via F6");
+            linhas.Add("00:53:18:178 [38816] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: feature 18 created via the signed snippet after DLSS/DLAA for NR input 2560x1440 -> output 2560x1440 with guides 2560x1440");
+        }
+        var log = string.Join("\n", linhas) + "\n";
+        var s = RenodxLog.Ler(log)!;
+        Assert.True(s.Ativo);
+        Assert.Equal(7, s.RecriacoesSemToggle);
+
+        // Uma criação só: zero.
+        Assert.Equal(0, RenodxLog.Ler(string.Join("\n", linhas.Take(4)))!.RecriacoesSemToggle);
+    }
+
+    [Fact]
+    public void Checkpoint14AvisaDasRecriacoesNoTextoDeAjuda()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-recria-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("00:52:01:620 [16480] | INFO  | Registered add-on \"DLSS 5 Neural Rendering\" v0.2026.828.517 using ReShade API version 18.");
+            sb.AppendLine("00:52:04:235 [41740] | INFO  | Redirecting IDXGIFactory2::CreateSwapChainForHwnd(this = 0000024D2D7FA3A0, ...) ...");
+            sb.AppendLine("00:52:07:723 [31872] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: NGX feature create intercepted: feature=1 (DLSS/DLAA), slot=0");
+            sb.AppendLine("00:52:09:363 [31872] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: inline feature 18 evaluation succeeded (count=60, NR input 2560x1440 (guides 1708x960), output 2560x1440 [native])");
+            for (int i = 0; i < 8; i++)
+                sb.AppendLine("00:52:20:000 [31872] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: feature 18 created via the signed snippet after DLSS/DLAA for NR input 2560x1440 -> output 2560x1440 with guides 2560x1440");
+            sb.Append(' ', 2000);
+            File.WriteAllText(Path.Combine(dir, "ReShade.log"), sb.ToString());
+            File.WriteAllText(Path.Combine(dir, "renodx-dlss5.addon64"), "x");
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "OnimushaWotS_Demo.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D12,
+                HasNativeDlss = true,
+            };
+            var c14 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 14);
+            Assert.Equal(CheckStatus.Pass, c14.State);
+            Assert.Contains("RECRIOU A FEATURE DO NR 7 VEZES", c14.FixHint!);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}

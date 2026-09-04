@@ -27,6 +27,11 @@ namespace Dlss5.Core;
 /// O jogo ligou a geração de quadros (DLSSG, feature 11). O addon anuncia no log que
 /// NÃO encosta nela: os quadros gerados saem sem o Neural Rendering.
 /// </param>
+/// <param name="RecriacoesSemToggle">
+/// Quantas vezes o addon recriou a feature do NR ("feature 18 created") além das que o F6
+/// provocou. Onimusha (demo): dez recriações em dois minutos, duas do F6 — o addon está
+/// zerando o próprio estado a cada 10–20 s, e o olho não vê diferença nenhuma.
+/// </param>
 /// <param name="CompiladorAntigo">
 /// "error X3506: unrecognized compiler target 'cs_5_1'": o d3dcompiler_47.dll que o jogo
 /// carrega é velho demais e o addon não consegue compilar o shader do NR. Spider-Man
@@ -54,7 +59,8 @@ public sealed record RenodxStatus(
     bool CriouSwapchain = false,
     bool FrameGeneration = false,
     bool RayReconstruction = false,
-    bool CompiladorAntigo = false)
+    bool CompiladorAntigo = false,
+    int RecriacoesSemToggle = 0)
 {
     /// <summary>
     /// O jogo abriu a própria tela de erro antes de criar qualquer DLSS. Nesse quadro o
@@ -187,10 +193,14 @@ public static class RenodxLog
         bool rayRec = logText.Contains("after DLSSD/RR", StringComparison.OrdinalIgnoreCase)
                       || logText.Contains("feature=13 (DLSSD/RR)", StringComparison.OrdinalIgnoreCase);
         bool compiladorAntigo = logText.Contains(CompiladorD3D.ErroNoLog, StringComparison.OrdinalIgnoreCase);
+        int criadas = Regex.Matches(logText, @"feature 18 created", RegexOptions.IgnoreCase).Count;
+        int ligadas = Regex.Matches(logText, @"NR toggled ON", RegexOptions.IgnoreCase).Count;
+        // A primeira criação é a normal; cada F6 (ligar) vale uma; o resto é o addon se resetando.
+        int recriacoes = Math.Max(0, criadas - 1 - ligadas);
 
         return new RenodxStatus(ativo, avaliacoes, hooksSemUso, recusada,
             hooksInstalados, criouFeature, enableHooks, streamline, pedeStreamline,
-            SegundosAteDialogo(logText), encerrou, criouDevice, criouSwapchain, frameGen, rayRec, compiladorAntigo);
+            SegundosAteDialogo(logText), encerrou, criouDevice, criouSwapchain, frameGen, rayRec, compiladorAntigo, recriacoes);
     }
 
     /// <summary>
