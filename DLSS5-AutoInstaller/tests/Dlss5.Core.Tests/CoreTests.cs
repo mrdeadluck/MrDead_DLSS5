@@ -5539,7 +5539,10 @@ public class ReFrameworkNoDragonsDogma2Tests
     public void SoORe9SaiDaDeteccaoComOReFrameworkMarcado()
     {
         Assert.True(ReFramework.PrecisaDoBypass(@"C:\Games\RE9\re9.exe"));
-        Assert.False(ReFramework.PrecisaDoBypass(@"C:\Games\DD2\DD2.exe"));
+        // DD2 entrou na lista em 04/09/2026: o jogo atualizado (TDB 83) recusa o ReShade sem ele.
+        Assert.True(ReFramework.PrecisaDoBypass(@"C:\Games\DD2\DD2.exe"));
+        Assert.True(ReFramework.PrecisaDoBypass(@"M:\SteamLibrary\steamapps\common\Dragons Dogma 2\dd2.exe"));
+        Assert.False(ReFramework.PrecisaDoBypass(@"C:\Games\RE4\re4.exe"));
         Assert.False(ReFramework.PrecisaDoBypass(null));
     }
 
@@ -5566,12 +5569,13 @@ public class ReFrameworkNoDragonsDogma2Tests
             var falha = c17.First(c => c.State == CheckStatus.Fail && c.Detail.Contains("NÃO conseguiu desarmar", StringComparison.Ordinal));
             Assert.Contains("DD2", falha.Detail);
             Assert.Contains("caiu", falha.Detail);
-            Assert.Contains("DESMARCADA", falha.FixHint!);
+            // DD2 precisa do REFramework: o remédio é a nightly nova (o botão), não desmarcar.
+            Assert.Contains("nightly", falha.FixHint!);
 
-            // No RE9 o mesmo quadro vira "espere uma nightly nova", não "desmarque".
-            perfil.RealExePath = Path.Combine(dir, "re9.exe");
-            var re9 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 17 && c.State == CheckStatus.Fail);
-            Assert.Contains("nightly", re9.FixHint!);
+            // Num jogo que aceita o ReShade direto (RE4), o remédio é desmarcar a caixa.
+            perfil.RealExePath = Path.Combine(dir, "re4.exe");
+            var re4 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 17 && c.State == CheckStatus.Fail);
+            Assert.Contains("DESMARCADA", re4.FixHint!);
         }
         finally { Directory.Delete(dir, true); }
     }
