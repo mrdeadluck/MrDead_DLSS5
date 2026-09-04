@@ -5399,3 +5399,108 @@ public class ApiPeloDlssNativoTests
         finally { Directory.Delete(dir, true); }
     }
 }
+
+public class CompiladorD3DTests
+{
+    // Trecho real do ReShade.log do Spider-Man Remastered: tudo armado, feature interceptada,
+    // e o shader do NR não compila porque o d3dcompiler_47.dll do jogo é o do SDK do Win 8.1.
+    private const string LogSpiderMan =
+        "23:21:17:674 [30092] | INFO  | Registered add-on \"DLSS 5 Neural Rendering\" v0.2026.828.517 using ReShade API version 18.\n" +
+        "23:21:17:679 [30092] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: D3D12 NGX hooks installed across 2 module copy(ies); inline DLSS contract capture armed\n" +
+        "23:21:50:030 [23528] | INFO  | Redirecting IDXGIFactory2::CreateSwapChainForHwnd(this = 000002A6D1BBC670, ...) ...\n" +
+        "23:21:53:451 [ 5592] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: NGX feature create intercepted: feature=1 (DLSS/DLAA), slot=0\n" +
+        "23:21:54:010 [ 5592] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: signed DLSSNR 310.8.0 D3D12 runtime initialized\n" +
+        "23:21:54:123 [ 5592] | ERROR | [DLSS 5 Neural Rendering] DLSS5 Generic: DLSS5 Generic proxy encode compilation failed with HRESULT 0x8876086c: error X3506: unrecognized compiler target 'cs_5_1'\n";
+
+    [Fact]
+    public void OLogDoSpiderManAcusaOCompiladorAntigo()
+    {
+        var s = RenodxLog.Ler(LogSpiderMan)!;
+        Assert.True(s.CompiladorAntigo);
+        Assert.False(s.Ativo);
+        Assert.True(s.CriouFeature);
+        Assert.Contains("cs_5_1", s.Resumo);
+    }
+
+    [Fact]
+    public void Checkpoint14ViraFalhaComOConsertoCerto()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-d3dc-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "ReShade.log"), LogSpiderMan + new string(' ', 2000));
+            File.WriteAllText(Path.Combine(dir, "renodx-dlss5.addon64"), "x");
+            File.WriteAllBytes(Path.Combine(dir, "d3dcompiler_47.dll"), new byte[] { 0x4D, 0x5A, 0, 0 });
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "Spider-Man.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D12,
+                HasNativeDlss = true,
+            };
+            var checagens = CheckpointVerifier.Verify(perfil, null);
+            var c14 = checagens.First(c => c.Number == 14);
+            Assert.Equal(CheckStatus.Fail, c14.State);
+            Assert.Contains("cs_5_1", c14.Detail);
+            Assert.Contains("d3dcompiler_47.dll", c14.FixHint!);
+
+            var c21 = checagens.First(c => c.Number == 21);
+            Assert.Equal(CheckStatus.Fail, c21.State);
+            Assert.Contains("sem versão gravada", c21.Detail);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void OPlanoTrocaOCompiladorAntigoPeloDoWindowsComBackup()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-d3dc-plan-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var sistema = Path.Combine(dir, "system32-d3dcompiler_47.dll");
+        var lerAntes = CompiladorD3D.LerVersao;
+        var sistemaAntes = CompiladorD3D.CaminhoNoSistema;
+        try
+        {
+            File.WriteAllBytes(Path.Combine(dir, "d3dcompiler_47.dll"), new byte[] { 0x4D, 0x5A, 0, 0 });
+            File.WriteAllBytes(sistema, new byte[] { 0x4D, 0x5A, 0, 1 });
+            // Só a cópia "do Windows" tem versão 10: a do jogo continua sem versão (antiga).
+            CompiladorD3D.LerVersao = p => string.Equals(p, sistema, StringComparison.OrdinalIgnoreCase) ? new Version(10, 0, 26100, 1) : null;
+            CompiladorD3D.CaminhoNoSistema = () => sistema;
+
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "Spider-Man.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D12,
+                HasNativeDlss = true,
+            };
+            var plan = InstallPlanBuilder.Build(perfil, PlanBuilderTests.KitCompleto(), new InstallOptions());
+            var troca = plan.Actions.Single(a => a.Kind == PlanActionKind.CopyFile
+                                              && string.Equals(a.TargetPath, Path.Combine(dir, "d3dcompiler_47.dll"), StringComparison.OrdinalIgnoreCase));
+            Assert.Equal(sistema, troca.SourcePath);
+            Assert.Contains("backup", troca.Description);
+            Assert.Contains(plan.Warnings, w => w.Contains("cs_5_1", StringComparison.Ordinal));
+
+            // Sem a cópia do Windows: só o aviso, nada de trocar.
+            CompiladorD3D.CaminhoNoSistema = () => null;
+            var semSistema = InstallPlanBuilder.Build(perfil, PlanBuilderTests.KitCompleto(), new InstallOptions());
+            Assert.DoesNotContain(semSistema.Actions, a => string.Equals(a.TargetPath, Path.Combine(dir, "d3dcompiler_47.dll"), StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(semSistema.Warnings, w => w.Contains("System32", StringComparison.Ordinal));
+
+            // Jogo sem a DLL: nada acontece.
+            File.Delete(Path.Combine(dir, "d3dcompiler_47.dll"));
+            CompiladorD3D.CaminhoNoSistema = () => sistema;
+            var semDll = InstallPlanBuilder.Build(perfil, PlanBuilderTests.KitCompleto(), new InstallOptions());
+            Assert.DoesNotContain(semDll.Warnings, w => w.Contains("cs_5_1", StringComparison.Ordinal));
+        }
+        finally
+        {
+            CompiladorD3D.LerVersao = lerAntes;
+            CompiladorD3D.CaminhoNoSistema = sistemaAntes;
+            Directory.Delete(dir, true);
+        }
+    }
+}

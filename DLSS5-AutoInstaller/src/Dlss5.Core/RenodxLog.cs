@@ -27,6 +27,11 @@ namespace Dlss5.Core;
 /// O jogo ligou a geração de quadros (DLSSG, feature 11). O addon anuncia no log que
 /// NÃO encosta nela: os quadros gerados saem sem o Neural Rendering.
 /// </param>
+/// <param name="CompiladorAntigo">
+/// "error X3506: unrecognized compiler target 'cs_5_1'": o d3dcompiler_47.dll que o jogo
+/// carrega é velho demais e o addon não consegue compilar o shader do NR. Spider-Man
+/// Remastered: tudo armado, feature interceptada, e o NR nunca entra.
+/// </param>
 /// <param name="RayReconstruction">
 /// O DLSS do jogo é o Ray Reconstruction (DLSSD, feature 13) e o NR entrou depois dele
 /// ("feature 18 created ... after DLSSD/RR"). Alan Wake 2: o log diz sucesso em cada
@@ -48,7 +53,8 @@ public sealed record RenodxStatus(
     bool CriouDevice = false,
     bool CriouSwapchain = false,
     bool FrameGeneration = false,
-    bool RayReconstruction = false)
+    bool RayReconstruction = false,
+    bool CompiladorAntigo = false)
 {
     /// <summary>
     /// O jogo abriu a própria tela de erro antes de criar qualquer DLSS. Nesse quadro o
@@ -70,6 +76,9 @@ public sealed record RenodxStatus(
 
     public string Resumo => AssinaturaRecusada
         ? "O NGX recusou a runtime (0xBAD00007): falta o override no registro ou falta reiniciar o PC."
+        : CompiladorAntigo
+        ? "O addon não conseguiu compilar o shader do Neural Rendering: o d3dcompiler_47.dll que o jogo " +
+          "carrega não conhece cs_5_1 (\"error X3506\" no log). Hooks e runtime estão certos; o NR nunca entra."
         : FechouSemJanela
         ? "O jogo criou o device de vídeo, carregou os addons e SAIU sozinho, sem chegar a criar a " +
           "swapchain (a janela). Não houve travamento nem tela de erro — foi o jogo que se fechou."
@@ -177,10 +186,11 @@ public static class RenodxLog
         // pendurado no Ray Reconstruction, não no DLSS comum.
         bool rayRec = logText.Contains("after DLSSD/RR", StringComparison.OrdinalIgnoreCase)
                       || logText.Contains("feature=13 (DLSSD/RR)", StringComparison.OrdinalIgnoreCase);
+        bool compiladorAntigo = logText.Contains(CompiladorD3D.ErroNoLog, StringComparison.OrdinalIgnoreCase);
 
         return new RenodxStatus(ativo, avaliacoes, hooksSemUso, recusada,
             hooksInstalados, criouFeature, enableHooks, streamline, pedeStreamline,
-            SegundosAteDialogo(logText), encerrou, criouDevice, criouSwapchain, frameGen, rayRec);
+            SegundosAteDialogo(logText), encerrou, criouDevice, criouSwapchain, frameGen, rayRec, compiladorAntigo);
     }
 
     /// <summary>

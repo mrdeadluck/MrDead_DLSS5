@@ -229,6 +229,23 @@ public static class CheckpointVerifier
             }
         }
 
+        // 21 — o d3dcompiler_47.dll que o jogo carrega conhece cs_5_1? Spider-Man Remastered
+        // traz o do SDK do Windows 8.1 e o addon falha ao compilar o shader do NR, em silêncio.
+        if (route == InstallRoute.A)
+        {
+            var compilador = Path.Combine(exe, CompiladorD3D.Arquivo);
+            if (File.Exists(compilador))
+            {
+                bool antigo = CompiladorD3D.Antigo(compilador);
+                r.Add(new CheckResult(21, "Compilador de shaders do jogo (d3dcompiler_47.dll) conhece cs_5_1",
+                    antigo ? CheckStatus.Fail : CheckStatus.Pass,
+                    antigo
+                        ? CompiladorD3D.PorQueTrocar(compilador)
+                        : $"{CompiladorD3D.Arquivo} na pasta do jogo é o {CompiladorD3D.Descrever(compilador)}: serve.",
+                    antigo ? CompiladorD3D.ComoConsertar : null));
+            }
+        }
+
         // 19 — Fox Engine: o patch anti-hook está no executável? Sem ele nada abaixo importa.
         if (MotorFox.EhFoxEngine(profile.RealExePath))
         {
@@ -688,6 +705,7 @@ public static class CheckpointVerifier
         if (renodx is not null)
         {
             var estado = renodx.AssinaturaRecusada ? CheckStatus.Fail
+                       : renodx.CompiladorAntigo ? CheckStatus.Fail
                        : renodx.Ativo ? CheckStatus.Pass
                        : renodx.CaiuAntesDoDlss ? CheckStatus.Fail
                        : renodx.FechouSemJanela ? CheckStatus.Fail
@@ -751,6 +769,8 @@ public static class CheckpointVerifier
                       "intensidade; depois volte para o que você preferir."
                     : renodx.AssinaturaRecusada
                         ? "Aplique o override no registro e reinicie o PC quando puder — o driver só lê essa chave na inicialização."
+                        : renodx.CompiladorAntigo
+                            ? CompiladorD3D.ComoConsertar + " Veja o item 21."
                         : renodx.CaiuAntesDoDlss
                             // RE9: três logs, a mesma assinatura — runtime recriado, 1 a 3 s
                             // de silêncio, tela de erro do jogo, nenhum "feature create".

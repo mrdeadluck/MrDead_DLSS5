@@ -316,6 +316,32 @@ public static class InstallPlanBuilder
             CopySemSobrescreverDoJogo(kit.NvngxDlss, host64, "nvngx_dlss.dll");
         }
 
+        // d3dcompiler_47.dll do jogo velho demais para cs_5_1 (Spider-Man Remastered traz o
+        // do SDK do Windows 8.1): o addon compila o shader do NR com ele e falha em silêncio.
+        // Vai a cópia do Windows por cima, com backup do original (volta na desinstalação).
+        if (route == InstallRoute.A)
+        {
+            var compilador = Path.Combine(exe, CompiladorD3D.Arquivo);
+            if (CompiladorD3D.Antigo(compilador))
+            {
+                var doSistema = CompiladorD3D.DoSistema();
+                if (doSistema is not null)
+                {
+                    plan.Actions.Add(new PlanAction(PlanActionKind.CopyFile,
+                        $"Trocar o {CompiladorD3D.Arquivo} do jogo ({CompiladorD3D.Descrever(compilador)}) pelo do Windows " +
+                        $"({CompiladorD3D.Descrever(doSistema)}) — o original vai para backup",
+                        doSistema, compilador));
+                    plan.Warnings.Add(CompiladorD3D.PorQueTrocar(compilador) +
+                        " O plano troca pela cópia do Windows; o original volta na desinstalação.");
+                }
+                else
+                {
+                    plan.Warnings.Add(CompiladorD3D.PorQueTrocar(compilador) +
+                        " Não achei a cópia do Windows em System32 para pôr no lugar.");
+                }
+            }
+        }
+
         // Rota C: dgVoodoo na pasta do renderizador (exe ou bin\ no Source).
         if (route == InstallRoute.C)
         {
