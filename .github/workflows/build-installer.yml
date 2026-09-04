@@ -100,7 +100,7 @@ jobs:
       # ATENÇÃO à próxima sessão: se você trabalha noutra branch claude/..., troque
       # o nome aqui (ou traga seu trabalho para esta) antes de esperar o link novo.
       - name: Publicar/atualizar a Release "latest"
-        if: github.ref_name == 'claude/executable-fixes-xytsgm' || github.ref_name == 'main'
+        if: github.ref_name == 'claude/renodx-updates-e5mjc7' || github.ref_name == 'claude/upload-large-files-02562q' || github.ref_name == 'claude/executable-fixes-xytsgm' || github.ref_name == 'main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: installer-latest
