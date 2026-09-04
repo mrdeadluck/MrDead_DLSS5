@@ -2,3 +2,10 @@
 Thumbs.db
 desktop.ini
 *.tmp
+
+# Build do .NET (nunca commitar: viraria LFS por causa das regras de *.dll/*.exe)
+[Bb]in/
+[Oo]bj/
+publish/
+*.user
+.vs/

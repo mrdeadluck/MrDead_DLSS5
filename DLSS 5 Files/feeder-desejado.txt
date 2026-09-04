@@ -1,0 +1,12 @@
+# Qual release do DLSS5-Feeder (github.com/jlrouzies-fr/DLSS5-Feeder) o kit deve trazer.
+#
+# Mudar a linha "versao=" e commitar dispara o workflow trocar-feeder.yml, que baixa a
+# release, confere os quatro arquivos (dlss5-feed.addon64, dlss5-feed.addon32,
+# dlss5-feed-host64.exe e reshade-shaders\Shaders\DLSS5_Feed.fx), grava as versões e os
+# hashes em feeder-versao.txt e commita tudo no LFS. O pacote completo é refeito em seguida.
+#
+# Por que 0.12.0: o 0.5.0 que o kit trazia derrubava a sessão inteira quando o jogo
+# recriava a swapchain (trocar resolução, tela cheia ou qualidade dentro do jogo) e criava
+# a feature de novo bem quando o addon do RenoDX rearma os hooks — o jogo caía. O 0.12.0
+# mantém a feature viva na recriação, tenta de novo com calma e fica com a anterior se falhar.
+versao=v0.12.0

@@ -1,0 +1,135 @@
+name: Trocar o runtime do kit (nvngx_dlssnr.dll) e refazer o pacote
+
+# O nvngx_dlssnr.dll do kit era um remendo do original de RTX 50: dizia "ACTIVE" e não
+# desenhava nada em RTX 40/30/20. O build certo é o do ShortFuse (310.8.SF-v2), que o RHI
+# instala. Este job baixa esse build, confere o hash e o commita no LFS — porque o objeto
+# do LFS não sobe a partir do ambiente de desenvolvimento (lfs.github.com bloqueado) e o
+# token do app também não consegue disparar workflows à mão (403).
+#
+# Dispara sozinho quando "DLSS 5 Files/runtime-desejado.txt" muda: a versão e o hash
+# vêm de lá. Depois de trocar, refaz o DLSS5-Pacote-Completo.zip com o kit inteiro.
+# Cada execução consome ~166 MB de armazenamento do LFS e ~230 MB de download.
+on:
+  push:
+    branches: ['claude/executable-fixes-xytsgm', 'main']
+    paths:
+      - 'DLSS 5 Files/runtime-desejado.txt'
+      - '.github/workflows/trocar-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  trocar:
+    runs-on: windows-latest
+    outputs:
+      trocou: ${{ steps.commit.outputs.trocou }}
+    steps:
+      - name: Checkout (só o ponteiro do LFS; o conteúdo antigo não interessa)
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - name: Ler o runtime desejado
+        id: desejado
+        shell: pwsh
+        run: |
+          $linhas = Get-Content "DLSS 5 Files\runtime-desejado.txt" | Where-Object { $_ -match '=' }
+          $mapa = @{}
+          foreach ($l in $linhas) { $k, $v = $l -split '=', 2; $mapa[$k.Trim()] = $v.Trim() }
+          if (-not $mapa['versao'] -or -not $mapa['sha256']) { throw "runtime-desejado.txt precisa de versao= e sha256=" }
+          "versao=$($mapa['versao'])" >> $env:GITHUB_OUTPUT
+          "sha256=$($mapa['sha256'].ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          Write-Host "Desejado: $($mapa['versao']) $($mapa['sha256'])"
+
+      - name: Baixar, conferir e trocar
+        shell: pwsh
+        run: |
+          $versao = "${{ steps.desejado.outputs.versao }}"
+          $esperado = "${{ steps.desejado.outputs.sha256 }}"
+          $atual = Get-Item "DLSS 5 Files\nvngx_dlssnr.dll" -ErrorAction SilentlyContinue
+          if ($atual -and $atual.Length -gt 1024) {
+            $h = (Get-FileHash $atual.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($h -eq $esperado) { Write-Host "O kit já tem o $versao."; "ja=1" >> $env:GITHUB_ENV; exit 0 }
+          }
+          $url = "https://github.com/RankFTW/rhi-repo/releases/download/dlssnr-$versao/nvngx_dlssnr_$versao.zip"
+          Write-Host "Baixando $url"
+          Invoke-WebRequest -Uri $url -OutFile runtime.zip
+          Expand-Archive runtime.zip -DestinationPath runtime -Force
+          $dll = Get-ChildItem runtime -Recurse -Filter nvngx_dlssnr.dll | Select-Object -First 1
+          if (-not $dll) { throw "O zip não traz nvngx_dlssnr.dll" }
+          $hash = (Get-FileHash $dll.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          Write-Host "SHA-256: $hash ($($dll.Length) bytes)"
+          if ($hash -ne $esperado) { throw "Hash diferente do esperado ($esperado). Nada foi trocado." }
+          Copy-Item $dll.FullName "DLSS 5 Files\nvngx_dlssnr.dll" -Force
+          Remove-Item runtime.zip -Force
+          Remove-Item runtime -Recurse -Force
+
+      - name: Commitar no LFS
+        id: commit
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git lfs install --local
+          git add "DLSS 5 Files/nvngx_dlssnr.dll"
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "Kit: nvngx_dlssnr.dll passa a ser o ${{ steps.desejado.outputs.versao }} (build do ShortFuse, RTX 20-50)" -m "Baixado de RankFTW/rhi-repo e conferido pelo SHA-256 ${{ steps.desejado.outputs.sha256 }}. O arquivo anterior era um remendo do original de RTX 50: dizia ACTIVE e nao desenhava nada."
+            git push origin HEAD:${{ github.ref_name }}
+            "trocou=1" >> $env:GITHUB_OUTPUT
+            Write-Host "Trocado e commitado."
+          } else {
+            "trocou=0" >> $env:GITHUB_OUTPUT
+            Write-Host "Nada a commitar."
+          }
+
+  pacote:
+    needs: trocar
+    runs-on: windows-latest
+    steps:
+      - name: Checkout com os arquivos do kit (no commit novo)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          lfs: true
+
+      - name: Instalar .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Compilar o executável
+        working-directory: DLSS5-AutoInstaller
+        run: >
+          dotnet publish src/Dlss5.App/Dlss5.App.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:DebugType=None
+          -p:SourceRevisionId=${{ github.sha }}
+          -o ${{ github.workspace }}\publish
+
+      - name: Montar o pacote
+        shell: pwsh
+        run: |
+          $dest = "${{ github.workspace }}\DLSS5-Pacote"
+          New-Item -ItemType Directory -Path $dest -Force | Out-Null
+          Copy-Item "${{ github.workspace }}\publish\DLSS5-AutoInstaller.exe" $dest
+          Copy-Item "${{ github.workspace }}\DLSS 5 Files" (Join-Path $dest 'DLSS 5 Files') -Recurse
+          Copy-Item (Join-Path $dest 'DLSS 5 Files\LEIA-ME.txt') (Join-Path $dest 'LEIA-ME.txt')
+          $ponteiros = Get-ChildItem $dest -Recurse -File |
+            Where-Object { $_.Length -lt 300 -and $_.Extension -in '.dll', '.exe', '.addon64', '.addon32' }
+          if ($ponteiros) { $ponteiros | ForEach-Object { Write-Host "PONTEIRO LFS: $($_.FullName)" }; throw "O checkout nao materializou os arquivos do LFS." }
+          $h = (Get-FileHash (Join-Path $dest 'DLSS 5 Files\nvngx_dlssnr.dll') -Algorithm SHA256).Hash.ToLowerInvariant()
+          Write-Host "nvngx_dlssnr.dll no pacote: $h"
+          Compress-Archive -Path "$dest\*" -DestinationPath "${{ github.workspace }}\DLSS5-Pacote-Completo.zip" -CompressionLevel Optimal
+          Write-Host ("Zip com {0} MB" -f [math]::Round(((Get-Item "${{ github.workspace }}\DLSS5-Pacote-Completo.zip").Length / 1MB), 1))
+
+      - name: Publicar na Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: installer-latest
+          name: DLSS 5 AutoInstaller (build mais recente)
+          prerelease: true
+          overwrite_files: true
+          files: DLSS5-Pacote-Completo.zip

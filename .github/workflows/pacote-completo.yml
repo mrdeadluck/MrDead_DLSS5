@@ -1,0 +1,73 @@
+name: Pacote completo (programa + kit)
+
+# Só roda quando pedido pelo botão "Run workflow": este é o único job que baixa
+# os arquivos do LFS, e cada execução consome ~230 MB da cota mensal do repositório.
+# O build normal continua rodando a cada push, sem LFS e sem gastar cota.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pacote:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout com os arquivos do kit
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Instalar .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Compilar o executável
+        working-directory: DLSS5-AutoInstaller
+        run: >
+          dotnet publish src/Dlss5.App/Dlss5.App.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:EnableCompressionInSingleFile=true
+          -p:DebugType=None
+          -o ${{ github.workspace }}\publish
+
+      - name: Montar o pacote
+        shell: pwsh
+        run: |
+          $dest = "${{ github.workspace }}\DLSS5-Pacote"
+          New-Item -ItemType Directory -Path $dest -Force | Out-Null
+
+          Copy-Item "${{ github.workspace }}\publish\DLSS5-AutoInstaller.exe" $dest
+          Copy-Item "${{ github.workspace }}\DLSS 5 Files" (Join-Path $dest 'DLSS 5 Files') -Recurse
+
+          # O LEIA-ME também na raiz do zip, para aparecer assim que abrir.
+          Copy-Item (Join-Path $dest 'DLSS 5 Files\LEIA-ME.txt') (Join-Path $dest 'LEIA-ME.txt')
+
+          # Confere que nenhum ponteiro do LFS entrou no lugar do arquivo real.
+          $ponteiros = Get-ChildItem $dest -Recurse -File |
+            Where-Object { $_.Length -lt 300 -and $_.Extension -in '.dll', '.exe', '.addon64', '.addon32' }
+          if ($ponteiros) {
+            $ponteiros | ForEach-Object { Write-Host "PONTEIRO LFS: $($_.FullName)" }
+            throw "O checkout nao materializou os arquivos do LFS."
+          }
+
+          $mb = [math]::Round(((Get-ChildItem $dest -Recurse -File | Measure-Object Length -Sum).Sum / 1MB), 1)
+          Write-Host "Pacote com $mb MB"
+
+          Compress-Archive -Path "$dest\*" -DestinationPath "${{ github.workspace }}\DLSS5-Pacote-Completo.zip" -CompressionLevel Optimal
+          $zipMb = [math]::Round(((Get-Item "${{ github.workspace }}\DLSS5-Pacote-Completo.zip").Length / 1MB), 1)
+          Write-Host "Zip com $zipMb MB"
+
+      - name: Publicar na Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: installer-latest
+          name: DLSS 5 AutoInstaller (build mais recente)
+          prerelease: true
+          overwrite_files: true
+          files: DLSS5-Pacote-Completo.zip

@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>Dlss5.App</RootNamespace>
+    <AssemblyName>DLSS5-AutoInstaller</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <Version>1.1.0</Version>
+    <Product>DLSS 5 AutoInstaller</Product>
+    <AssemblyTitle>DLSS 5 AutoInstaller</AssemblyTitle>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- Publish single-file autocontido: roda sem instalar o .NET -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Dlss5.Core\Dlss5.Core.csproj" />
+  </ItemGroup>
+
+  <!-- Imagens de assets/ entram embutidas no executável. Se a pasta estiver vazia,
+       o glob simplesmente não casa e o build segue normal. -->
+  <ItemGroup>
+    <EmbeddedResource Include="assets\*.png" />
+  </ItemGroup>
+
+</Project>
