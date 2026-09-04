@@ -70,6 +70,27 @@ public static class ReShadeConfigWriter
         return list;
     }
 
+    /// <summary>O BasePath de [INSTALL], ou nulo quando não há.</summary>
+    public static string? LerBasePath(string? ini)
+    {
+        if (string.IsNullOrWhiteSpace(ini)) return null;
+        bool dentro = false;
+        foreach (var bruta in ini.Replace("\r\n", "\n").Split('\n'))
+        {
+            var linha = bruta.Trim();
+            if (linha.StartsWith('['))
+            {
+                dentro = linha.Equals("[INSTALL]", StringComparison.OrdinalIgnoreCase);
+                continue;
+            }
+            if (!dentro) continue;
+            int eq = linha.IndexOf('=');
+            if (eq > 0 && linha[..eq].Trim().Equals("BasePath", StringComparison.OrdinalIgnoreCase))
+                return linha[(eq + 1)..].Trim();
+        }
+        return null;
+    }
+
     /// <summary>Nome legível da combinação, para instruções e para a tela.</summary>
     /// <summary>
     /// Lê a linha KeyOverlay de um ReShade.ini já gravado. O que vale para o jogo é o que
@@ -120,6 +141,11 @@ public static class ReShadeConfigWriter
     /// EnableHooks do addon do RenoDX, gravado explícito na seção [RenoDX.DLSS5] para a
     /// tela de verificação poder trocá-lo depois (ver <see cref="RenodxIni"/>).
     /// </param>
+    /// <param name="baseDir">
+    /// Pasta do jogo, quando o ReShade NÃO mora nela. Hospedado no REFramework ele fica em
+    /// reframework\plugins e resolve caminho relativo a partir dali, não da pasta do jogo —
+    /// os caminhos do ini precisam ser absolutos ou nada é encontrado.
+    /// </param>
     public static string BuildReShadeIni(
         int overlayKey = KeyHome,
         bool ctrl = false,
@@ -127,13 +153,32 @@ public static class ReShadeConfigWriter
         bool alt = false,
         string presetFile = "ReShadePreset.ini",
         bool feederUsed = true,
-        int renodxHooks = RenodxIni.Padrao)
+        int renodxHooks = RenodxIni.Padrao,
+        string? baseDir = null,
+        string? basePath = null)
     {
+        // Sem baseDir tudo continua relativo, como sempre foi.
+        string Raiz(string relativo) => baseDir is null
+            ? @".\" + relativo
+            : Path.Combine(baseDir, relativo);
+
         var sb = new StringBuilder();
+        if (!string.IsNullOrWhiteSpace(basePath))
+        {
+            // O ReShade, carregado como dxgi.dll, usa a pasta da PRÓPRIA DLL como base —
+            // ini, log, shaders e addons. Quando a DLL mora fora da raiz (Titanfall 2:
+            // bin\x64_retail), ele ignoraria tudo que está ao lado do exe e criaria um
+            // ini vazio ao lado da DLL ("nenhum arquivo de efeito encontrado"). O único
+            // desvio que o próprio ReShade oferece é este: [INSTALL] BasePath no
+            // ReShade.ini ao lado do executável (get_base_path em dll_main.cpp).
+            sb.AppendLine("[INSTALL]");
+            sb.AppendLine($"BasePath={basePath}");
+            sb.AppendLine();
+        }
         sb.AppendLine("[GENERAL]");
-        sb.AppendLine(@"EffectSearchPaths=.\reshade-shaders\Shaders\**");
-        sb.AppendLine(@"TextureSearchPaths=.\reshade-shaders\Textures\**");
-        sb.AppendLine($"PresetPath=.\\{presetFile}");
+        sb.AppendLine($"EffectSearchPaths={Raiz(@"reshade-shaders\Shaders\**")}");
+        sb.AppendLine($"TextureSearchPaths={Raiz(@"reshade-shaders\Textures\**")}");
+        sb.AppendLine($"PresetPath={Raiz(presetFile)}");
         // Caminho direto: só efeitos marcados no preset são carregados — e o preset é
         // vazio. Assim nenhum .fx que sobrou na pasta (de instalação antiga, ou do
         // usuário) é compilado e alocado no device do jogo.
@@ -144,7 +189,7 @@ public static class ReShadeConfigWriter
         sb.AppendLine($"KeyOverlay={overlayKey},{Bit(ctrl)},{Bit(shift)},{Bit(alt)}");
         sb.AppendLine();
         sb.AppendLine("[ADDON]");
-        sb.AppendLine(@"AddonPath=.\");
+        sb.AppendLine($"AddonPath={(baseDir is null ? @".\" : baseDir)}");
         if (!feederUsed)
             sb.AppendLine("DisabledAddons=Generic Depth");
         if (feederUsed)
@@ -194,6 +239,45 @@ public static class ReShadeConfigWriter
 
         sb.AppendLine($"Techniques={list}");
         sb.AppendLine($"TechniqueSorting={list}");
+
+        // O DLSS5_Feed.fx (0.12.0) escolhe de QUEM lê os vetores de movimento por uma
+        // definição de pré-processador — e o ReShade guarda essa definição POR EFEITO, na
+        // seção [DLSS5_Feed.fx] do preset (o PreprocessorDefinitions do [GENERAL] no
+        // ReShade.ini não vale para isso; o autor do Feeder conferiu num jogo vivo). Sem
+        // ela o shader lê texMotionVectors, que o Launchpad não escreve: DLSS sem vetores.
+        sb.AppendLine();
+        sb.AppendLine(SecaoDoFeed);
+        sb.AppendLine($"PreprocessorDefinitions={DefinicaoProvedor}={ProvedorNoShader(provider)}");
         return sb.ToString();
+    }
+
+    public const string SecaoDoFeed = "[DLSS5_Feed.fx]";
+    public const string DefinicaoProvedor = "DLSS5_MV_PROVIDER";
+
+    /// <summary>
+    /// O valor de DLSS5_MV_PROVIDER que o DLSS5_Feed.fx espera para cada provedor do kit:
+    /// 0 = texMotionVectors (DRME, qUINT), 1 = iMMERSE Launchpad, 2 = VORT, 3/4 = LumeniteFX.
+    /// </summary>
+    public static int ProvedorNoShader(MvProvider provider) => provider == MvProvider.Drme ? 0 : 1;
+
+    /// <summary>O DLSS5_MV_PROVIDER gravado na seção [DLSS5_Feed.fx] do preset; null se não há.</summary>
+    public static int? LerProvedorDoPreset(string? preset)
+    {
+        if (string.IsNullOrWhiteSpace(preset)) return null;
+        bool dentro = false;
+        foreach (var bruta in preset.Replace("\r\n", "\n").Split('\n'))
+        {
+            var linha = bruta.Trim();
+            if (linha.StartsWith('['))
+            {
+                dentro = linha.Equals(SecaoDoFeed, StringComparison.OrdinalIgnoreCase);
+                continue;
+            }
+            if (!dentro || !linha.StartsWith("PreprocessorDefinitions=", StringComparison.OrdinalIgnoreCase)) continue;
+            var m = System.Text.RegularExpressions.Regex.Match(linha, DefinicaoProvedor + @"\s*=\s*(\d+)",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            return m.Success && int.TryParse(m.Groups[1].Value, out var v) ? v : null;
+        }
+        return null;
     }
 }

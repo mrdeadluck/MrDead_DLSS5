@@ -47,6 +47,7 @@ jobs:
           -p:PublishSingleFile=true
           -p:EnableCompressionInSingleFile=true
           -p:DebugType=None
+          -p:SourceRevisionId=${{ github.sha }}
           -o ${{ github.workspace }}\publish
 
       - name: Conferir o resultado
@@ -70,6 +71,7 @@ jobs:
           -p:PublishSingleFile=true
           -p:EnableCompressionInSingleFile=false
           -p:DebugType=None
+          -p:SourceRevisionId=${{ github.sha }}
           -o ${{ github.workspace }}\publish-leve
 
       - name: Conferir o resultado (leve)
@@ -91,10 +93,14 @@ jobs:
             publish-leve/DLSS5-AutoInstaller-leve.exe
           retention-days: 90
 
-      # Cada sessão de desenvolvimento usa uma branch claude/... nova; o link fixo
-      # da release precisa receber o build de todas elas, não só de uma.
+      # O link fixo da release é UM só, e por um tempo qualquer branch claude/*
+      # publicava nele: com duas linhas de trabalho abertas, o executável baixado
+      # era o da última que compilou, e funcionalidade inteira parecia sumir entre
+      # um download e outro. Agora só a branch de integração publica.
+      # ATENÇÃO à próxima sessão: se você trabalha noutra branch claude/..., troque
+      # o nome aqui (ou traga seu trabalho para esta) antes de esperar o link novo.
       - name: Publicar/atualizar a Release "latest"
-        if: startsWith(github.ref_name, 'claude/') || github.ref_name == 'main'
+        if: github.ref_name == 'claude/executable-fixes-xytsgm' || github.ref_name == 'main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: installer-latest

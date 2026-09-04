@@ -14,6 +14,10 @@ public sealed partial class MainForm
     private readonly Label _lblNative = new();
     private readonly Label _lblNativeWhy = new();
     private readonly CheckBox _chkDireto = new();
+    private readonly CheckBox _chkReFramework = new();
+    private readonly ComboBox _cboReShadeNome = new();
+    private readonly Label _lblDicaReShadeNome = new();
+    private readonly Label _lblReShadeNome = new();
     private readonly Button _btnNativeAjustar = Ui.Secondary("Ajustar…");
     private readonly TextBox _txtRenderer = new();
     private readonly Label _lblRoute = new();
@@ -94,6 +98,38 @@ public sealed partial class MainForm
         _chkDireto.Margin = new Padding(0, 0, 0, 6);
         _chkDireto.CheckedChanged += (_, _) => SyncProfileFromUi();
         form.Controls.Add(_chkDireto, 1, linha++);
+
+        // RE Engine com proteção anti-adulteração: o ReShade injetado como dxgi.dll faz o
+        // jogo abrir a própria tela de erro antes de criar qualquer DLSS. Hospedado no
+        // REFramework ele passa — foi assim que o RE9 abriu com o painel funcionando.
+        _chkReFramework.Text = "Instalar o REFramework junto — só para jogo que recusa o ReShade na abertura (RE Requiem, Dragon's Dogma 2). " +
+                               "Em RE4, RE Village e MH Wilds deixe DESMARCADO: ali ele derruba o jogo.";
+        _chkReFramework.AutoSize = true;
+        _chkReFramework.Visible = false;
+        _chkReFramework.Margin = new Padding(0, 0, 0, 6);
+        _chkReFramework.CheckedChanged += (_, _) => SyncProfileFromUi();
+        form.Controls.Add(_chkReFramework, 1, linha++);
+
+        // O nome com que o ReShade entra. Quase sempre dxgi.dll; mas há jogo que recusa
+        // exatamente esse nome (MGS V, Fox Engine: com o dxgi.dll na pasta o executável
+        // nem abre) e aceita o nome da própria API.
+        _lblReShadeNome.Text = "ReShade entra como:";
+        _lblReShadeNome.AutoSize = true;
+        _lblReShadeNome.Margin = new Padding(0, 8, 0, 6);
+        _cboReShadeNome.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cboReShadeNome.Width = 200;
+        _cboReShadeNome.Margin = new Padding(0, 4, 0, 6);
+        _cboReShadeNome.SelectedIndexChanged += (_, _) => SyncProfileFromUi();
+        var filaNome = Ui.Fila();
+        filaNome.Controls.Add(_cboReShadeNome);
+        filaNome.Controls.Add(_lblDicaReShadeNome);
+        _lblDicaReShadeNome.Text = "dxgi.dll serve em quase tudo. Troque só se o jogo não abrir com ele.";
+        _lblDicaReShadeNome.AutoSize = true;
+        _lblDicaReShadeNome.ForeColor = Ui.Muted;
+        _lblDicaReShadeNome.Font = Ui.SmallFont;
+        _lblDicaReShadeNome.Margin = new Padding(8, 8, 0, 0);
+        form.Controls.Add(_lblReShadeNome, 0, linha);
+        form.Controls.Add(filaNome, 1, linha++);
 
         // Renderizador
         _txtRenderer.Dock = DockStyle.Fill;
@@ -214,15 +250,43 @@ public sealed partial class MainForm
         return l;
     }
 
+    /// <summary>
+    /// Enquanto a tela é preenchida a partir de uma detecção nova, os eventos dos controles
+    /// NÃO podem gravar no perfil: cada atribuição dispara SyncProfileFromUi, e os campos
+    /// ainda não preenchidos guardam o texto da rodada anterior. Foi assim que o MGS V
+    /// perdeu o d3d11.dll e o Titanfall 2 perdeu a pasta do renderizador — a detecção
+    /// acertava, a nota na tela dizia bin\x64_retail, e o campo "Pasta do renderizador"
+    /// gravava a raiz da rodada anterior por cima antes de ser preenchido.
+    /// </summary>
+    private bool _preenchendoDeteccao;
+
     private void PreencherDeteccao(DetectionResult detection, KitInventory kit)
     {
         _profile = detection.Profile;
         _candidates = detection.Candidates;
 
-        PopulateCandidates(_profile.RealExePath);
+        _preenchendoDeteccao = true;
+        try
+        {
+            PreencherControles(detection, kit);
+        }
+        finally
+        {
+            _preenchendoDeteccao = false;
+        }
+
+        SyncProfileFromUi();
+        _diario.Tecnico($"Detecção: {_profile.RealExePath} {_profile.Architecture} {_profile.Api} rota {_profile.Route} nativo={_profile.HasNativeDlss} renderizador={_profile.RendererFolder}");
+    }
+
+    private void PreencherControles(DetectionResult detection, KitInventory kit)
+    {
+        PopulateCandidates(_profile!.RealExePath);
         _cboArch.SelectedItem = _profile.Architecture;
         _cboApi.SelectedItem = _profile.Api;
         _chkDireto.Checked = _profile.PreferirFeeder;
+        _chkReFramework.Checked = _profile.UsarReFramework;
+        PopularNomesDeReShade();
         _txtRenderer.Text = _profile.RendererFolder ?? _profile.ExeFolder;
         _cboMv.SelectedIndex = _options.MvProvider == MvProvider.Drme ? 1 : 0;
         _chkRegistry.Checked = _options.ApplyRegistryOverride;
@@ -235,16 +299,22 @@ public sealed partial class MainForm
         else if (kit.HasDrme && !kit.HasLaunchpad) _cboMv.SelectedIndex = 1;
 
         var notes = new List<string>(detection.Notes);
+        notes.Add($"Este executável: {AppInfo.Nome} {AppInfo.VersaoComBuild}.");
         if (_profile.LauncherExePath is not null)
             notes.Add($"Launcher detectado ({Path.GetFileName(_profile.LauncherExePath)}) — a instalação aponta para o exe real, não para ele.");
+        if (kit.ReFrameworkDinput8 is null)
+            notes.Add("REFramework NÃO está no kit. Para hospedar o ReShade nele, ponha o dinput8.dll " +
+                      "(x64) do REFramework em qualquer subpasta de " + kit.KitRoot + " — por exemplo " +
+                      "numa pasta REFramework\\ — e detecte de novo.");
+        notes.Add("RE Engine (re_chunk_*.pak na pasta): " + (_profile.EhReEngine ? "SIM" : "NÃO") +
+                  " — é a engine em que o REFramework carrega. " + ReFramework.QuandoMarcar +
+                  " O ReShade continua sendo a DLL ao lado do executável: o REFramework, quando entra, " +
+                  "só desarma a checagem de integridade.");
         notes.Add($"Kit: {DescribeKit(kit)}");
         foreach (var p in kit.Problems) notes.Add("ATENÇÃO: " + p);
         if (_manifest is not null)
             notes.Add($"Instalação anterior registrada em {_manifest.InstalledUtc.ToLocalTime():dd/MM/yyyy HH:mm} (rota {_manifest.Route}); os backups dos originais serão preservados.");
         _txtNotes.Lines = notes.ToArray();
-
-        SyncProfileFromUi();
-        _diario.Tecnico($"Detecção: {_profile.RealExePath} {_profile.Architecture} {_profile.Api} rota {_profile.Route} nativo={_profile.HasNativeDlss}");
     }
 
     private void BrowseExe()
@@ -335,12 +405,15 @@ public sealed partial class MainForm
 
     private void SyncProfileFromUi()
     {
-        if (_profile is null) return;
+        if (_profile is null || _preenchendoDeteccao) return;
         if (_cboArch.SelectedItem is PeArchitecture a) _profile.Architecture = a;
         if (_cboApi.SelectedItem is GraphicsApi g) _profile.Api = g;
         if (!string.IsNullOrWhiteSpace(_txtRenderer.Text)) _profile.RendererFolder = _txtRenderer.Text;
         _profile.MvProvider = _options.MvProvider;
         _profile.PreferirFeeder = _chkDireto.Visible && _chkDireto.Checked;
+        _profile.UsarReFramework = _chkReFramework.Visible && _chkReFramework.Checked;
+        if (_cboReShadeNome.Visible && _cboReShadeNome.SelectedItem is string nomeReShade)
+            _profile.NomeDoReShadeEscolhido = nomeReShade;
         UpdateMvAvailability();
         UpdateNativeLabel();
         UpdateRouteLabel();
@@ -355,6 +428,19 @@ public sealed partial class MainForm
         var porque = _profile.NativeDlss?.Resumo ?? "sem detecção";
         _lblNativeWhy.Text = porque + Environment.NewLine + ConsequenciaDoNativo();
         _chkDireto.Visible = _profile.HasNativeDlss && _profile.Api == GraphicsApi.D3D12;
+        PopularNomesDeReShade();
+
+        // O REFramework é x64 e só carrega em RE Engine — mas quem decide é o usuário, não
+        // o palpite. Já escondi essa caixa duas vezes: primeiro atrás da detecção de RE
+        // Engine (re_chunk_*.pak), depois atrás de o kit ter o arquivo. Nas duas o usuário
+        // ficou sem a opção E sem saber por quê. Ela aparece; quem cobra o que falta é o
+        // plano, que sabe dizer onde pôr o dinput8.dll.
+        bool cabeReFramework = _profile.Architecture == PeArchitecture.X64;
+        if (_chkReFramework.Visible != cabeReFramework)
+        {
+            _chkReFramework.Visible = cabeReFramework;
+            if (!cabeReFramework) _chkReFramework.Checked = false;
+        }
     }
 
     private string ConsequenciaDoNativo()
@@ -399,6 +485,35 @@ public sealed partial class MainForm
         };
     }
 
+    /// <summary>
+    /// Enche a lista com os nomes que a API do jogo aceita e marca o que vale agora.
+    /// </summary>
+    private void PopularNomesDeReShade()
+    {
+        if (_profile is null) return;
+
+        // Antes o REFramework escondia esta lista, porque no desenho antigo ele hospedava
+        // o ReShade e o nome não valia de nada. Agora os dois convivem na pasta e o
+        // ReShade continua sendo a DLL que o jogo carrega: o nome importa nos dois casos.
+        var nomes = _profile.NomesDeReShadePossiveis;
+        bool cabe = nomes.Count > 1;
+
+        _lblReShadeNome.Visible = cabe;
+        _cboReShadeNome.Visible = cabe;
+        _lblDicaReShadeNome.Visible = cabe;
+        if (!cabe) return;
+
+        var atual = _profile.ReShadeHookName;
+        if (_cboReShadeNome.Items.Count != nomes.Count
+            || !_cboReShadeNome.Items.Cast<string>().SequenceEqual(nomes))
+        {
+            _cboReShadeNome.Items.Clear();
+            foreach (var n in nomes) _cboReShadeNome.Items.Add(n);
+        }
+        int i = nomes.ToList().IndexOf(atual);
+        _cboReShadeNome.SelectedIndex = i < 0 ? 0 : i;
+    }
+
     private static string DescribeKit(KitInventory kit)
     {
         var have = new List<string>();
@@ -416,6 +531,7 @@ public sealed partial class MainForm
         if (kit.HasDrme) have.Add("DRME");
         if (kit.DgVoodooD3D9X86 is not null) have.Add("dgVoodoo-d3d9");
         if (kit.DgVoodooD3D8X86 is not null) have.Add("dgVoodoo-d3d8");
+        if (kit.ReFrameworkDinput8 is not null) have.Add("REFramework");
         return string.Join(", ", have);
     }
 }

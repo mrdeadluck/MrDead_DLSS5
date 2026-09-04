@@ -67,6 +67,26 @@ public static class InstallPlanBuilder
         foreach (var p in kit.Problems)
             plan.Blockers.Add(p);
 
+        // O runtime do kit, pelo hash. É aviso e não bloqueio porque o original serve em
+        // RTX 50 — mas é o aviso que teria poupado o RE9 de dias de teste.
+        if (kit.NvngxDlssnr is not null)
+        {
+            var build = RuntimeNr.Identificar(kit.NvngxDlssnr);
+            var (falha, texto) = RuntimeNr.Avaliar(build, serieRtx: null);
+            if (falha)
+                plan.Warnings.Add($"{RuntimeNr.Arquivo} do kit: {texto} {RuntimeNr.ComoTrocar}");
+        }
+
+        // O Feeder do kit, pela versão gravada no arquivo (o 0.5.0 não gravava nenhuma). É o
+        // que derruba o jogo na troca de configuração; aviso, não bloqueio, porque sem
+        // mexer nas configurações com o DLSS 5 ligado ele funciona.
+        if (kit.FeedAddon64 is not null && profile.NeedsFeeder)
+        {
+            var versaoFeeder = FeederKit.VersaoDoArquivo(kit.FeedAddon64);
+            if (FeederKit.Antiga(versaoFeeder))
+                plan.Warnings.Add(FeederKit.AvisoKitAntigo(versaoFeeder));
+        }
+
         var exe = profile.ExeFolder;
         var host64 = Path.Combine(exe, "host64");
         var shadersTarget = Path.Combine(exe, "reshade-shaders");
@@ -121,41 +141,130 @@ public static class InstallPlanBuilder
         // ReShade na pasta do exe, arquitetura = exe. O NOME depende da API: o jogo só
         // carrega a DLL que ele mesmo procura (dxgi.dll no Direct3D, opengl32.dll no OpenGL).
         var dxgiArch = profile.Architecture;
-        var hook = profile.ReShadeHookName;
         var dxgiSrc = dxgiArch == PeArchitecture.X64 ? kit.DxgiX64 : kit.DxgiX86;
-        if (dxgiSrc is not null)
+
+        // O REFramework entra JUNTO com o ReShade, não no lugar dele. O binário dele traz
+        // IntegrityCheckBypass — com patch nomeado para o RE9 — e é isso que desarma a
+        // checagem que derruba o jogo quando há uma DLL a mais na pasta. Hospedar o ReShade
+        // dentro de reframework\plugins foi invenção minha e não é o caminho que funciona:
+        // o ReShade continua sendo a DLL ao lado do executável, como em qualquer outro jogo.
+        if (profile.UsarReFramework)
         {
-            Copy(dxgiSrc, exe, hook);
+            if (kit.ReFrameworkDinput8 is null)
+            {
+                plan.Blockers.Add(
+                    "Falta no kit: dinput8.dll do REFramework (x64). Baixe a nightly em " +
+                    "github.com/praydog/REFramework-nightly/releases e ponha o dinput8.dll em qualquer " +
+                    "subpasta do kit (" + kit.KitRoot + ") — por exemplo numa pasta REFramework\\. " +
+                    "Sem ele o ReShade não roda em jogo da RE Engine: é o REFramework que desarma a " +
+                    "checagem de integridade.");
+            }
+            else
+            {
+                Copy(kit.ReFrameworkDinput8, exe, ReFramework.Dinput8);
+                if (kit.ReFrameworkRevision is not null)
+                    Copy(kit.ReFrameworkRevision, exe, ReFramework.RevisionFile);
+            }
+
+            // Aviso, não desvio: a pasta sem re_chunk_*.pak pode ser um jogo da RE Engine
+            // que guarda os dados noutro lugar, e quem escolheu a caixa é quem sabe. O que
+            // não pode é a instalação mudar por causa do palpite.
+            if (!profile.EhReEngine)
+                plan.Warnings.Add(
+                    "Esta pasta não tem re_chunk_*.pak, então não parece um jogo da RE Engine — e o " +
+                    "REFramework só carrega nela. Se o jogo for RE Engine mesmo assim (dados noutra " +
+                    "pasta), siga; se não for, o ReShade não vai carregar por este caminho e o certo " +
+                    "é desmarcar a caixa e instalar pela injeção direta.");
+
+            plan.Warnings.Add(
+                "Modo REFramework: ele entra como dinput8.dll AO LADO do ReShade, não no lugar " +
+                "dele. O binário traz um desarme de checagem de integridade (com patch nomeado " +
+                "para o RE9), e é isso que deixa a DLL do ReShade conviver com o jogo.");
         }
-        else if (kit.ReShadeSetup is not null)
+
         {
-            plan.Actions.Add(new PlanAction(PlanActionKind.ExtractReShadeDll,
-                $"Extrair ReShade ({dxgiArch}) do instalador → {Rel(profile, Path.Combine(exe, hook))}",
-                kit.ReShadeSetup, Path.Combine(exe, hook)));
+            var hook = profile.ReShadeHookName;
+
+            // Sobra de instalação anterior com OUTRO nome: ela continua sendo carregada
+            // pelo jogo e continua sendo ReShade. No MGS V, instalar como d3d11.dll e
+            // deixar o dxgi.dll antigo é não consertar nada — o arquivo que impede o jogo
+            // de abrir segue na pasta. Só sai o que o conteúdo prova ser ReShade.
+            var pastaDoHook = profile.PastaDoReShade;
+            bool hookForaDaRaiz = !string.Equals(pastaDoHook, exe, StringComparison.OrdinalIgnoreCase);
+            if (hookForaDaRaiz)
+            {
+                plan.Warnings.Add($"A DLL do ReShade ({hook}) vai para {Rel(profile, pastaDoHook)}, a pasta do " +
+                                  "renderizador — na raiz ela nunca carrega neste jogo. ReShade.ini, addons e " +
+                                  "shaders ficam na raiz, ao lado do exe, e o ReShade.ini ganha [INSTALL] " +
+                                  "BasePath apontando para a raiz: sem isso o ReShade usaria a pasta da DLL como " +
+                                  "base e não acharia efeito nem addon nenhum.");
+
+                // O que o ReShade criou ao lado da DLL numa rodada sem o BasePath (ini vazio,
+                // preset, log) sai — com backup, como tudo que o plano remove.
+                foreach (var sobra in new[] { "ReShade.ini", "ReShadePreset.ini", "ReShade.log" })
+                {
+                    var caminho = Path.Combine(pastaDoHook, sobra);
+                    if (File.Exists(caminho))
+                        plan.Actions.Add(new PlanAction(PlanActionKind.DeleteForbiddenFile,
+                            $"Remover {Rel(profile, caminho)} (criado pelo ReShade ao lado da DLL; a base é a raiz)",
+                            null, caminho));
+                }
+            }
+
+            // Sobra de ReShade em qualquer das duas pastas, com qualquer nome que não seja
+            // o hook no lugar certo, sai. Foi o Titanfall 2: o dxgi.dll da raiz, inerte,
+            // ficava lá enquanto o de bin\x64_retail entrava.
+            foreach (var pasta in new[] { pastaDoHook, exe }.Distinct(StringComparer.OrdinalIgnoreCase))
+            foreach (var outro in Isolamento.NomesDeReShade)
+            {
+                bool ehOHook = outro.Equals(hook, StringComparison.OrdinalIgnoreCase)
+                               && string.Equals(pasta, pastaDoHook, StringComparison.OrdinalIgnoreCase);
+                if (ehOHook) continue;
+                var caminho = Path.Combine(pasta, outro);
+                if (!File.Exists(caminho) || !Propriedade.ContemTexto(caminho, "ReShade")) continue;
+
+                plan.Actions.Add(new PlanAction(PlanActionKind.DeleteForbiddenFile,
+                    $"Remover ReShade antigo em {Rel(profile, caminho)} (agora ele entra como {Rel(profile, Path.Combine(pastaDoHook, hook))})",
+                    null, caminho));
+            }
+
+            if (dxgiSrc is not null)
+            {
+                Copy(dxgiSrc, pastaDoHook, hook);
+            }
+            else if (kit.ReShadeSetup is not null)
+            {
+                plan.Actions.Add(new PlanAction(PlanActionKind.ExtractReShadeDll,
+                    $"Extrair ReShade ({dxgiArch}) do instalador → {Rel(profile, Path.Combine(pastaDoHook, hook))}",
+                    kit.ReShadeSetup, Path.Combine(pastaDoHook, hook)));
+            }
         }
 
         // ReShade.ini + preset gerados.
         plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
-            "Gerar ReShade.ini", null, Path.Combine(exe, "ReShade.ini")));
+            profile.UsarReFramework
+                ? $"Gerar {ReFramework.ReShadeIni} (é o ini que o ReShade hospedado lê)"
+                : "Gerar ReShade.ini",
+            null, profile.ReShadeIniPath));
         plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
             profile.NeedsFeeder
                 ? $"Gerar ReShadePreset.ini (MV = {options.MvProvider}, acima do DLSS 5 Feed)"
                 : "Gerar ReShadePreset.ini (sem efeitos: com DLSS nativo em D3D12 o RenoDX se pendura na chamada do próprio jogo)",
             null, Path.Combine(exe, "ReShadePreset.ini")));
 
-        // Pasta de shaders — só no caminho do Feeder. No direto nenhum efeito participa
-        // (o preset sai vazio), e cada .fx da pasta ainda seria compilado e alocado no
-        // device do jogo toda vez que o runtime do ReShade sobe. No RE9 a tela de erro do
-        // jogo vinha 1 a 3 s depois desse ponto, com ou sem o RenoDX; uma instalação
-        // manual do addon não leva shader nenhum. A pasta fica de fora.
-        if (kit.ShadersDir is not null && profile.NeedsFeeder)
+        // Pasta de shaders: vai nos dois caminhos.
+        //
+        // Ela já ficou de fora do caminho direto, na suspeita de que compilar os .fx
+        // derrubava o RE9. A suspeita caiu: o RE9 caía pela proteção anti-adulteração do
+        // próprio jogo (com o REFramework hospedando o ReShade, ele abre). E sem a pasta
+        // o ReShade abre reclamando na aba Início — "nenhum arquivo de efeito (.fx)
+        // encontrado nos caminhos de pesquisa" — o que parece defeito e não é. Com a
+        // pasta no lugar e EffectLoadSkipping=1 (preset vazio no direto), os arquivos
+        // existem e mesmo assim nenhum é compilado.
+        if (kit.ShadersDir is not null)
             plan.Actions.Add(new PlanAction(PlanActionKind.CopyFile,
                 $"Copiar pasta reshade-shaders → {Rel(profile, shadersTarget)}",
                 kit.ShadersDir, shadersTarget));
-        else if (!profile.NeedsFeeder)
-            plan.Warnings.Add("Caminho direto: a pasta reshade-shaders NÃO é instalada. Nenhum efeito do " +
-                "ReShade participa (o RenoDX trabalha no contrato NGX do próprio jogo), e cada shader da " +
-                "pasta seria compilado e alocado no device do jogo à toa a cada vez que o runtime sobe.");
 
         if (route == InstallRoute.A)
         {
@@ -205,6 +314,32 @@ public static class InstallPlanBuilder
             Copy(kit.RenodxAddon64, host64, "renodx-dlss5.addon64");
             Copy(kit.NvngxDlssnr, host64, "nvngx_dlssnr.dll");
             CopySemSobrescreverDoJogo(kit.NvngxDlss, host64, "nvngx_dlss.dll");
+        }
+
+        // d3dcompiler_47.dll do jogo velho demais para cs_5_1 (Spider-Man Remastered traz o
+        // do SDK do Windows 8.1): o addon compila o shader do NR com ele e falha em silêncio.
+        // Vai a cópia do Windows por cima, com backup do original (volta na desinstalação).
+        if (route == InstallRoute.A)
+        {
+            var compilador = Path.Combine(exe, CompiladorD3D.Arquivo);
+            if (CompiladorD3D.Antigo(compilador))
+            {
+                var doSistema = CompiladorD3D.DoSistema();
+                if (doSistema is not null)
+                {
+                    plan.Actions.Add(new PlanAction(PlanActionKind.CopyFile,
+                        $"Trocar o {CompiladorD3D.Arquivo} do jogo ({CompiladorD3D.Descrever(compilador)}) pelo do Windows " +
+                        $"({CompiladorD3D.Descrever(doSistema)}) — o original vai para backup",
+                        doSistema, compilador));
+                    plan.Warnings.Add(CompiladorD3D.PorQueTrocar(compilador) +
+                        " O plano troca pela cópia do Windows; o original volta na desinstalação.");
+                }
+                else
+                {
+                    plan.Warnings.Add(CompiladorD3D.PorQueTrocar(compilador) +
+                        " Não achei a cópia do Windows em System32 para pôr no lugar.");
+                }
+            }
         }
 
         // Rota C: dgVoodoo na pasta do renderizador (exe ou bin\ no Source).
@@ -313,6 +448,38 @@ public static class InstallPlanBuilder
                 "DirectX 8 compatible display adapter\"). Se mesmo assim aparecer essa mensagem, use o " +
                 "botão \"Painel do dgVoodoo\" na tela de verificação e troque VideoCard para " +
                 "geforce_ti_4800 ou ati_radeon_8500 — não precisa reinstalar.");
+        }
+
+        if (EaJavelin.EhJavelin(exe))
+            plan.Warnings.Add(EaJavelin.Aviso + " " + EaJavelin.ComoAbrir);
+
+        // Easy Anti-Cheat: os arquivos são os mesmos, mas o jogo só os carrega com o EAC
+        // fora. Aviso, não bloqueio — e o programa não toca em arquivo de anticheat.
+        if (EasyAntiCheat.Encontrar(profile.GameFolder, exe) is { } eac)
+            plan.Warnings.Add(EasyAntiCheat.Nota(eac, profile.GameFolder));
+
+        if (MotorFox.EhFoxEngine(profile.RealExePath) && !MotorFox.PatchAplicado(profile.RealExePath))
+        {
+            var exeFox = profile.RealExePath!;
+            if (!MotorFox.PatcherCobre(exeFox))
+            {
+                plan.Blockers.Add(MotorFox.Aviso + " " + MotorFox.SemPatcherParaGz);
+            }
+            else if (MotorFox.EstadoDoExe(exeFox) == EstadoDoExeFox.Original)
+            {
+                // O patch entra ANTES de tudo: se falhar, a instalação para sem deixar nada
+                // na pasta (a reversão desfaz o que veio antes — e antes não veio nada).
+                plan.Actions.Insert(0, new PlanAction(PlanActionKind.PatchMgsvExe,
+                    "Aplicar o patch anti-hook no mgsvtpp.exe (desvia o CheckModuleHook; backup mgsvtpp.exe" +
+                    MotorFox.SufixoDoBackup + ")", null, exeFox));
+                plan.Warnings.Add(MotorFox.Aviso + " " + MotorFox.PatchAutomatico);
+            }
+            else
+            {
+                // Exe de outra versão/idioma: bloqueio com tamanho e hash, para a resposta
+                // não depender de mais uma rodada de "não abriu".
+                plan.Blockers.Add(MotorFox.Aviso + " " + MotorFox.ExeNaoCoberto(exeFox));
+            }
         }
 
         if (profile.Api == GraphicsApi.Vulkan && profile.Architecture == PeArchitecture.X64)

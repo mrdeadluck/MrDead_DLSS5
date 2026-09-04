@@ -1,0 +1,8 @@
+# Qual nvngx_dlssnr.dll o kit deve ter. Mudar este arquivo dispara o workflow
+# "Trocar o runtime do kit", que baixa a versão do RankFTW/rhi-repo, confere o
+# SHA-256 e commita o arquivo no LFS — e depois refaz o DLSS5-Pacote-Completo.zip.
+#
+# 310.8.SF-v2 = build do ShortFuse para RTX 20/30/40/50; é o que o RHI instala.
+# (O 310.8.0 original do NBA 2K27 só roda em RTX 50.)
+versao=310.8.SF-v2
+sha256=6eb209e764f39872625debd6abaf45e2bb6322f6f270f781f70c059ae30b3927

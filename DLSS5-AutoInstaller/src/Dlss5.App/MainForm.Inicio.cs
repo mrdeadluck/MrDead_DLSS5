@@ -584,8 +584,10 @@ public sealed partial class MainForm
         _manifest = manifest;
         MostrarTela(Tela.Execucao);
         var nvngxDoKit = NvngxDoKit();
+        var refwDoKit = ReFrameworkDoKit();
         var resultado = await RodarOperacaoAsync("Desinstalação", cancelavel: false,
-            (ct, progresso) => new InstallerEngine(_diario) { NvngxDlssDoKit = nvngxDoKit }.Revert(manifest, removerRegistro, ct, progresso));
+            (ct, progresso) => new InstallerEngine(_diario) { NvngxDlssDoKit = nvngxDoKit, ReFrameworkDoKit = refwDoKit }
+                .Revert(manifest, removerRegistro, ct, progresso));
         ConcluirReversao(resultado, "Desinstalação");
     }
 
@@ -599,8 +601,9 @@ public sealed partial class MainForm
         SetOcupado(true);
         Status("Procurando arquivos do mod na pasta do jogo…");
         var nvngxDoKit = NvngxDoKit();
+        var refwDoKit = ReFrameworkDoKit();
         IReadOnlyList<string> achados;
-        try { achados = await Task.Run(() => new InstallerEngine(_diario) { NvngxDlssDoKit = nvngxDoKit }.EncontrarInstalacao(pasta)); }
+        try { achados = await Task.Run(() => new InstallerEngine(_diario) { NvngxDlssDoKit = nvngxDoKit, ReFrameworkDoKit = refwDoKit }.EncontrarInstalacao(pasta)); }
         finally { SetOcupado(false); }
 
         if (achados.Count == 0)
@@ -624,7 +627,7 @@ public sealed partial class MainForm
         MostrarTela(Tela.Execucao);
         var resultado = await RodarOperacaoAsync("Remoção conservadora", cancelavel: false, (ct, progresso) =>
         {
-            var engine = new InstallerEngine(_diario) { NvngxDlssDoKit = nvngxDoKit };
+            var engine = new InstallerEngine(_diario) { NvngxDlssDoKit = nvngxDoKit, ReFrameworkDoKit = refwDoKit };
             new Isolamento(_diario.Info).ReligarTudo(pasta);
             return engine.LimpezaConservadora(pasta, ct, progresso);
         });

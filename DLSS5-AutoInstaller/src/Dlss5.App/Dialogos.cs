@@ -84,7 +84,7 @@ internal static class Dialogos
         fila.FlowDirection = FlowDirection.RightToLeft;
         fila.Margin = new Padding(0, 6, 0, 0);
         Button? principal = null;
-        foreach (var o in opcoes.Reverse())
+        foreach (var o in Enumerable.Reverse(opcoes))
         {
             var b = o.Perigosa ? Ui.Danger_(o.Texto) : o.Principal ? Ui.Primary(o.Texto) : Ui.Secondary(o.Texto);
             b.Margin = new Padding(8, 0, 0, 0);

@@ -1,0 +1,4 @@
+# Gravado pelo workflow trocar-reframework.yml. Não edite: mude reframework-desejado.txt.
+tag=nightly-01414-849c35a041fa4d748b42a2fb5ebe53f402875311
+revisao=849c35a041fa4d748b42a2fb5ebe53f402875311
+dinput8.dll=1dfe37dede668b5a969833ddfb2bbc933c83074e86fb03d46015690adf8a29f3 23050240

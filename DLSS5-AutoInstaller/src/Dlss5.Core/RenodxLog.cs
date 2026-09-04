@@ -18,6 +18,36 @@ namespace Dlss5.Core;
 /// (a tela de erro do próprio jogo). Nulo quando não houve diálogo.
 /// </param>
 /// <param name="Encerrou">O log termina com o processo saindo ("Exiting").</param>
+/// <param name="CriouDevice">O jogo chegou a criar o device de vídeo (D3D11/D3D12).</param>
+/// <param name="CriouSwapchain">
+/// O jogo chegou a criar a swapchain — é ela que dá a imagem na tela e o runtime do
+/// ReShade. Sem swapchain o jogo morreu antes de ter janela.
+/// </param>
+/// <param name="FrameGeneration">
+/// O jogo ligou a geração de quadros (DLSSG, feature 11). O addon anuncia no log que
+/// NÃO encosta nela: os quadros gerados saem sem o Neural Rendering.
+/// </param>
+/// <param name="NrDesligadoPorToggle">
+/// O último "NR toggled" do log é OFF: o NR terminou a rodada desligado. Max Payne 3
+/// (32-bit): o host64 subiu assim depois de uma troca de configuração, e o feed entregava
+/// 30 mil quadros para um NR desligado.
+/// </param>
+/// <param name="RecriacoesSemToggle">
+/// Quantas vezes o addon recriou a feature do NR ("feature 18 created") além das que o F6
+/// provocou. Onimusha (demo): dez recriações em dois minutos, duas do F6 — o addon está
+/// zerando o próprio estado a cada 10–20 s, e o olho não vê diferença nenhuma.
+/// </param>
+/// <param name="CompiladorAntigo">
+/// "error X3506: unrecognized compiler target 'cs_5_1'": o d3dcompiler_47.dll que o jogo
+/// carrega é velho demais e o addon não consegue compilar o shader do NR. Spider-Man
+/// Remastered: tudo armado, feature interceptada, e o NR nunca entra.
+/// </param>
+/// <param name="RayReconstruction">
+/// O DLSS do jogo é o Ray Reconstruction (DLSSD, feature 13) e o NR entrou depois dele
+/// ("feature 18 created ... after DLSSD/RR"). Alan Wake 2: o log diz sucesso em cada
+/// quadro e a imagem não muda com F6 — a saída do RR passa ainda por toda a
+/// pós-produção do jogo antes da tela.
+/// </param>
 public sealed record RenodxStatus(
     bool Ativo,
     int Avaliacoes,
@@ -29,7 +59,14 @@ public sealed record RenodxStatus(
     bool Streamline = false,
     bool PedeStreamlineHooks = false,
     double? SegundosAteDialogo = null,
-    bool Encerrou = false)
+    bool Encerrou = false,
+    bool CriouDevice = false,
+    bool CriouSwapchain = false,
+    bool FrameGeneration = false,
+    bool RayReconstruction = false,
+    bool CompiladorAntigo = false,
+    int RecriacoesSemToggle = 0,
+    bool NrDesligadoPorToggle = false)
 {
     /// <summary>
     /// O jogo abriu a própria tela de erro antes de criar qualquer DLSS. Nesse quadro o
@@ -38,8 +75,25 @@ public sealed record RenodxStatus(
     /// </summary>
     public bool CaiuAntesDoDlss => SegundosAteDialogo is not null && !CriouFeature && !Ativo;
 
+    /// <summary>
+    /// A assinatura do MGS V: o jogo criou o device de vídeo, os addons carregaram, e o
+    /// processo saiu limpo — sem swapchain, sem janela, sem tela de erro. Não é travamento
+    /// (travamento deixa diálogo ou log truncado): é o jogo se fechando por decisão
+    /// própria, o que a proteção anti-adulteração da Fox Engine faz ao achar uma DLL
+    /// estranha pendurada no D3D11/DXGI.
+    /// </summary>
+    public bool FechouSemJanela =>
+        Encerrou && CriouDevice && !CriouSwapchain && SegundosAteDialogo is null && !Ativo;
+
+
     public string Resumo => AssinaturaRecusada
         ? "O NGX recusou a runtime (0xBAD00007): falta o override no registro ou falta reiniciar o PC."
+        : CompiladorAntigo
+        ? "O addon não conseguiu compilar o shader do Neural Rendering: o d3dcompiler_47.dll que o jogo " +
+          "carrega não conhece cs_5_1 (\"error X3506\" no log). Hooks e runtime estão certos; o NR nunca entra."
+        : FechouSemJanela
+        ? "O jogo criou o device de vídeo, carregou os addons e SAIU sozinho, sem chegar a criar a " +
+          "swapchain (a janela). Não houve travamento nem tela de erro — foi o jogo que se fechou."
         : Ativo
             ? $"Neural Rendering ATIVO — {Avaliacoes} avaliação(ões) bem-sucedida(s) registradas."
             : CaiuAntesDoDlss
@@ -123,9 +177,41 @@ public static class RenodxLog
 
         bool encerrou = logText.Contains("| Exiting", StringComparison.OrdinalIgnoreCase);
 
+        bool criouDevice = logText.Contains("D3D11CreateDevice", StringComparison.OrdinalIgnoreCase)
+                           || logText.Contains("D3D12CreateDevice", StringComparison.OrdinalIgnoreCase)
+                           || logText.Contains("vkCreateDevice", StringComparison.OrdinalIgnoreCase);
+
+        // "::CreateSwapChain" com os dois-pontos duplos casa só o método da interface —
+        // "D3D11CreateDeviceAndSwapChain" também contém a palavra, e nesse jogo ele é
+        // chamado com ppSwapChain nulo, ou seja, sem criar swapchain nenhuma.
+        bool criouSwapchain = logText.Contains("::CreateSwapChain", StringComparison.OrdinalIgnoreCase)
+                              || logText.Contains("CreateSwapChainForHwnd", StringComparison.OrdinalIgnoreCase)
+                              || logText.Contains("CreateSwapChainForCoreWindow", StringComparison.OrdinalIgnoreCase)
+                              || logText.Contains("vkCreateSwapchainKHR", StringComparison.OrdinalIgnoreCase)
+                              || logText.Contains("Recreated runtime environment", StringComparison.OrdinalIgnoreCase);
+
+        // "feature 11 (DLSSG/FrameGeneration)": o addon diz, com todas as letras, que
+        // pula o NR nos quadros gerados. Quem está com geração de quadros ligada vê o
+        // efeito em metade dos quadros — e é aí que nasce o "não mudou nada".
+        bool frameGen = logText.Contains("DLSSG/FrameGeneration", StringComparison.OrdinalIgnoreCase);
+        // "feature=13 (DLSSD/RR)" e "feature 18 created ... after DLSSD/RR": o NR está
+        // pendurado no Ray Reconstruction, não no DLSS comum.
+        bool rayRec = logText.Contains("after DLSSD/RR", StringComparison.OrdinalIgnoreCase)
+                      || logText.Contains("feature=13 (DLSSD/RR)", StringComparison.OrdinalIgnoreCase);
+        bool compiladorAntigo = logText.Contains(CompiladorD3D.ErroNoLog, StringComparison.OrdinalIgnoreCase);
+        int criadas = Regex.Matches(logText, @"feature 18 created", RegexOptions.IgnoreCase).Count;
+        int ligadas = Regex.Matches(logText, @"NR toggled ON", RegexOptions.IgnoreCase).Count;
+        // A primeira criação é a normal; cada F6 (ligar) vale uma; o resto é o addon se resetando.
+        int recriacoes = Math.Max(0, criadas - 1 - ligadas);
+
+        int ultimoOn = logText.LastIndexOf("NR toggled ON", StringComparison.OrdinalIgnoreCase);
+        int ultimoOff = logText.LastIndexOf("NR toggled OFF", StringComparison.OrdinalIgnoreCase);
+        bool desligado = ultimoOff >= 0 && ultimoOff > ultimoOn;
+
         return new RenodxStatus(ativo, avaliacoes, hooksSemUso, recusada,
             hooksInstalados, criouFeature, enableHooks, streamline, pedeStreamline,
-            SegundosAteDialogo(logText), encerrou);
+            SegundosAteDialogo(logText), encerrou, criouDevice, criouSwapchain, frameGen, rayRec, compiladorAntigo, recriacoes,
+            desligado);
     }
 
     /// <summary>

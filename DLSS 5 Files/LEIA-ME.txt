@@ -53,11 +53,25 @@ O QUE ESPERAR — leia antes, evita decepção
      de movimento são estimados por shader, não vêm do jogo.
    - Consome bastante VRAM. Se travar, teste primeiro em 1080p e em modo
      janela.
+   - Trocar resolução, tela cheia ou qualidade DENTRO do jogo recria a
+     tela e o Feeder reconstrói tudo. O Feeder deste kit (0.12.0) foi
+     feito para sobreviver a isso; o antigo (0.5.0) derrubava o jogo.
+     Se um jogo instalado com o kit antigo cair nessa hora, aponte o
+     kit novo e clique em Instalar de novo — o programa troca só o que
+     mudou. A verificação (item 15) diz qual versão rodou.
 
 AVISOS
    - NÃO use em jogos online com anti-cheat (EAC, BattlEye, Vanguard).
      A liberação de assinatura vale para o sistema inteiro e pode ser
      interpretada como violação de integridade.
+   - Jogo que sobe o Easy Anti-Cheat junto com o exe (Gears of War
+     Reloaded) não carrega a DLL do ReShade: o ReShade.log nem nasce e
+     o Gears fecha com "Your machine does not support Direct3D 12".
+     O programa reconhece a pasta EasyAntiCheat e explica o contorno
+     que a comunidade usa para jogar a campanha OFFLINE (uma letra no
+     "productid" do EasyAntiCheat\Settings.json da raiz do jogo). Ele não
+     mexe nesse arquivo — é você quem decide, e o multiplayer não
+     funciona sem o EAC.
    - Desligue as sobreposições da Steam e do NVIDIA App no jogo que for
      usar: elas disputam o mesmo ponto de interceptação.
    - Desligue MSAA/SSAA nas opções gráficas do jogo. FXAA e SMAA podem

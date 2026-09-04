@@ -110,6 +110,13 @@ public static class SymptomDiagnoser
         }
 
         // Sinais estruturais que não vêm de log.
+        if (!File.Exists(Path.Combine(exe, "ReShade.log")) && EasyAntiCheat.Presente(profile.GameFolder, exe))
+            results.Add(new Diagnosis(
+                "Sem ReShade.log (o jogo abre sem o Home, ou fecha com \"does not support Direct3D 12\")",
+                "Easy Anti-Cheat na instalação: sob ele a DLL do ReShade não carrega.",
+                EasyAntiCheat.ComoAbrir,
+                "Easy Anti-Cheat"));
+
         var addon64InRoot = profile.Route is InstallRoute.B or InstallRoute.C
             && Directory.Exists(exe)
             && Directory.EnumerateFiles(exe, "*.addon64", SearchOption.TopDirectoryOnly).Any();

@@ -10,6 +10,9 @@ public sealed partial class MainForm
     private Panel _pPlano = new();
     private readonly Label _lblResumoDoPlano = new();
     private readonly TextBox _txtBlockers = new();
+    // Aparece só quando o plano avisou que o nvngx_dlssnr.dll do kit não serve para a
+    // placa: um clique baixa o build que o RHI instala, conferido pelo hash.
+    private readonly Button _btnRuntimePlano = Ui.Secondary("Baixar o runtime do RHI (166 MB) para o kit");
     private readonly CheckBox _chkConflitos = new();
     private readonly ListBox _lstPlan = new();
 
@@ -17,8 +20,9 @@ public sealed partial class MainForm
     {
         _pPlano = new Panel { Dock = DockStyle.Fill };
 
-        var t = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Margin = new Padding(0) };
+        var t = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Margin = new Padding(0) };
         t.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -35,6 +39,11 @@ public sealed partial class MainForm
         _txtBlockers.MinimumSize = new Size(0, 60);
         _txtBlockers.Margin = new Padding(0, 0, 0, 8);
         _txtBlockers.Visible = false;
+
+        _btnRuntimePlano.AutoSize = true;
+        _btnRuntimePlano.Visible = false;
+        _btnRuntimePlano.Margin = new Padding(0, 0, 0, 8);
+        _btnRuntimePlano.Click += (_, _) => _ = BaixarRuntimeDoRhiAsync();
 
         _chkConflitos.Text = Textos.ConfirmarConflitos;
         _chkConflitos.AutoSize = true;
@@ -54,8 +63,9 @@ public sealed partial class MainForm
 
         t.Controls.Add(_lblResumoDoPlano, 0, 0);
         t.Controls.Add(_txtBlockers, 0, 1);
-        t.Controls.Add(_chkConflitos, 0, 2);
-        t.Controls.Add(_lstPlan, 0, 3);
+        t.Controls.Add(_btnRuntimePlano, 0, 2);
+        t.Controls.Add(_chkConflitos, 0, 3);
+        t.Controls.Add(_lstPlan, 0, 4);
         _pPlano.Controls.Add(t);
     }
 
@@ -104,6 +114,8 @@ public sealed partial class MainForm
         }
         _txtBlockers.Visible = lines.Count > 0;
         _txtBlockers.Lines = lines.ToArray();
+        _btnRuntimePlano.Visible = _plan.Warnings.Any(w =>
+            w.StartsWith(RuntimeNr.Arquivo + " do kit", StringComparison.Ordinal));
         _txtBlockers.ForeColor = _plan.Blockers.Count > 0 ? Ui.Bad : Ui.Ink;
 
         _chkConflitos.Visible = _plan.Conflitos.Count > 0;

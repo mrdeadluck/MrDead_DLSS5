@@ -1,0 +1,170 @@
+name: Trocar o REFramework do kit (nightly) e refazer o pacote
+
+# O dinput8.dll do REFramework (23 MB) vive no LFS, e o objeto do LFS não sobe a partir do
+# ambiente de desenvolvimento. Este job baixa a nightly pedida em
+# "DLSS 5 Files/reframework-desejado.txt", confere o arquivo e o commita — e refaz o pacote.
+on:
+  push:
+    branches: ['claude/executable-fixes-xytsgm', 'main']
+    paths:
+      - 'DLSS 5 Files/reframework-desejado.txt'
+      - '.github/workflows/trocar-reframework.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  trocar:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout (só os ponteiros do LFS; a história inteira, para achar o anterior)
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 0
+
+      - name: Ler a nightly desejada
+        id: desejado
+        shell: pwsh
+        run: |
+          $linhas = Get-Content "DLSS 5 Files\reframework-desejado.txt" | Where-Object { $_ -match '^\s*[^#].*=' }
+          $mapa = @{}
+          foreach ($l in $linhas) { $k, $v = $l -split '=', 2; $mapa[$k.Trim()] = $v.Trim() }
+          if (-not $mapa['tag']) { throw "reframework-desejado.txt precisa de tag=latest ou tag=nightly-NNNNN-<sha>" }
+          "tag=$($mapa['tag'])" >> $env:GITHUB_OUTPUT
+          Write-Host "Desejado: $($mapa['tag'])"
+
+      - name: Guardar o REFramework anterior (caminho de volta)
+        shell: pwsh
+        run: |
+          git lfs install --local
+          $anterior = "${{ github.workspace }}\reframework-anterior"
+          New-Item -ItemType Directory -Path "$anterior\REFramework" -Force | Out-Null
+          $ultimo = (git log -1 --format=%H -- "DLSS 5 Files/REFramework/dinput8.dll").Trim()
+          $base = if ($ultimo) { "$ultimo" } else { "HEAD" }
+          Write-Host "Ultimo commit que mexeu no dinput8.dll: $base"
+          cmd /c "git show `"${base}:DLSS 5 Files/REFramework/dinput8.dll`" | git lfs smudge > `"$anterior\REFramework\dinput8.dll`""
+          $f = Get-Item "$anterior\REFramework\dinput8.dll"
+          if ($f.Length -lt 1024) { throw "O dinput8.dll anterior não materializou ($($f.Length) bytes)" }
+          cmd /c "git show `"${base}:DLSS 5 Files/REFramework/reframework_revision.txt`" > `"$anterior\REFramework\reframework_revision.txt`"" 2>$null
+          Write-Host ("anterior dinput8.dll: {0} bytes, sha256={1}, revisao={2}" -f $f.Length, (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), (Get-Content "$anterior\REFramework\reframework_revision.txt" -ErrorAction SilentlyContinue))
+          @(
+            "REFramework ANTERIOR do kit (o que estava antes da troca), guardado como caminho de volta.",
+            "Copie a pasta REFramework por cima da que está em 'DLSS 5 Files' e clique em Instalar de novo no jogo."
+          ) | Set-Content "$anterior\LEIA-ME.txt" -Encoding UTF8
+          Compress-Archive -Path "$anterior\*" -DestinationPath "${{ github.workspace }}\DLSS5-REFramework-anterior-kit.zip" -CompressionLevel Optimal -Force
+
+      - name: Baixar a nightly e conferir
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.desejado.outputs.tag }}"
+          $url = if ($tag -eq 'latest') { "https://github.com/praydog/REFramework-nightly/releases/latest/download/REFramework.zip" }
+                 else { "https://github.com/praydog/REFramework-nightly/releases/download/$tag/REFramework.zip" }
+          Write-Host "Baixando $url"
+          Invoke-WebRequest -Uri $url -OutFile REFramework.zip
+          Expand-Archive REFramework.zip -DestinationPath refw -Force
+          Get-ChildItem refw -Recurse -File | ForEach-Object { Write-Host ("  {0,10}  {1}" -f $_.Length, $_.Name) }
+          $dll = Get-ChildItem refw -Recurse -File -Filter dinput8.dll | Select-Object -First 1
+          $rev = Get-ChildItem refw -Recurse -File -Filter reframework_revision.txt | Select-Object -First 1
+          if (-not $dll) { throw "O REFramework.zip não traz dinput8.dll" }
+          $bytes = [IO.File]::ReadAllBytes($dll.FullName)
+          if ($bytes.Length -lt 1048576 -or $bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) { throw "dinput8.dll não é um PE ($($bytes.Length) bytes)" }
+          $peOffset = [BitConverter]::ToInt32($bytes, 60)
+          $machine = [BitConverter]::ToUInt16($bytes, $peOffset + 4)
+          if ($machine -ne 0x8664) { throw ("dinput8.dll não é x64 (machine 0x{0:X})" -f $machine) }
+          $texto = [Text.Encoding]::ASCII.GetString($bytes)
+          if ($texto -notmatch 'REFramework') { throw "dinput8.dll não carrega a assinatura do REFramework" }
+          $revisao = if ($rev) { (Get-Content $rev.FullName -Raw).Trim() } else { "" }
+          Write-Host ("dinput8.dll: {0} bytes, sha256={1}, revisao={2}" -f $dll.Length, (Get-FileHash $dll.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $revisao)
+          Copy-Item $dll.FullName "DLSS 5 Files\REFramework\dinput8.dll" -Force
+          if ($rev) { Copy-Item $rev.FullName "DLSS 5 Files\REFramework\reframework_revision.txt" -Force }
+          @(
+            "# Gravado pelo workflow trocar-reframework.yml. Não edite: mude reframework-desejado.txt.",
+            "tag=$tag",
+            "revisao=$revisao",
+            ("dinput8.dll={0} {1}" -f (Get-FileHash $dll.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $dll.Length)
+          ) | Set-Content "DLSS 5 Files\REFramework\reframework-versao.txt" -Encoding UTF8
+          New-Item -ItemType Directory -Path kit-novo\REFramework -Force | Out-Null
+          Copy-Item "DLSS 5 Files\REFramework\*" kit-novo\REFramework\
+          @("REFramework $tag para o kit do DLSS 5 AutoInstaller.", "", "Copie a pasta REFramework por cima da que está em 'DLSS 5 Files' e clique em Instalar de novo no jogo.") | Set-Content kit-novo\LEIA-ME.txt -Encoding UTF8
+          Compress-Archive -Path kit-novo\* -DestinationPath "${{ github.workspace }}\DLSS5-REFramework-kit.zip" -CompressionLevel Optimal -Force
+
+      - name: Commitar no LFS
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git lfs install --local
+          git add "DLSS 5 Files/REFramework/dinput8.dll" "DLSS 5 Files/REFramework/reframework_revision.txt" "DLSS 5 Files/REFramework/reframework-versao.txt"
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "Kit: REFramework passa a ser a nightly ${{ steps.desejado.outputs.tag }}" -m "Baixado de praydog/REFramework-nightly e conferido (PE x64 com a assinatura do REFramework). O Dragon's Dogma 2 atualizado (TDB 83) recusa o ReShade sem o REFramework, e a nightly de 28/08 caia dentro do proprio REFramework nessa versao do jogo."
+            git push origin HEAD:${{ github.ref_name }}
+            Write-Host "Trocado e commitado."
+          } else {
+            Write-Host "Nada a commitar: o kit já tem esse REFramework."
+          }
+
+      - name: Publicar os zips na Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: installer-latest
+          name: DLSS 5 AutoInstaller (build mais recente)
+          prerelease: true
+          overwrite_files: true
+          files: |
+            DLSS5-REFramework-kit.zip
+            DLSS5-REFramework-anterior-kit.zip
+
+  pacote:
+    needs: trocar
+    runs-on: windows-latest
+    steps:
+      - name: Checkout com os arquivos do kit (no commit novo)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          lfs: true
+
+      - name: Instalar .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Compilar o executável
+        working-directory: DLSS5-AutoInstaller
+        run: >
+          dotnet publish src/Dlss5.App/Dlss5.App.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:DebugType=None
+          -p:SourceRevisionId=${{ github.sha }}
+          -o ${{ github.workspace }}\publish
+
+      - name: Montar o pacote
+        shell: pwsh
+        run: |
+          $dest = "${{ github.workspace }}\DLSS5-Pacote"
+          New-Item -ItemType Directory -Path $dest -Force | Out-Null
+          Copy-Item "${{ github.workspace }}\publish\DLSS5-AutoInstaller.exe" $dest
+          Copy-Item "${{ github.workspace }}\DLSS 5 Files" (Join-Path $dest 'DLSS 5 Files') -Recurse
+          Copy-Item (Join-Path $dest 'DLSS 5 Files\LEIA-ME.txt') (Join-Path $dest 'LEIA-ME.txt')
+          $ponteiros = Get-ChildItem $dest -Recurse -File |
+            Where-Object { $_.Length -lt 300 -and ((Get-Content $_.FullName -TotalCount 1 -ErrorAction SilentlyContinue) -like 'version https://git-lfs.github.com/spec/*') }
+          $graves = $ponteiros | Where-Object { $_.Extension -in '.dll', '.exe', '.addon64', '.addon32', '.fx', '.fxh', '.png', '.conf' }
+          $ponteiros | ForEach-Object { Write-Host "PONTEIRO LFS: $($_.FullName)" }
+          if ($graves) { throw "O checkout nao materializou os arquivos do LFS." }
+          $f = Get-Item (Join-Path $dest 'DLSS 5 Files\REFramework\dinput8.dll')
+          Write-Host ("REFramework no pacote: {0} bytes, sha256={1}" -f $f.Length, (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLowerInvariant())
+          Compress-Archive -Path "$dest\*" -DestinationPath "${{ github.workspace }}\DLSS5-Pacote-Completo.zip" -CompressionLevel Optimal
+          $z = Get-Item "${{ github.workspace }}\DLSS5-Pacote-Completo.zip"
+          Write-Host ("Zip com {0} MB, sha256={1}" -f [math]::Round($z.Length / 1MB, 1), (Get-FileHash $z.FullName -Algorithm SHA256).Hash.ToLowerInvariant())
+
+      - name: Publicar na Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: installer-latest
+          name: DLSS 5 AutoInstaller (build mais recente)
+          prerelease: true
+          overwrite_files: true
+          files: DLSS5-Pacote-Completo.zip

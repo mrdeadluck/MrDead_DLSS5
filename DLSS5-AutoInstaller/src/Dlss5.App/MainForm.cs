@@ -285,7 +285,7 @@ public sealed partial class MainForm : Form
         }, 0, 0);
         marca.Controls.Add(new Label
         {
-            Text = "AutoInstaller " + AppInfo.Versao,
+            Text = "AutoInstaller " + AppInfo.VersaoComBuild,
             Font = Ui.SmallFont,
             ForeColor = Ui.SidebarIdle,
             AutoSize = true,
@@ -612,6 +612,16 @@ public sealed partial class MainForm : Form
         if (string.IsNullOrWhiteSpace(pasta) || !Directory.Exists(pasta)) return null;
         try { _kit = KitResolver.Resolve(pasta); } catch { return null; }
         return _kit.NvngxDlss;
+    }
+
+    /// <summary>Gabarito do REFramework do kit: sem ele a faxina não encosta em dinput8.dll.</summary>
+    private string? ReFrameworkDoKit()
+    {
+        if (_kit?.ReFrameworkDinput8 is { } pronto) return pronto;
+        var pasta = _txtKit.Text.Trim();
+        if (string.IsNullOrWhiteSpace(pasta) || !Directory.Exists(pasta)) return null;
+        try { _kit = KitResolver.Resolve(pasta); } catch { return null; }
+        return _kit.ReFrameworkDinput8;
     }
 
     private void ExportarDiagnostico()

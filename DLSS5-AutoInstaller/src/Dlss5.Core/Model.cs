@@ -139,6 +139,18 @@ public sealed class GameProfile
     public bool UsesRenodxDirectPath => HasNativeDlss && Api == GraphicsApi.D3D12 && !PreferirFeeder;
 
     /// <summary>
+    /// O jogo entrega o DLSS pelo Streamline da NVIDIA (sl.*.dll ao lado do exe), e não
+    /// por chamadas cruas de NGX. Informativo: o RHI, que é a referência que funciona,
+    /// não mexe no EnableHooks por causa disso, e o RE9 provou que o modo 1 não muda o
+    /// resultado quando o runtime está errado. O que decide é o item 18 da verificação.
+    /// </summary>
+    public bool UsaStreamline => NativeDlss?.Clues
+        .Any(c => c.Texto.StartsWith("sl.", StringComparison.OrdinalIgnoreCase)) == true;
+
+    /// <summary>EnableHooks gravado na instalação: o padrão do addon, como o RHI faz.</summary>
+    public int HooksDoRenodx => RenodxIni.Padrao;
+
+    /// <summary>
     /// O Feeder entra sempre que o RenoDX não consegue pegar o DLSS do próprio jogo —
     /// jogo sem DLSS (os 30+ que funcionaram) ou jogo com DLSS nativo fora do D3D12,
     /// porque ele roda o NGX num device D3D12 privado e independe da API do jogo. Em
@@ -150,11 +162,92 @@ public sealed class GameProfile
     public bool NeedsDgVoodoo => Route == InstallRoute.C;
 
     /// <summary>
+    /// Hospedar o ReShade dentro do REFramework em vez de injetá-lo como dxgi.dll.
+    /// É o caminho para jogo da RE Engine com proteção anti-adulteração (o RE9 recusa a
+    /// injeção direta e cai antes de criar qualquer DLSS). Ver <see cref="ReFramework"/>.
+    /// </summary>
+    public bool UsarReFramework { get; set; }
+
+    /// <summary>A pasta do jogo é RE Engine — só ali o REFramework tem função.</summary>
+    public bool EhReEngine => ReFramework.EhReEngine(ExeFolder);
+
+    /// <summary>
+    /// Onde a DLL do ReShade (dxgi.dll etc.) entra. Quase sempre é a pasta do exe. No
+    /// Titanfall 2 (engine da Respawn) o renderizador mora em bin\x64_retail e a DLL na
+    /// raiz nunca carrega — o jogo abre, o Home não faz nada e o ReShade.log nem nasce.
+    /// Ali a DLL vai para a pasta do renderizador; o ReShade.ini, o log, os addons e os
+    /// shaders continuam na raiz, porque o ReShade escolhe a base pelo ini ao lado do exe.
+    /// Na Source clássica (bin\ com shaderapi*.dll, D3D9 via dgVoodoo) a DLL fica na raiz.
+    /// </summary>
+    public string PastaDoReShade
+    {
+        get
+        {
+            // Só na rota A: na rota C o dgVoodoo mora na pasta do renderizador e cria o
+            // device D3D11 de lá, mas o ReShade continua entrando pela raiz (Source, DS2).
+            if (IsSourceEngine || Route != InstallRoute.A || string.IsNullOrWhiteSpace(RendererFolder)) return ExeFolder;
+            static string N(string p) => Path.GetFullPath(p).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            return string.Equals(N(RendererFolder), N(ExeFolder), StringComparison.OrdinalIgnoreCase)
+                ? ExeFolder : RendererFolder;
+        }
+    }
+
+    /// <summary>A DLL do ReShade mora fora da pasta do exe (Titanfall 2): o ini precisa do BasePath.</summary>
+    public bool ReShadeForaDaRaiz => !string.Equals(PastaDoReShade, ExeFolder, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Onde fica a configuração que o ReShade lê: ao lado do executável.</summary>
+    public string ReShadeIniPath => Path.Combine(ExeFolder, "ReShade.ini");
+
+    /// <summary>Onde fica o log que o ReShade grava.</summary>
+    public string ReShadeLogPath => Path.Combine(ExeFolder, "ReShade.log");
+
+    /// <summary>
     /// Nome com que o ReShade é instalado. O jogo carrega a DLL pelo nome da API que ele
     /// usa: um jogo OpenGL nunca vai procurar por dxgi.dll, então instalar com esse nome
     /// resulta em ReShade que jamais é carregado e num ReShade.log que nem chega a existir.
     /// </summary>
-    public string ReShadeHookName => Api == GraphicsApi.OpenGL ? "opengl32.dll" : "dxgi.dll";
+    public string ReShadeHookName => Api == GraphicsApi.OpenGL
+        ? "opengl32.dll"
+        : NomeDoReShadeEscolhido ?? "dxgi.dll";
+
+    /// <summary>
+    /// Nome alternativo escolhido para o ReShade, quando o dxgi.dll não serve.
+    ///
+    /// O dxgi.dll é o nome que funciona na esmagadora maioria dos jogos Direct3D, porque
+    /// é pela DXGI que o swapchain nasce. Mas há jogo que RECUSA especificamente esse
+    /// nome: o MGS V (Fox Engine, TPP e Ground Zeroes) tem uma proteção anti-adulteração
+    /// que, com o dxgi.dll na pasta, faz o executável nem abrir — e o contorno que a
+    /// comunidade usa há anos é entrar como d3d11.dll, o nome da própria API. O jogo
+    /// carrega a DLL, o ReShade se pendura na criação do device e a proteção não reage.
+    /// </summary>
+    public string? NomeDoReShadeEscolhido { get; set; }
+
+    /// <summary>
+    /// Jogos que sabidamente recusam o dxgi.dll. O MGS V (Fox Engine) é o caso
+    /// documentado: com o dxgi.dll na pasta o executável não abre, e trocar para o nome
+    /// da própria API é o contorno que a comunidade usa. Devolve nulo quando não há
+    /// motivo para fugir do padrão.
+    /// </summary>
+    public static string? NomeDeReShadePreferido(string? exePath, GraphicsApi api)
+    {
+        if (string.IsNullOrWhiteSpace(exePath)) return null;
+        if (api is not (GraphicsApi.D3D11 or GraphicsApi.D3D12)) return null;
+
+        // Fox Engine já morou aqui pedindo d3d11.dll. Era lenda de fórum: a checagem do
+        // jogo (CheckModuleHook) olha o gancho no D3D11, não o nome do arquivo — d3d11.dll
+        // fechava o jogo igual. Com o patch anti-hook o ReShade entra como dxgi.dll, o
+        // nome comum, e é assim que as instruções do patcher mandam instalar.
+        return null;
+    }
+
+    /// <summary>Nomes oferecidos para o ReShade, na ordem em que a tela mostra.</summary>
+    public IReadOnlyList<string> NomesDeReShadePossiveis => Api switch
+    {
+        GraphicsApi.OpenGL => new[] { "opengl32.dll" },
+        GraphicsApi.D3D12 => new[] { "dxgi.dll", "d3d12.dll" },
+        GraphicsApi.D3D11 => new[] { "dxgi.dll", "d3d11.dll" },
+        _ => new[] { "dxgi.dll" },
+    };
 
     /// <summary>
     /// Wrapper do dgVoodoo2 correspondente à API do jogo (rota C). O dgVoodoo traz um
@@ -188,6 +281,8 @@ public enum PlanActionKind
     PatchDgVoodooConf,
     DeleteForbiddenFile,
     RegistryOverride,
+    /// <summary>Roda o patcher anti-hook da Fox Engine sobre o exe do jogo (SourcePath = patcher, TargetPath = exe).</summary>
+    PatchMgsvExe,
 }
 
 /// <summary>Uma ação do plano de instalação, exibível e executável.</summary>

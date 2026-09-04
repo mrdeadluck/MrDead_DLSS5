@@ -28,7 +28,7 @@ public static class Propriedade
     public static readonly string[] SoNossos =
     {
         "renodx-dlss5.addon64", "dlss5-feed.addon64", "dlss5-feed.addon32",
-        "dlss5-feed-host64.exe", "dlss5-feed.cfg", "dlss5-feed.log", "dlss5-feed-host.log",
+        "dlss5-feed-host64.exe", "dlss5-feed.cfg", "dlss5-feed.log", "dlss5-feed-host.log", "dlss5-feed-crash.dmp",
         "nvngx_dlssnr.dll",
         // O dgVoodoo encadeado atrás do DxWrapper: nenhum jogo traz um arquivo com esse nome.
         "dgVoodoo_D3D9.dll", "dgVoodoo_D3D8.dll",
@@ -42,7 +42,7 @@ public static class Propriedade
     {
         "ReShade.log", "ReShade64.json", "ReShade32.json",
         "ReShade64_XR.json", "ReShade32_XR.json",
-        "dlss5-feed.log", "dlss5-feed.cfg", "dlss5-feed-host.log",
+        "dlss5-feed.log", "dlss5-feed.cfg", "dlss5-feed-host.log", "dlss5-feed-crash.dmp",
     };
 
     /// <summary>
@@ -59,6 +59,11 @@ public static class Propriedade
     {
         ("dxgi.dll", "ReShade"),
         ("opengl32.dll", "ReShade"),
+        // Nomes alternativos do ReShade, usados em jogo que recusa o dxgi.dll (MGS V).
+        // Sem eles aqui, a desinstalação deixaria para trás justamente o arquivo que
+        // impede o jogo de abrir.
+        ("d3d11.dll", "ReShade"),
+        ("d3d12.dll", "ReShade"),
     };
 
     public static readonly (string Nome, string Prova)[] PrecisamDeProvaEEscolta =
@@ -136,7 +141,7 @@ public static class Propriedade
     private static readonly string[] ExclusivosDoKit =
     {
         "renodx-dlss5.addon64", "dlss5-feed.addon64", "dlss5-feed.addon32",
-        "dlss5-feed-host64.exe", "dlss5-feed.cfg", "dlss5-feed.log", "dlss5-feed-host.log",
+        "dlss5-feed-host64.exe", "dlss5-feed.cfg", "dlss5-feed.log", "dlss5-feed-host.log", "dlss5-feed-crash.dmp",
         "nvngx_dlssnr.dll", "dgVoodoo_D3D9.dll", "dgVoodoo_D3D8.dll", InstallManifest.FileName,
     };
 

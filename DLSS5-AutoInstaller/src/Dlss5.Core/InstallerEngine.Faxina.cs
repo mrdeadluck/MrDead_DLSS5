@@ -12,6 +12,23 @@ namespace Dlss5.Core;
 public sealed partial class InstallerEngine
 {
     /// <summary>
+    /// O que a instalação deixa dentro de reframework\plugins. O ReShade hospedado e a
+    /// configuração dele: nomes que só existem ali porque nós os pusemos.
+    /// </summary>
+    private static readonly string[] NossosNoPlugins =
+    {
+        ReFramework.ReShadePlugin, ReFramework.ReShadeIni, ReFramework.ReShadeLog,
+    };
+
+    /// <summary>
+    /// Caminho do dinput8.dll do REFramework no kit. Serve de gabarito, igual ao do
+    /// nvngx_dlss.dll: sem ele a faxina não encosta em nenhum dinput8.dll, porque o
+    /// arquivo pode ser um REFramework que o usuário instalou por conta própria (com
+    /// scripts e mods dele por perto) ou outro mod que usa o mesmo nome.
+    /// </summary>
+    public string? ReFrameworkDoKit { get; set; }
+
+    /// <summary>
     /// Tudo que este programa possa ter deixado em qualquer subpasta do jogo — arquivos,
     /// pastas nossas e backups .dlss5bak ainda por devolver. Só olha, não mexe.
     /// </summary>
@@ -254,6 +271,25 @@ public sealed partial class InstallerEngine
         // gabarito (NvngxDlssDoKit nulo) não há prova, e nenhum nvngx_dlss.dll sai.
         var nvngx = Path.Combine(pasta, "nvngx_dlss.dll");
         if (TransplanteDlss.EhDoKit(nvngx, NvngxDlssDoKit)) nossos.Add(nvngx);
+
+        // REFramework: só sai se for byte a byte o do kit. Um dinput8.dll diferente é do
+        // usuário (outra versão, ou outro mod) e fica onde está.
+        var dinput = Path.Combine(pasta, ReFramework.Dinput8);
+        if (ReFramework.EhDoKit(dinput, ReFrameworkDoKit))
+        {
+            nossos.Add(dinput);
+            var revisao = Path.Combine(pasta, ReFramework.RevisionFile);
+            if (File.Exists(revisao)) nossos.Add(revisao);
+        }
+
+        // O ReShade hospedado e a configuração dele, dentro de reframework\plugins.
+        var plugins = ReFramework.PastaPlugins(pasta);
+        if (Directory.Exists(plugins))
+            foreach (var nome in NossosNoPlugins)
+            {
+                var caminho = Path.Combine(plugins, nome);
+                if (File.Exists(caminho)) nossos.Add(caminho);
+            }
 
         foreach (var nome in Propriedade.SoNossos)
         {

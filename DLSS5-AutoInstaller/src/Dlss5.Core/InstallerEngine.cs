@@ -231,6 +231,13 @@ public sealed partial class InstallerEngine
                     case PlanActionKind.RegistryOverride:
                         AplicarOverride(manifest, desfazer);
                         break;
+
+                    case PlanActionKind.PatchMgsvExe:
+                        // Remenda o exe do jogo com backup próprio (.anti-hook-backup, o
+                        // mesmo nome do patcher da comunidade). A desinstalação não mexe
+                        // nisso de propósito: o jogo abre normalmente com o patch.
+                        MotorFox.AplicarPatch(action.TargetPath!, _log);
+                        break;
                 }
 
                 manifest.Save(exe);
@@ -318,6 +325,7 @@ public sealed partial class InstallerEngine
         PlanActionKind.WriteGeneratedFile => "Gerando configurações",
         PlanActionKind.PatchDgVoodooConf => "Ajustando o dgVoodoo",
         PlanActionKind.RegistryOverride => "Aplicando o override de assinatura no registro",
+        PlanActionKind.PatchMgsvExe => "Aplicando o patch anti-hook no mgsvtpp.exe",
         _ => "Aplicando",
     };
 
@@ -357,9 +365,17 @@ public sealed partial class InstallerEngine
         }
         var name = Path.GetFileName(target);
         return name.Equals("ReShade.ini", StringComparison.OrdinalIgnoreCase)
+               || name.Equals(ReFramework.ReShadeIni, StringComparison.OrdinalIgnoreCase)
             ? ReShadeConfigWriter.BuildReShadeIni(
                 plan.Options.OverlayKey, plan.Options.OverlayCtrl, plan.Options.OverlayShift, plan.Options.OverlayAlt,
-                feederUsed: plan.Profile.NeedsFeeder)
+                feederUsed: plan.Profile.NeedsFeeder,
+                // Hospedado no REFramework o ini fica longe da pasta do jogo: sem caminho
+                // absoluto o ReShade procuraria shaders e addons dentro de plugins\.
+                baseDir: null,
+                renodxHooks: plan.Profile.HooksDoRenodx,
+                // DLL fora da raiz (Titanfall 2): o ReShade usaria a pasta da DLL como
+                // base; o BasePath traz a base de volta para a raiz, onde está tudo.
+                basePath: plan.Profile.ReShadeForaDaRaiz ? plan.Profile.ExeFolder : null)
             : ReShadeConfigWriter.BuildPresetIni(plan.Options.MvProvider, feederUsed: plan.Profile.NeedsFeeder);
     }
 
@@ -621,7 +637,7 @@ public sealed partial class InstallerEngine
         "dxgi.dll", "opengl32.dll", "ReShade.ini", "ReShade.log", "ReShadePreset.ini",
         "ReShade64.json", "ReShade32.json", "ReShade64_XR.json", "ReShade32_XR.json",
         "renodx-dlss5.addon64", "nvngx_dlssnr.dll",
-        "dlss5-feed.addon64", "dlss5-feed.addon32", "dlss5-feed.cfg", "dlss5-feed.log",
+        "dlss5-feed.addon64", "dlss5-feed.addon32", "dlss5-feed.cfg", "dlss5-feed.log", "dlss5-feed-crash.dmp",
         "D3D9.dll", "D3D8.dll", "dgVoodoo.conf", "dgVoodooCpl.exe",
         "dgVoodoo_D3D9.dll", "dgVoodoo_D3D8.dll",
     };
@@ -648,6 +664,12 @@ public sealed partial class InstallerEngine
         // O transplante que resistiu (arquivo em uso) é sobra como qualquer outra.
         var transplante = Path.Combine(exeFolder, "nvngx_dlss.dll");
         if (TransplanteDlss.EhDoKit(transplante, NvngxDlssDoKit)) sobras.Add(transplante);
+
+        // Modo REFramework: o hospedeiro (só se for o do kit) e o ReShade dentro dele.
+        var dinput = ReFramework.CaminhoDinput8(exeFolder);
+        if (ReFramework.EhDoKit(dinput, ReFrameworkDoKit)) sobras.Add(dinput);
+        foreach (var caminho in new[] { ReFramework.CaminhoPlugin(exeFolder), ReFramework.CaminhoIni(exeFolder) })
+            if (File.Exists(caminho)) sobras.Add(caminho);
 
         // Um ini do DxWrapper ainda apontando para o dgVoodoo é sobra perigosa: com o
         // dgVoodoo fora, o DxWrapper tentaria carregar um arquivo que não existe.

@@ -16,6 +16,15 @@ public sealed class DetectionResult
 /// </summary>
 public static class GameDetector
 {
+    /// <summary>
+    /// Exes conhecidos que dividem a pasta com o jogo e NÃO são o jogo: modos online,
+    /// editores, ferramentas. Sem esta lista o tamanho decide, e ele mente.
+    /// </summary>
+    private static readonly string[] SecondaryExeNames =
+    {
+        "mgsvmgo",   // Metal Gear Online, ao lado do mgsvtpp.exe
+    };
+
     private static readonly string[] LauncherNameHints =
     {
         "launcher", "play", "setup", "unins", "install", "crash", "report",
@@ -68,6 +77,50 @@ public static class GameDetector
 
         DetectApiAndRenderer(profile, result.Notes);
         DetectNativeDlss(profile, result.Notes);
+
+        // Só o jogo que recusa o ReShade na abertura sai com o REFramework marcado. Nos
+        // outros da RE Engine ele é a causa do crash, não o remédio (Dragon's Dogma 2).
+        profile.UsarReFramework = ReFramework.PrecisaDoBypass(profile.RealExePath);
+        if (profile.UsarReFramework)
+            result.Notes.Add("Este jogo recusa a DLL do ReShade na abertura: o REFramework entra junto para " +
+                             "desarmar a checagem (caixa marcada).");
+        else if (profile.EhReEngine)
+            result.Notes.Add("RE Engine: este jogo aceita o ReShade direto. " + ReFramework.QuandoMarcar);
+
+        // Jogo que recusa o dxgi.dll já sai da detecção com o nome que ele aceita. Isto
+        // ficava na tela e chegava tarde: cada atribuição de controle dispara o
+        // sincronismo do formulário, que gravava o nome do combo no perfil ANTES — e a
+        // preferência, aplicada depois com "??=", virava no-op. No MGS V o resultado era
+        // o instalador continuar em dxgi.dll, justamente o nome que impede o jogo de abrir.
+        profile.NomeDoReShadeEscolhido =
+            GameProfile.NomeDeReShadePreferido(profile.RealExePath, profile.Api);
+        if (profile.NomeDoReShadeEscolhido is { } nome)
+            result.Notes.Add($"Este jogo recusa o dxgi.dll (proteção anti-adulteração): o ReShade entra como {nome}.");
+        if (EaJavelin.EhJavelin(profile.ExeFolder))
+            result.Notes.Add(EaJavelin.Aviso + " " + EaJavelin.ComoAbrir);
+        else if (File.Exists(Path.Combine(profile.GameFolder, "__Installer", "installerdata.xml")))
+            result.Notes.Add("Jogo do EA App (__Installer\\installerdata.xml): a sobreposição do EA App costuma pegar o " +
+                             "DXGI antes do ReShade — jogo abre, Home não faz nada, ReShade.log nem nasce. Desligue-a " +
+                             "no EA App (Configurações → Sobreposição no jogo) antes de abrir. Se mesmo assim não houver " +
+                             "log, troque \"ReShade entra como\" para o outro nome (d3d11.dll) e instale de novo.");
+
+        // Easy Anti-Cheat (Gears of War Reloaded): a DLL do ReShade não carrega sob ele e
+        // o jogo fecha com "does not support Direct3D 12". Dito aqui, antes de instalar.
+        if (EasyAntiCheat.Encontrar(profile.GameFolder, profile.ExeFolder) is { } eac)
+            result.Notes.Add(EasyAntiCheat.Nota(eac, profile.GameFolder));
+
+        if (MotorFox.EhFoxEngine(profile.RealExePath))
+        {
+            result.Notes.Add(MotorFox.Aviso);
+            var exeFox = profile.RealExePath!;
+            result.Notes.Add(MotorFox.PatchAplicado(exeFox)
+                ? "Patch anti-hook já aplicado no exe: a instalação está liberada."
+                : !MotorFox.PatcherCobre(exeFox) ? MotorFox.SemPatcherParaGz
+                : MotorFox.EstadoDoExe(exeFox) == EstadoDoExeFox.Original
+                    ? "mgsvtpp.exe 1.0.15.4 Steam inglês reconhecido: a instalação aplica o patch anti-hook sozinha."
+                    : MotorFox.ExeNaoCoberto(exeFox));
+        }
+
         return result;
     }
 
@@ -126,6 +179,12 @@ public static class GameDetector
                 score -= 140;
             if (HelperExeNames.Any(h => name.Equals(h, StringComparison.OrdinalIgnoreCase)))
                 score -= 200;
+            // Executável secundário que mora na MESMA pasta do jogo e é maior ou igual a ele:
+            // o mgsvmgo.exe (Metal Gear Online) ao lado do mgsvtpp.exe. Escolhido, ele levava
+            // a instalação para o jogo errado sem ninguém perceber — o plano nem pedia o patch
+            // da Fox Engine, porque o nome não era o do Phantom Pain.
+            if (SecondaryExeNames.Any(h => name.Equals(h, StringComparison.OrdinalIgnoreCase)))
+                score -= 150;
 
             list.Add(new ExeCandidate(exe, arch, size, score));
         }
@@ -160,10 +219,29 @@ public static class GameDetector
             return;
         }
 
-        profile.RendererFolder = exeDir;
+        // Engine da Respawn (Titanfall 2): exe na raiz, renderizador em bin\x64_retail.
+        // A DLL do ReShade na raiz nunca carrega; em bin\x64_retail carrega.
+        var respawn = Path.Combine(exeDir, "bin", "x64_retail");
+        if (File.Exists(Path.Combine(respawn, "materialsystem_dx11.dll")))
+        {
+            profile.RendererFolder = respawn;
+            notes.Add("Renderizador em bin\\x64_retail (materialsystem_dx11.dll — engine do Titanfall 2): o " +
+                      "dxgi.dll do ReShade vai LÁ. Na raiz ele nunca carrega: o jogo abre, o Home não faz nada e " +
+                      "o ReShade.log nem nasce. ReShade.ini, addons e shaders ficam na raiz, ao lado do exe.");
+        }
+        else
+        {
+            profile.RendererFolder = exeDir;
+        }
 
         var detection = ApiDetector.Detect(profile.RealExePath, exeDir);
         profile.ApiDetection = detection;
+
+        if (detection.ExeOpaco)
+            notes.Add("O executável não mostra pista nenhuma de API (nem import, nem string, nem NGX): é a cara de " +
+                      "exe cifrado ou empacotado (Arxan, Denuvo, stub da Steam). A detecção fica com o que há ao " +
+                      "lado dele e com os logs da última execução — as DLLs da NVIDIA (nvngx_*.dll) e os proxies " +
+                      "não contam, porque citam todas as APIs.");
 
         if (detection.Api != GraphicsApi.Unknown)
         {

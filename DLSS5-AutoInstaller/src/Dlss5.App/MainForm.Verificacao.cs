@@ -20,9 +20,21 @@ public sealed partial class MainForm
     private readonly ComboBox _cboPlaca = new();
     private readonly CheckBox _chkTnL = new();
     private readonly Button _btnRenodx = Ui.Secondary("Testar sem o RenoDX");
+    private readonly Button _btnFeeder = Ui.Secondary("Testar sem o Feeder");
+    private readonly Button _btnSoReShade = Ui.Secondary("Testar só o ReShade");
+    // O runtime do DLSS 5 pelo hash: quando o do kit é remendo/original-só-RTX-50, este
+    // botão baixa o build do ShortFuse que o RHI instala e o põe no kit, conferido.
+    private readonly Button _btnRuntime = Ui.Secondary("Baixar o runtime do RHI (166 MB)");
+    private readonly Button _btnReFramework = Ui.Secondary("Baixar REFramework nightly (23 MB)");
+    private readonly Button _btnEac = Ui.Secondary("Abrir o Settings.json do EAC");
     // Caminho direto: a chave EnableHooks do RenoDX, trocada no ReShade.ini sem reinstalar.
     private readonly FlowLayoutPanel _barraHooks = Ui.Fila();
     private readonly ComboBox _cboHooks = new();
+
+    // Feeder em D3D11: work_resolution do dlss5-feed.cfg (50–100% das texturas de trabalho),
+    // o alívio de VRAM que o próprio Feeder oferece. O NFS em 4K travou na reconstrução.
+    private readonly FlowLayoutPanel _barraFeed = Ui.Fila();
+    private readonly ComboBox _cboFeedRes = new();
     private EstadoIsolamento _isolamento = EstadoIsolamento.Tudo;
     private bool? _abriuSemDgVoodoo;
     private bool? _abriuSemReShade;
@@ -121,6 +133,32 @@ public sealed partial class MainForm
         _btnRenodx.Margin = new Padding(0, 4, 8, 4);
         _btnRenodx.Click += (_, _) => TestarSemRenodx();
         bar.Controls.Add(_btnRenodx);
+
+        // O Feeder é o suspeito número um quando o jogo NÃO ABRE, e até agora não havia
+        // como desligar só ele: a bisseção pulava direto para o ReShade inteiro.
+        _btnFeeder.Margin = new Padding(0, 4, 8, 4);
+        _btnFeeder.Click += (_, _) => TestarSemFeeder();
+        bar.Controls.Add(_btnFeeder);
+
+        // Os dois addons de uma vez: sem este degrau, testar um a um nunca inocenta os dois.
+        _btnSoReShade.Margin = new Padding(0, 4, 8, 4);
+        _btnSoReShade.Click += (_, _) => TestarSoOReShade();
+        bar.Controls.Add(_btnSoReShade);
+        _btnRuntime.Margin = new Padding(0, 4, 8, 4);
+        _btnRuntime.Click += (_, _) => _ = BaixarRuntimeDoRhiAsync();
+        bar.Controls.Add(_btnRuntime);
+        // Jogo da RE Engine que caiu COM o REFramework: a nightly mais nova é o remédio
+        // (Dragon's Dogma 2 atualizado x nightly de 28/08). Só aparece em RE Engine.
+        _btnReFramework.Margin = new Padding(0, 4, 8, 4);
+        _btnReFramework.Visible = false;
+        _btnReFramework.Click += (_, _) => _ = BaixarReFrameworkAsync();
+        bar.Controls.Add(_btnReFramework);
+        // Jogo sob Easy Anti-Cheat (Gears Reloaded): o programa não edita o arquivo, mas
+        // abre-o no Bloco de Notas para o usuário fazer o contorno da campanha offline.
+        _btnEac.Margin = new Padding(0, 4, 8, 4);
+        _btnEac.Visible = false;
+        _btnEac.Click += (_, _) => AbrirSettingsDoEac();
+        bar.Controls.Add(_btnEac);
         bar.Controls.Add(Botao("Reiniciar o PC (opcional)…", (_, _) => ReiniciarSeOUsuarioQuiser()));
         bar.Controls.Add(Botao(Textos.BotaoAbrirLogs, (_, _) => AbrirPastaDeLogs()));
         bar.Controls.Add(Botao(Textos.BotaoExportarDiagnostico, (_, _) => ExportarDiagnostico()));
@@ -155,13 +193,25 @@ public sealed partial class MainForm
         _barraHooks.Controls.Add(Botao("Aplicar hooks", (_, _) => TrocarHooksDoRenodx()));
         _barraHooks.Visible = false;
 
-        t.RowCount = 5;
+        _barraFeed.Controls.Add(new Label { Text = "Resolução de trabalho do Feeder:", AutoSize = true, Margin = new Padding(0, 10, 8, 0) });
+        _cboFeedRes.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cboFeedRes.Width = 380;
+        _cboFeedRes.Margin = new Padding(0, 4, 8, 4);
+        foreach (var v in FeedCfg.ResolucoesDeTrabalho) _cboFeedRes.Items.Add(FeedCfg.Descricao(v));
+        _cboFeedRes.SelectedIndex = 0;
+        _barraFeed.Controls.Add(_cboFeedRes);
+        _barraFeed.Controls.Add(Botao("Aplicar", (_, _) => TrocarResolucaoDoFeed()));
+        _barraFeed.Visible = false;
+
+        t.RowCount = 6;
+        t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         t.Controls.Add(_lblResumoVerificacao, 0, 0);
         t.Controls.Add(split, 0, 1);
         t.Controls.Add(bar, 0, 2);
         t.Controls.Add(_barraDgVoodoo, 0, 3);
         t.Controls.Add(_barraHooks, 0, 4);
+        t.Controls.Add(_barraFeed, 0, 5);
         _pVerificacao.Controls.Add(t);
     }
 
@@ -215,6 +265,11 @@ public sealed partial class MainForm
         _barraDgVoodoo.Visible = _profile.NeedsDgVoodoo;
         bool direto = _profile.UsesRenodxDirectPath;
         _barraHooks.Visible = direto;
+        // work_resolution é só D3D11 (o Feeder ignora noutras APIs): a barra segue a regra.
+        _barraFeed.Visible = !direto && _profile.Api == GraphicsApi.D3D11;
+        _btnReFramework.Visible = _profile.EhReEngine;
+        _btnEac.Visible = EasyAntiCheat.SettingsDe(_profile.GameFolder, _profile.ExeFolder) is not null;
+        if (_barraFeed.Visible) SincronizarResolucaoDoFeed();
         if (direto) SincronizarHooksDoRenodx();
         AtualizarBotaoRenodx();
 
@@ -292,11 +347,70 @@ public sealed partial class MainForm
         _ => "N/A",
     };
 
+    /// <summary>
+    /// Abre o Settings.json do EAC no Bloco de Notas. O programa não mexe no arquivo: a
+    /// letra trocada no productid é decisão do usuário, e vale só para a campanha offline.
+    /// </summary>
+    private void AbrirSettingsDoEac()
+    {
+        var settings = EasyAntiCheat.SettingsDe(_profile?.GameFolder, _profile?.ExeFolder);
+        if (settings is null) { Aviso("Não achei o Settings.json do Easy Anti-Cheat nesta instalação."); return; }
+        Dialogos.Informar(this, "Easy Anti-Cheat", "Só para jogar a campanha OFFLINE",
+            EasyAntiCheat.ComoAbrir + "\r\n\r\nO arquivo vai abrir no Bloco de Notas: troque UMA letra do " +
+            "valor de \"productid\" (ex.: ...f03 → ...g03), salve, feche, e clique em Verificar de novo.");
+        try
+        {
+            Process.Start(new ProcessStartInfo("notepad.exe", $"\"{settings}\"") { UseShellExecute = true });
+            Status("Settings.json aberto no Bloco de Notas. Depois de salvar, clique em Verificar de novo: o item 23 confirma.");
+        }
+        catch (Exception ex)
+        {
+            Aviso("Não consegui abrir o Bloco de Notas: " + ex.Message + "\r\n\r\nO arquivo é: " + settings);
+        }
+    }
+
     private void LaunchGame()
     {
         if (_profile?.RealExePath is null || !File.Exists(_profile.RealExePath)) { Aviso("Executável do jogo não encontrado."); return; }
         try
         {
+            if (EaJavelin.EhJavelin(_profile.ExeFolder))
+            {
+                // Pela Steam o anticheat sobe antes do jogo e o ReShade não entra. O jogo
+                // abre pelo Launcher do Live Editor, que o usuário aponta uma vez.
+                var launcher = _settings.LiveEditorLauncher;
+                if (!EaJavelin.PareceLiveEditor(launcher))
+                {
+                    Dialogos.Informar(this, "Jogo sob EA Javelin Anticheat", "Abrir pelo Live Editor",
+                        EaJavelin.Aviso + "\r\n\r\n" + EaJavelin.ComoAbrir + "\r\n\r\nAponte o Launcher.exe do Live Editor.");
+                    using var dlg = new OpenFileDialog
+                    {
+                        Title = "Launcher.exe do FC Live Editor",
+                        Filter = "Launcher do Live Editor|Launcher.exe|Executáveis|*.exe",
+                        CheckFileExists = true,
+                    };
+                    if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                    launcher = dlg.FileName;
+                    if (!EaJavelin.PareceLiveEditor(launcher) &&
+                        !Dialogos.Pergunta(this, "Não parece o Live Editor",
+                            $"Não achei {EaJavelin.DllDoLiveEditor} ao lado desse arquivo. Usar assim mesmo?"))
+                        return;
+                    _settings.LiveEditorLauncher = launcher;
+                    _settings.Save();
+                }
+                Process.Start(new ProcessStartInfo(launcher!) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(launcher)! });
+                Status("Live Editor aberto: inicie o jogo por ele (sem o anticheat). Depois de fechar, clique em Verificar de novo.");
+                return;
+            }
+
+            // Sob o Easy Anti-Cheat o ReShade não carrega: abrir sem avisar seria a rodada
+            // perdida de sempre (Gears Reloaded fecha com "does not support Direct3D 12").
+            if (EasyAntiCheat.Presente(_profile.GameFolder, _profile.ExeFolder) &&
+                !Dialogos.Pergunta(this, "Jogo sob Easy Anti-Cheat",
+                    "Com o EAC ativo a DLL do ReShade não carrega. Já tirou o EAC do caminho? Abrir assim mesmo?",
+                    EasyAntiCheat.Aviso + "\r\n\r\n" + EasyAntiCheat.ComoAbrir))
+                return;
+
             var appId = SteamGame.FindAppId(_profile.GameFolder);
             if (appId is not null)
             {
@@ -421,9 +535,175 @@ public sealed partial class MainForm
         catch (Exception ex) { Erro("Não consegui alterar os arquivos do teste", ex); }
     }
 
+    /// <summary>
+    /// Teste avulso do caso "instalei e o jogo não abre mais": desliga só o Feeder,
+    /// mantendo ReShade e RenoDX. O Feeder inicializa um NGX dentro do processo do jogo
+    /// e foi quem derrubou Onimusha e GTA 5 — mas não havia degrau para ele, então a
+    /// bisseção acusava o ReShade inteiro e o culpado escapava.
+    /// </summary>
+    private void TestarSemFeeder()
+    {
+        if (_profile is null) { Aviso("Faça a detecção primeiro."); return; }
+        if (_ocupado) { Status(Textos.OperacaoEmAndamento); return; }
+        var rodando = Preflight.JogoRodando(_profile.RealExePath);
+        if (rodando is not null) { Aviso("O jogo está aberto", $"Feche o jogo ({rodando}.exe) antes: arquivo em uso não é renomeado."); return; }
+
+        var proximo = _isolamento == EstadoIsolamento.SemFeeder ? EstadoIsolamento.Tudo : EstadoIsolamento.SemFeeder;
+        try
+        {
+            using var etapa = _diario.Etapa("Testar sem o Feeder");
+            new Isolamento(_diario.Info).Aplicar(proximo, _profile.ExeFolder, _profile.RendererFolder ?? _profile.ExeFolder);
+            _isolamento = proximo;
+            AtualizarBotaoRenodx();
+            Status(proximo == EstadoIsolamento.SemFeeder
+                ? "Feeder desligado. Abra o jogo e veja se ele abre."
+                : "Feeder religado.");
+            Dialogos.Informar(this, "Testar sem o Feeder",
+                proximo == EstadoIsolamento.SemFeeder ? "Feeder desligado" : "Feeder religado",
+                Isolamento.Leitura(proximo, _profile.NeedsDgVoodoo));
+        }
+        catch (Exception ex) { Erro("Não consegui alterar os arquivos do teste", ex); }
+    }
+
+    /// <summary>
+    /// Desliga os DOIS addons e deixa só o ReShade. Fecha a pergunta que os testes
+    /// separados não fecham: com dois addons na pasta, desligar um de cada vez nunca
+    /// inocenta os dois ao mesmo tempo.
+    /// </summary>
+    private void TestarSoOReShade()
+    {
+        if (_profile is null) { Aviso("Faça a detecção primeiro."); return; }
+        if (_ocupado) { Status(Textos.OperacaoEmAndamento); return; }
+        var rodando = Preflight.JogoRodando(_profile.RealExePath);
+        if (rodando is not null) { Aviso("O jogo está aberto", $"Feche o jogo ({rodando}.exe) antes: arquivo em uso não é renomeado."); return; }
+
+        var proximo = _isolamento == EstadoIsolamento.SoOReShade ? EstadoIsolamento.Tudo : EstadoIsolamento.SoOReShade;
+        try
+        {
+            using var etapa = _diario.Etapa("Testar só o ReShade");
+            new Isolamento(_diario.Info).Aplicar(proximo, _profile.ExeFolder, _profile.RendererFolder ?? _profile.ExeFolder);
+            _isolamento = proximo;
+            AtualizarBotaoRenodx();
+            Status(proximo == EstadoIsolamento.SoOReShade
+                ? "Addons desligados. Abra o jogo e veja se ele abre."
+                : "Addons religados.");
+            Dialogos.Informar(this, "Testar só o ReShade",
+                proximo == EstadoIsolamento.SoOReShade ? "Addons desligados" : "Addons religados",
+                Isolamento.Leitura(proximo, _profile.NeedsDgVoodoo));
+        }
+        catch (Exception ex) { Erro("Não consegui alterar os arquivos do teste", ex); }
+    }
+
+    /// <summary>
+    /// Baixa o nvngx_dlssnr.dll recomendado (o que o RHI instala) para a pasta do kit,
+    /// conferindo o hash antes de trocar. Depois é só instalar de novo: o motor copia o
+    /// arquivo novo e atualiza o manifesto. Foi o que faltou no RE9 — o kit trazia um
+    /// remendo do original de RTX 50, e a RTX 4070 Ti rodava, dizia OK e não desenhava.
+    /// </summary>
+    /// <summary>
+    /// Troca o dinput8.dll do REFramework do kit pela nightly mais nova do praydog. O caso:
+    /// o Dragon's Dogma 2 atualizado caía dentro do REFramework de 28/08; o de 02/09 traz
+    /// os fixes. O anterior fica como .dlss5prev na pasta do kit.
+    /// </summary>
+    private async Task BaixarReFrameworkAsync()
+    {
+        if (_ocupado) { Status(Textos.OperacaoEmAndamento); return; }
+        var pastaKit = _txtKit.Text.Trim();
+        if (string.IsNullOrWhiteSpace(pastaKit) || !Directory.Exists(pastaKit))
+        {
+            Aviso("Aponte a pasta do kit primeiro", "O REFramework é gravado na pasta do kit (DLSS 5 Files\\REFramework), na tela inicial.");
+            return;
+        }
+
+        KitInventory? kit = null;
+        try { kit = KitResolver.Resolve(pastaKit); } catch { }
+        var pastaRef = kit?.ReFrameworkDinput8 is { } atual
+            ? Path.GetDirectoryName(atual) ?? Path.Combine(pastaKit, "REFramework")
+            : Path.Combine(pastaKit, "REFramework");
+        var revisaoAtual = ReFramework.RevisaoDoKit(pastaRef);
+
+        if (!Dialogos.Confirmar(this, "Baixar a nightly do REFramework",
+                revisaoAtual is null ? "O kit não tem o REFramework (ou não tem a revisão gravada)" : $"O kit traz a revisão {revisaoAtual[..Math.Min(8, revisaoAtual.Length)]}",
+                $"Baixar a nightly mais nova de {ReFramework.UrlNightly} (~10 MB compactado) e gravar em:\r\n{pastaRef}\r\n\r\n" +
+                "O dinput8.dll atual fica guardado como .dlss5prev. Depois, clique em Instalar de novo (Atualizar) para o " +
+                "jogo receber o arquivo novo. Use isto quando um jogo da RE Engine cai COM o REFramework marcado — o item 17 " +
+                "da verificação diz quando é o caso.",
+                "Baixar"))
+            return;
+
+        SetOcupado(true);
+        try
+        {
+            using var etapa = _diario.Etapa("Baixar a nightly do REFramework");
+            var progresso = new Progress<string>(Status);
+            var revisao = await ReFramework.BaixarParaOKit(pastaRef, progresso);
+            _kit = null;   // o inventário do kit mudou: quem precisar resolve de novo
+            _diario.Info($"REFramework do kit trocado para a nightly {revisao}");
+            Status($"Kit atualizado: REFramework {revisao[..Math.Min(8, revisao.Length)]}. Agora instale de novo para o jogo receber o arquivo.");
+            Dialogos.Informar(this, "REFramework baixado", $"dinput8.dll do kit agora é a nightly {revisao[..Math.Min(8, revisao.Length)]}",
+                "Próximo passo: volte à tela inicial e clique em Instalar (Atualizar), com a caixa \"Instalar o REFramework junto\" marcada.");
+        }
+        catch (Exception ex) { Erro("Não consegui baixar a nightly do REFramework", ex); }
+        finally { SetOcupado(false); }
+    }
+
+    private async Task BaixarRuntimeDoRhiAsync()
+    {
+        if (_ocupado) { Status(Textos.OperacaoEmAndamento); return; }
+        var pastaKit = _txtKit.Text.Trim();
+        if (string.IsNullOrWhiteSpace(pastaKit) || !Directory.Exists(pastaKit))
+        {
+            Aviso("Aponte a pasta do kit primeiro", "O runtime é gravado na pasta do kit (DLSS 5 Files), na tela inicial.");
+            return;
+        }
+
+        KitInventory kit;
+        try { kit = KitResolver.Resolve(pastaKit); }
+        catch (Exception ex) { Erro("Não consegui ler a pasta do kit", ex); return; }
+        var destino = kit.NvngxDlssnr ?? Path.Combine(pastaKit, RuntimeNr.Arquivo);
+
+        var atual = RuntimeNr.Identificar(destino);
+        var (falha, texto) = RuntimeNr.Avaliar(atual, null);
+        if (!Dialogos.Confirmar(this, "Baixar o runtime do RHI",
+                atual is null && !File.Exists(destino)
+                    ? "O kit não tem nvngx_dlssnr.dll"
+                    : falha ? "O runtime do kit não serve para a maioria das placas" : "O runtime do kit já é um build bom",
+                (File.Exists(destino) ? texto + "\r\n\r\n" : "") +
+                $"Baixar {RuntimeNr.Recomendado} de {RuntimeNr.UrlRecomendado} (~110 MB compactado) e gravar em:\r\n{destino}\r\n\r\n" +
+                "O arquivo atual fica guardado como .dlss5prev. O hash é conferido antes da troca. " +
+                "Depois, clique em Instalar de novo (Atualizar) para o jogo receber o arquivo novo.",
+                "Baixar"))
+            return;
+
+        SetOcupado(true);
+        try
+        {
+            using var etapa = _diario.Etapa("Baixar o runtime do RHI");
+            var progresso = new Progress<string>(Status);
+            var build = await RuntimeNr.BaixarParaOKit(destino, progresso);
+            _kit = null;   // o inventário do kit mudou: quem precisar resolve de novo
+            _diario.Info($"nvngx_dlssnr.dll do kit trocado para {build.Nome} ({build.Sha256[..12]}...)");
+            Status($"Kit atualizado: {build.Nome}. Agora instale de novo para o jogo receber o arquivo.");
+            Dialogos.Informar(this, "Runtime baixado", $"{RuntimeNr.Arquivo} do kit agora é o {build.Nome}",
+                build.Leitura + "\r\n\r\nPróximo passo: volte à tela inicial e clique em Instalar (Atualizar). " +
+                "Depois abra o jogo: no painel do addon o runtime deve aparecer como 310.8.SF.0, e o item 18 da " +
+                "verificação passa a OK.");
+        }
+        catch (Exception ex) { Erro("Não consegui baixar o runtime", ex); }
+        finally { SetOcupado(false); }
+    }
+
     /// <summary>O texto do botão diz o que o clique fará, não o estado atual.</summary>
-    private void AtualizarBotaoRenodx() =>
+    private void AtualizarBotaoRenodx()
+    {
         _btnRenodx.Text = _isolamento == EstadoIsolamento.SemRenodx ? "Religar o RenoDX" : "Testar sem o RenoDX";
+        _btnFeeder.Text = _isolamento == EstadoIsolamento.SemFeeder ? "Religar o Feeder" : "Testar sem o Feeder";
+        // Sem Feeder instalado (caminho direto) o teste não existe.
+        _btnFeeder.Visible = _profile?.NeedsFeeder ?? false;
+        _btnSoReShade.Text = _isolamento == EstadoIsolamento.SoOReShade
+            ? "Religar os addons"
+            : "Testar só o ReShade";
+    }
 
     /// <summary>Mostra na lista o valor que o ReShade.ini da pasta tem de fato.</summary>
     private void SincronizarHooksDoRenodx()
@@ -459,6 +739,45 @@ public sealed partial class MainForm
             Dialogos.Informar(this, "Hooks do RenoDX", $"EnableHooks = {valor} gravado", RenodxIni.Leitura(valor));
         }
         catch (Exception ex) { Erro("Não consegui gravar o ReShade.ini", ex); }
+    }
+
+    private void SincronizarResolucaoDoFeed()
+    {
+        if (_profile is null) return;
+        var cfg = Path.Combine(_profile.ExeFolder, FeedCfg.Arquivo);
+        int valor = FeedCfg.ResolucaoPadrao;
+        try { if (File.Exists(cfg)) valor = FeedCfg.Ler(File.ReadAllText(cfg)) ?? FeedCfg.ResolucaoPadrao; }
+        catch { /* sem leitura, fica o padrão */ }
+        int i = FeedCfg.ResolucoesDeTrabalho.ToList().IndexOf(valor);
+        _cboFeedRes.SelectedIndex = i < 0 ? 0 : i;
+    }
+
+    /// <summary>
+    /// Regrava só work_resolution no dlss5-feed.cfg. O Feeder relê o arquivo com o jogo
+    /// aberto, mas a troca vale de verdade na próxima construção — melhor com o jogo fechado.
+    /// </summary>
+    private void TrocarResolucaoDoFeed()
+    {
+        if (_profile is null) { Aviso("Faça a detecção primeiro."); return; }
+        var rodando = Preflight.JogoRodando(_profile.RealExePath);
+        if (rodando is not null) { Aviso("O jogo está aberto", $"Feche o jogo ({rodando}.exe) antes: a troca vale na próxima construção do Feeder."); return; }
+        var cfg = Path.Combine(_profile.ExeFolder, FeedCfg.Arquivo);
+        int valor = FeedCfg.ResolucoesDeTrabalho[Math.Max(0, _cboFeedRes.SelectedIndex)];
+        try
+        {
+            string? atual = null;
+            if (File.Exists(cfg)) atual = File.ReadAllText(cfg);
+            File.WriteAllText(cfg, FeedCfg.Gravar(atual, valor));
+            _diario.Info($"{FeedCfg.Arquivo}: {FeedCfg.ChaveResolucao}={valor}");
+            Status($"{FeedCfg.Arquivo}: {FeedCfg.ChaveResolucao}={valor}. Abra o jogo e verifique de novo.");
+            Dialogos.Informar(this, "Resolução de trabalho do Feeder", $"{FeedCfg.ChaveResolucao} = {valor} gravado",
+                valor == FeedCfg.ResolucaoPadrao
+                    ? "Texturas de trabalho na resolução cheia do jogo (padrão)."
+                    : $"As texturas de trabalho do Feeder (cor, profundidade, motion vectors) ficam em {valor}% dos eixos do " +
+                      "backbuffer; a saída continua na resolução do jogo. Menos VRAM e menos custo na criação da " +
+                      "feature — é o alívio para jogo em 4K que trava ao reconstruir depois da janela inicial.");
+        }
+        catch (Exception ex) { Erro($"Não consegui gravar o {FeedCfg.Arquivo}", ex); }
     }
 
     private string? ConfDoDgVoodoo()
