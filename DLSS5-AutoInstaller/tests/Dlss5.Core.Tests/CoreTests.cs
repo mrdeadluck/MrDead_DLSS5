@@ -5718,14 +5718,19 @@ public class EasyAntiCheatTests
         return dir;
     }
 
+    /// <summary>O layout real: start_protected_game.exe e EasyAntiCheat\ na raiz, exe em Binaries_x64.</summary>
     private static (string Raiz, string Binaries) GearsReloaded(string raiz)
     {
         var binaries = Path.Combine(raiz, "Binaries_x64");
         Directory.CreateDirectory(binaries);
-        var eac = Path.Combine(raiz, "Content", "EasyAntiCheat");
+        File.WriteAllText(Path.Combine(raiz, "start_protected_game.exe"), "x");
+        var eac = Path.Combine(raiz, "EasyAntiCheat");
         Directory.CreateDirectory(eac);
         File.WriteAllText(Path.Combine(eac, "Settings.json"),
-            "{\"title_id\":\"1\",\"productid\":\"7e3756e03bda4408a9197c6f93437f03\",\"executable\":\"Binaries_x64\\\\GOWDE-Steam.exe\"}");
+            "{\n\t\"title\": \"GOWDE-Steam\",\n\t\"executable\": \"Binaries_x64/GOWDE-Steam.exe\",\n" +
+            "\t\"productid\": \"7e3756e03bda4408a9197c6f93437f03\",\n\t\"sandboxid\": \"e2b262fd0d994e3e8606073a783e1da5\",\n" +
+            "\t\"deploymentid\": \"6e7ce561c1e2471fb9535c35bc3633e3\",\n\t\"requested_splash\": \"EasyAntiCheat/SplashScreen.png\",\n" +
+            "\t\"wait_for_game_process_exit\": \"false\",\n\t\"hide_bootstrapper\": \"false\",\n\t\"hide_gui\": \"false\"\n}");
         return (raiz, binaries);
     }
 
@@ -5745,10 +5750,24 @@ public class EasyAntiCheatTests
             var (raiz, binaries) = GearsReloaded(dir);
             var onde = EasyAntiCheat.Encontrar(raiz, binaries);
             Assert.NotNull(onde);
-            Assert.EndsWith(Path.Combine("Content", "EasyAntiCheat"), onde!);
-            Assert.EndsWith("Settings.json", EasyAntiCheat.SettingsDe(raiz, binaries)!);
-            Assert.Contains("Content", EasyAntiCheat.Nota(onde!, raiz));
+            Assert.EndsWith("EasyAntiCheat", onde!);
+            Assert.EndsWith(Path.Combine("EasyAntiCheat", "Settings.json"), EasyAntiCheat.SettingsDe(raiz, binaries)!);
+            Assert.Contains("EasyAntiCheat", EasyAntiCheat.Nota(onde!, raiz));
             Assert.Contains("productid", EasyAntiCheat.Nota(onde!, raiz));
+
+            // Jogo que guarda a pasta em Content\ também é achado.
+            var comContent = Pasta();
+            try
+            {
+                var bin = Path.Combine(comContent, "Binaries_x64");
+                Directory.CreateDirectory(bin);
+                var eac = Path.Combine(comContent, "Content", "EasyAntiCheat");
+                Directory.CreateDirectory(eac);
+                File.WriteAllText(Path.Combine(eac, "Settings.json"), "{\"productid\":\"00112233445566778899aabbccddeeff\"}");
+                Assert.EndsWith(Path.Combine("Content", "EasyAntiCheat"), EasyAntiCheat.Encontrar(comContent, bin)!);
+                Assert.Equal(EstadoDoProductId.Valido, EasyAntiCheat.LerProductId(EasyAntiCheat.SettingsDe(comContent, bin)).Estado);
+            }
+            finally { Directory.Delete(comContent, true); }
 
             // Arquivo solto na raiz (outros jogos com EAC).
             var outro = Pasta();

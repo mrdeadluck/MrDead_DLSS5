@@ -69,7 +69,7 @@ AVISOS
      o Gears fecha com "Your machine does not support Direct3D 12".
      O programa reconhece a pasta EasyAntiCheat e explica o contorno
      que a comunidade usa para jogar a campanha OFFLINE (uma letra no
-     "productid" do Content\EasyAntiCheat\Settings.json). Ele não
+     "productid" do EasyAntiCheat\Settings.json da raiz do jogo). Ele não
      mexe nesse arquivo — é você quem decide, e o multiplayer não
      funciona sem o EAC.
    - Desligue as sobreposições da Steam e do NVIDIA App no jogo que for

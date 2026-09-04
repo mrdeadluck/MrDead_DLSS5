@@ -2,7 +2,8 @@ namespace Dlss5.Core;
 
 /// <summary>
 /// Jogos sob o Easy Anti-Cheat (EAC). O Gears of War Reloaded ensinou: a Steam abre o
-/// GOWDE-Steam.exe, ele sobe o EAC lendo Content\EasyAntiCheat\Settings.json, e sob o EAC
+/// start_protected_game.exe da raiz (o bootstrapper do EAC), que lê EasyAntiCheat\Settings.json
+/// e só então abre Binaries_x64\GOWDE-Steam.exe sob o EAC — e sob ele
 /// nenhuma DLL que ele não reconheça carrega dentro do processo — o dxgi.dll do ReShade
 /// fica na pasta sem rodar, o ReShade.log nem nasce, e o jogo, que não conseguiu abrir o
 /// DXGI/D3D12 pelo caminho que pediu, mostra "Your machine does not support Direct3D 12.
@@ -32,7 +33,8 @@ public static class EasyAntiCheat
     /// <summary>
     /// Onde o EAC mora nesta instalação, ou null. Procura a pasta EasyAntiCheat\ (com o
     /// Settings.json ou o setup dentro) e os arquivos soltos na pasta do exe, na raiz do
-    /// jogo e em Content\ (Gears Reloaded: Content\EasyAntiCheat, com o exe em Binaries_x64).
+    /// jogo e em Content\ (Gears Reloaded: EasyAntiCheat\ e start_protected_game.exe na raiz,
+    /// com o exe em Binaries_x64).
     /// </summary>
     public static string? Encontrar(string? gameFolder, string? exeFolder)
     {
@@ -120,7 +122,7 @@ public static class EasyAntiCheat
 
     public const string ComoAbrir =
         "O que a comunidade faz para jogar a CAMPANHA com mods: abra o Settings.json da pasta EasyAntiCheat " +
-        "(no Gears Reloaded: Content\\EasyAntiCheat\\Settings.json) no Bloco de Notas e troque UMA letra do " +
+        "(no Gears Reloaded fica na raiz do jogo: EasyAntiCheat\\Settings.json) no Bloco de Notas e troque UMA letra do " +
         "valor de \"productid\" (por exemplo o último bloco ...f03 → ...g03); salve. Com o id inválido o EAC " +
         "não sobe, o jogo abre normalmente pela Steam e o ReShade carrega. Só para jogar OFFLINE: o " +
         "multiplayer recusa a entrada sem o EAC (\"rejected by the anti cheat server\"), e entrar online " +
