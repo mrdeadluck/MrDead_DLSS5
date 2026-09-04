@@ -11,6 +11,9 @@ public sealed class AppSettings
     /// <summary>Launcher.exe do FC Live Editor, para abrir jogo sob EA Javelin sem o anticheat.</summary>
     public string? LiveEditorLauncher { get; set; }
     public string MvProvider { get; set; } = MvProviders.Padrao.ToString();
+    /// <summary>Último motor do Neural Rendering escolhido e as passadas do ShortFuse.</summary>
+    public string Engine { get; set; } = nameof(NeuralEngine.RenodxDlss5Feeder);
+    public int PassCount { get; set; } = ShortFuseDlss.PassesPadrao;
     public int OverlayKey { get; set; } = ReShadeConfigWriter.KeyHome;
     public bool OverlayCtrl { get; set; }
     public bool OverlayShift { get; set; }

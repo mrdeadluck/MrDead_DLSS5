@@ -58,7 +58,7 @@ public static class InstallPlanBuilder
             return plan;
         }
 
-        var missing = kit.MissingFor(route, profile.UsesRenodxDirectPath, profile.Api);
+        var missing = kit.MissingFor(route, profile.UsesRenodxDirectPath, profile.Api, profile.UsesShortFuse);
         if (missing.Count > 0)
         {
             foreach (var m in missing)
@@ -262,7 +262,9 @@ public static class InstallPlanBuilder
         plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
             profile.NeedsFeeder
                 ? $"Gerar ReShadePreset.ini (MV = {options.MvProvider}, acima do DLSS 5 Feed)"
-                : "Gerar ReShadePreset.ini (sem efeitos: com DLSS nativo em D3D12 o RenoDX se pendura na chamada do próprio jogo)",
+                : profile.UsesShortFuse
+                    ? $"Gerar ReShadePreset.ini (sem efeitos: o RenoDX DLSS do ShortFuse trabalha sozinho, {profile.PassCount} passada(s))"
+                    : "Gerar ReShadePreset.ini (sem efeitos: com DLSS nativo em D3D12 o RenoDX se pendura na chamada do próprio jogo)",
             null, Path.Combine(exe, "ReShadePreset.ini")));
 
         // Pasta de shaders: vai nos dois caminhos.
@@ -282,9 +284,33 @@ public static class InstallPlanBuilder
         if (route == InstallRoute.A)
         {
             // 64-bit: tudo na pasta do exe.
-            if (profile.NeedsFeeder)
-                Copy(kit.FeedAddon64, exe, "dlss5-feed.addon64");
-            Copy(kit.RenodxAddon64, exe, "renodx-dlss5.addon64");
+            //
+            // Dois motores que não convivem: o renodx-dlss do ShortFuse fabrica a chamada de
+            // DLSS sozinho e faz 1 a 10 passadas; o renodx-dlss5 do Krish (com o Feeder quando
+            // o jogo não tem DLSS em D3D12) faz uma. Ao trocar de motor o addon do outro sai
+            // da pasta, com backup — os dois carregados juntos disputam o mesmo NGX.
+            void RemoverRival(string nome, string porque)
+            {
+                var caminho = Path.Combine(exe, nome);
+                if (!File.Exists(caminho)) return;
+                plan.Actions.Add(new PlanAction(PlanActionKind.DeleteForbiddenFile,
+                    $"Remover {Rel(profile, caminho)} ({porque}; vai para backup)", null, caminho));
+            }
+
+            if (profile.UsesShortFuse)
+            {
+                Copy(kit.RenodxDlssShortFuse, exe, ShortFuseDlss.Addon);
+                RemoverRival("renodx-dlss5.addon64", "o RenoDX DLSS do ShortFuse não convive com o addon do Krish");
+                RemoverRival("dlss5-feed.addon64", "o RenoDX DLSS do ShortFuse não convive com o Feeder");
+                plan.Warnings.Add(ShortFuseDlss.AvisoDoPlano(profile.PassCount));
+            }
+            else
+            {
+                if (profile.NeedsFeeder)
+                    Copy(kit.FeedAddon64, exe, "dlss5-feed.addon64");
+                Copy(kit.RenodxAddon64, exe, "renodx-dlss5.addon64");
+                RemoverRival(ShortFuseDlss.Addon, "o addon do Krish e o Feeder não convivem com o RenoDX DLSS do ShortFuse");
+            }
             Copy(kit.NvngxDlssnr, exe, "nvngx_dlssnr.dll");
             if (profile.HasNativeDlss)
             {

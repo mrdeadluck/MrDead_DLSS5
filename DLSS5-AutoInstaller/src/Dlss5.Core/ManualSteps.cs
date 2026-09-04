@@ -47,6 +47,10 @@ public static class ManualSteps
                 "interceptar, e o RenoDX fica em \"HOOKS ARMED / NO DLSS CREATE SEEN\" sem aplicar nada. " +
                 "Ligue o DLSS no menu do jogo (qualquer modo) antes de esperar resultado.", true));
 
+        if (profile.UsesShortFuse)
+            steps.Add(new ManualStep(n++, $"Conferir o Pass Count ({profile.PassCount}) no painel RenoDX DLSS",
+                ShortFuseDlss.PassoManual(profile.PassCount), false));
+
         // Depth pelo Generic Depth e DLAA do Feeder: só existem no caminho do Feeder. No
         // direto o RenoDX recebe depth e motion vectors do contrato NGX do jogo, e o
         // Generic Depth fica desligado de propósito (a cópia antes dos clears derrubou o RE9).

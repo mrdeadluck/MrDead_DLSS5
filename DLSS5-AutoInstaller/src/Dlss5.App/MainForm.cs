@@ -661,6 +661,11 @@ public sealed partial class MainForm : Form
         if (Directory.Exists(_txtKit.Text.Trim())) _settings.KitFolder = _txtKit.Text.Trim();
         if (Directory.Exists(_txtGame.Text.Trim())) _settings.LastGameFolder = _txtGame.Text.Trim();
         _settings.MvProvider = _options.MvProvider.ToString();
+        if (_profile is not null)
+        {
+            _settings.Engine = _profile.Engine.ToString();
+            _settings.PassCount = _profile.PassCount;
+        }
         _settings.OverlayKey = _options.OverlayKey;
         _settings.OverlayCtrl = _options.OverlayCtrl;
         _settings.OverlayShift = _options.OverlayShift;

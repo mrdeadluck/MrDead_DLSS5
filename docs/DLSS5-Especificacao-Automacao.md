@@ -305,6 +305,33 @@ As duas variantes do Caminho C:
 
 ---
 
+### 6.4 Motor ShortFuse (64-bit, passadas múltiplas)
+
+Alternativa ao par Krish + Feeder para jogo 64-bit, com ou sem DLSS nativo, D3D9/D3D11/D3D12:
+o `renodx-dlss.addon64` do ShortFuse (`RenoDX DLSS`, seção `RENODX-DLSS` no `ReShade.ini`).
+Ele fabrica a chamada de DLSS sozinho (`Require DLSS` em Auto: com o DLSS do jogo ligado usa os
+guias do jogo; desligado, avalia o swapchain) e roda o Neural Rendering em **1 a 10 passadas**
+sequenciais (`DirectNeuralRenderingPassCount`, "Pass Count" no painel) — a passada N consome a
+saída da N-1. É o "DLSS 5 x2" dos vídeos.
+
+Layout: igual ao caminho A sem Feeder e sem shader de vetores: `dxgi.dll` (ReShade x64),
+`renodx-dlss.addon64`, `nvngx_dlssnr.dll`, `nvngx_dlss.dll` (regra do jogo com DLSS próprio
+igual à do caminho A), `reshade-shaders\` (só para a aba Início não reclamar). `ReShade.ini`:
+`[ADDON] LoadFromDllMain=renodx-dlss.addon64` (o addon pede carga no DllMain; sem a linha ele a
+grava sozinho e pede reinício), `DisabledAddons=Generic Depth`, `EffectLoadSkipping=1`,
+`[RENODX-DLSS] DirectNeuralRenderingPassCount=N`. Preset vazio. O `renodx-dlss5.addon64` e o
+`dlss5-feed.addon64` não podem ficar na mesma pasta: o plano os remove com backup (e o inverso
+ao voltar para o Krish).
+
+Verificação: item 14 lê `Registered add-on "RenoDX DLSS"`, `RenoDX DLSS attached`,
+`RenoDX DLSS-NR source evaluation completed` (OK), `could not attach the direct nvngx_dlssnr.dll
+runtime` / `Neural Rendering device binding failed` (falha), `Added ... to ADDON.LoadFromDllMain
+... Restart required` (reiniciar o jogo uma vez); item 24 confere o Pass Count do ini. O log do
+Krish (`DLSS5 Generic`, `feature 18 evaluation succeeded`) não existe neste motor.
+
+Não validado em jogo por este projeto: o motor entrou pelo que o binário declara e pelo que a
+comunidade mostra. Se um jogo cair, o primeiro teste é Pass Count 1; o segundo é voltar ao Krish.
+
 ## 7. O que fizemos em cada jogo
 
 ### RE2 Remake — x64, D3D12, sem DLSS nativo

@@ -9,6 +9,8 @@ public sealed class KitInventory
     public string? NvngxDlssnr { get; set; }
     public string? NvngxDlss { get; set; }
     public string? RenodxAddon64 { get; set; }
+    /// <summary>renodx-dlss.addon64 do ShortFuse (motor alternativo, passadas múltiplas).</summary>
+    public string? RenodxDlssShortFuse { get; set; }
     public string? FeedAddon64 { get; set; }
     public string? FeedAddon32 { get; set; }
     public string? FeedHost64Exe { get; set; }
@@ -57,17 +59,28 @@ public sealed class KitInventory
             try { return p is not null && File.Exists(p) ? new FileInfo(p).Length.ToString() : "-"; }
             catch { return "?"; }
         }
-        return $"dlssnr={T(NvngxDlssnr)};dlss={T(NvngxDlss)};renodx={T(RenodxAddon64)};feed64={T(FeedAddon64)};feed32={T(FeedAddon32)};host={T(FeedHost64Exe)};dxgi64={T(DxgiX64)};dxgi32={T(DxgiX86)}";
+        return $"dlssnr={T(NvngxDlssnr)};dlss={T(NvngxDlss)};renodx={T(RenodxAddon64)};sf={T(RenodxDlssShortFuse)};feed64={T(FeedAddon64)};feed32={T(FeedAddon32)};host={T(FeedHost64Exe)};dxgi64={T(DxgiX64)};dxgi32={T(DxgiX86)}";
     }
 
     /// <summary>Valida o inventário para uma rota específica; devolve o que falta.</summary>
     public IReadOnlyList<string> MissingFor(
-        InstallRoute route, bool nativeDlss, GraphicsApi api = GraphicsApi.Unknown)
+        InstallRoute route, bool nativeDlss, GraphicsApi api = GraphicsApi.Unknown, bool shortFuse = false)
     {
         var missing = new List<string>();
         void Need(string? path, string what)
         {
             if (path is null) missing.Add(what);
+        }
+
+        if (shortFuse)
+        {
+            // Motor ShortFuse (64-bit): um addon só, sem Feeder e sem shader de vetores.
+            Need(NvngxDlssnr, "nvngx_dlssnr.dll (x64, ~158 MB)");
+            Need(NvngxDlss, "nvngx_dlss.dll (x64, ~56 MB)");
+            Need(RenodxDlssShortFuse, ShortFuseDlss.Addon + " (ShortFuse) — no kit fica em \"renodx-dlss-SF-... (alternativa ShortFuse)\"");
+            if (DxgiX64 is null && ReShadeSetup is null)
+                missing.Add("dxgi.dll x64 do ReShade (ou o instalador ReShade_Setup para extrair)");
+            return missing;
         }
 
         Need(NvngxDlssnr, "nvngx_dlssnr.dll (x64, ~158 MB)");
@@ -171,6 +184,7 @@ public static class KitResolver
         inv.NvngxDlssnr = First("nvngx_dlssnr.dll");
         inv.NvngxDlss = First("nvngx_dlss.dll");
         inv.RenodxAddon64 = First("renodx-dlss5.addon64");
+        inv.RenodxDlssShortFuse = First(ShortFuseDlss.Addon);
         inv.FeedAddon64 = First("dlss5-feed.addon64");
         inv.FeedAddon32 = First("dlss5-feed.addon32");
         inv.FeedHost64Exe = First("dlss5-feed-host64.exe");

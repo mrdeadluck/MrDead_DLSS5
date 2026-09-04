@@ -709,3 +709,132 @@ public class PreflightTests
         Assert.True(Preflight.BytesNecessarios(plano.Actions) > 0);
     }
 }
+
+public class MotorShortFuseTests
+{
+    private static GameProfile PerfilSf(Cenario c, GraphicsApi api = GraphicsApi.D3D11, int passes = 2)
+    {
+        var p = c.Perfil(PeArchitecture.X64, api);
+        p.Engine = NeuralEngine.RenodxDlssShortFuse;
+        p.PassCount = passes;
+        return p;
+    }
+
+    [Fact]
+    public void PerfilDecideOMotor()
+    {
+        using var c = new Cenario();
+        var p = PerfilSf(c, GraphicsApi.D3D12);
+        p.HasNativeDlss = true;
+        Assert.True(p.UsesShortFuse);
+        Assert.False(p.UsesRenodxDirectPath);
+        Assert.False(p.NeedsFeeder);
+
+        // 32-bit ignora a escolha: o addon do ShortFuse e o NGX são x64.
+        var x86 = c.Perfil(PeArchitecture.X86, GraphicsApi.D3D11);
+        x86.Engine = NeuralEngine.RenodxDlssShortFuse;
+        Assert.False(x86.UsesShortFuse);
+        Assert.True(x86.NeedsFeeder);
+    }
+
+    [Fact]
+    public void KitSemOAddonDoShortFuseBloqueia()
+    {
+        using var c = new Cenario();
+        var plano = InstallPlanBuilder.Build(PerfilSf(c), c.Inventario, c.Opcoes());
+        Assert.Contains(plano.Blockers, b => b.Contains(ShortFuseDlss.Addon, StringComparison.Ordinal));
+        // E o kit sem Feeder nem shaders NÃO é problema para este motor.
+        var inv = new KitInventory { KitRoot = "k", NvngxDlssnr = "a", NvngxDlss = "b", RenodxDlssShortFuse = "c", DxgiX64 = "d" };
+        Assert.Empty(inv.MissingFor(InstallRoute.A, nativeDlss: false, shortFuse: true));
+        Assert.NotEmpty(inv.MissingFor(InstallRoute.A, nativeDlss: false));
+    }
+
+    [Fact]
+    public void PlanoCopiaSoOAddonDoShortFuseETiraOsRivais()
+    {
+        using var c = new Cenario();
+        var sf = Path.Combine(c.Kit, ShortFuseDlss.Addon);
+        File.WriteAllText(sf, "shortfuse");
+        c.Inventario.RenodxDlssShortFuse = sf;
+        // Sobra de uma instalação Krish + Feeder na pasta do jogo.
+        File.WriteAllText(Path.Combine(c.Jogo, "renodx-dlss5.addon64"), "krish");
+        File.WriteAllText(Path.Combine(c.Jogo, "dlss5-feed.addon64"), "feed");
+
+        var plano = InstallPlanBuilder.Build(PerfilSf(c, passes: 3), c.Inventario, c.Opcoes());
+        Assert.Empty(plano.Blockers);
+        var copias = plano.Actions.Where(a => a.Kind == PlanActionKind.CopyFile).Select(a => Path.GetFileName(a.TargetPath!)).ToList();
+        Assert.Contains(ShortFuseDlss.Addon, copias);
+        Assert.DoesNotContain("renodx-dlss5.addon64", copias);
+        Assert.DoesNotContain("dlss5-feed.addon64", copias);
+        Assert.Contains("nvngx_dlssnr.dll", copias);
+        var removidos = plano.Actions.Where(a => a.Kind == PlanActionKind.DeleteForbiddenFile).Select(a => Path.GetFileName(a.TargetPath!)).ToList();
+        Assert.Contains("renodx-dlss5.addon64", removidos);
+        Assert.Contains("dlss5-feed.addon64", removidos);
+        Assert.Contains(plano.Warnings, w => w.Contains("3 passada", StringComparison.Ordinal));
+
+        // O manifesto guarda motor e passadas, e devolve no perfil.
+        var m = InstallManifest.Para(plano, c.Inventario);
+        Assert.Equal(nameof(NeuralEngine.RenodxDlssShortFuse), m.Engine);
+        Assert.Equal(3, m.PassCount);
+        var perfil = m.PerfilGravado()!;
+        Assert.Equal(NeuralEngine.RenodxDlssShortFuse, perfil.Engine);
+        Assert.Equal(3, perfil.PassCount);
+    }
+
+    [Fact]
+    public void MotorKrishTiraOAddonDoShortFuseDaPasta()
+    {
+        using var c = new Cenario();
+        File.WriteAllText(Path.Combine(c.Jogo, ShortFuseDlss.Addon), "shortfuse");
+        var plano = InstallPlanBuilder.Build(c.Perfil(PeArchitecture.X64, GraphicsApi.D3D11), c.Inventario, c.Opcoes());
+        var removidos = plano.Actions.Where(a => a.Kind == PlanActionKind.DeleteForbiddenFile).Select(a => Path.GetFileName(a.TargetPath!)).ToList();
+        Assert.Contains(ShortFuseDlss.Addon, removidos);
+    }
+
+    [Fact]
+    public void IniDoShortFuseTemLoadFromDllMainEPassadas()
+    {
+        var ini = ReShadeConfigWriter.BuildReShadeIni(feederUsed: false, shortFuse: true, passCount: 4);
+        Assert.Contains($"LoadFromDllMain={ShortFuseDlss.Addon}", ini);
+        Assert.Contains("[RENODX-DLSS]", ini);
+        Assert.Contains("DirectNeuralRenderingPassCount=4", ini);
+        Assert.DoesNotContain("[RenoDX.DLSS5]", ini);
+        Assert.Equal(4, ShortFuseDlss.LerPassadas(ini));
+        // Limites: 1 a 10.
+        Assert.Equal(10, ShortFuseDlss.LerPassadas(ReShadeConfigWriter.BuildReShadeIni(feederUsed: false, shortFuse: true, passCount: 50)));
+        Assert.Equal(1, ShortFuseDlss.LerPassadas(ReShadeConfigWriter.BuildReShadeIni(feederUsed: false, shortFuse: true, passCount: 0)));
+        // O ini de sempre não muda.
+        var krish = ReShadeConfigWriter.BuildReShadeIni(feederUsed: false);
+        Assert.DoesNotContain("LoadFromDllMain", krish);
+        Assert.Null(ShortFuseDlss.LerPassadas(krish));
+        Assert.Contains("[RenoDX.DLSS5]", krish);
+    }
+
+    [Fact]
+    public void LogDoShortFuseViraCheckpoint14()
+    {
+        var ok = ShortFuseLog.Ler("Registered add-on \"RenoDX DLSS\" v0.52\nRenoDX DLSS attached; ReShade logical unload will be ignored.\n" +
+                                  "RenoDX DLSS-NR source evaluation completed: source=swapchain application_frame=12 size=2560x1440 replace_source=1 return_output=1.");
+        Assert.Equal(CheckStatus.Pass, ok.Checkpoint14(2, reinicioPendente: false).State);
+        Assert.Equal(CheckStatus.Warning, ok.Checkpoint14(2, reinicioPendente: true).State);
+
+        var reinicio = ShortFuseLog.Ler("Registered add-on \"RenoDX DLSS\"\nAdded renodx-dlss.addon64 to ADDON.LoadFromDllMain in ReShade.ini. Restart required.");
+        Assert.Equal(CheckStatus.Warning, reinicio.Checkpoint14(2, false).State);
+        Assert.Contains("reinício", reinicio.Checkpoint14(2, false).Detail);
+
+        var semRuntime = ShortFuseLog.Ler("Registered add-on \"RenoDX DLSS\"\nRenoDX DLSS could not attach the direct nvngx_dlssnr.dll runtime.");
+        Assert.Equal(CheckStatus.Fail, semRuntime.Checkpoint14(2, false).State);
+
+        var nada = ShortFuseLog.Ler("Registered add-on \"Generic Depth\"\nCreateSwapChain");
+        Assert.Equal(CheckStatus.Fail, nada.Checkpoint14(2, false).State);
+    }
+
+    [Fact]
+    public void PassosManuaisFalamDoPassCount()
+    {
+        using var c = new Cenario();
+        var passos = ManualSteps.For(PerfilSf(c, passes: 2), c.Opcoes());
+        Assert.Contains(passos, s => s.Title.Contains("Pass Count", StringComparison.Ordinal) && s.Detail.Contains("RenoDX DLSS", StringComparison.Ordinal));
+        Assert.DoesNotContain(passos, s => s.Title.Contains("DESLIGAR o DLSS", StringComparison.Ordinal));
+    }
+}
