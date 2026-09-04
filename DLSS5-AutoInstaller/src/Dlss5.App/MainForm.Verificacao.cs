@@ -26,6 +26,7 @@ public sealed partial class MainForm
     // botão baixa o build do ShortFuse que o RHI instala e o põe no kit, conferido.
     private readonly Button _btnRuntime = Ui.Secondary("Baixar o runtime do RHI (166 MB)");
     private readonly Button _btnReFramework = Ui.Secondary("Baixar REFramework nightly (23 MB)");
+    private readonly Button _btnEac = Ui.Secondary("Abrir o Settings.json do EAC");
     // Caminho direto: a chave EnableHooks do RenoDX, trocada no ReShade.ini sem reinstalar.
     private readonly FlowLayoutPanel _barraHooks = Ui.Fila();
     private readonly ComboBox _cboHooks = new();
@@ -152,6 +153,12 @@ public sealed partial class MainForm
         _btnReFramework.Visible = false;
         _btnReFramework.Click += (_, _) => _ = BaixarReFrameworkAsync();
         bar.Controls.Add(_btnReFramework);
+        // Jogo sob Easy Anti-Cheat (Gears Reloaded): o programa não edita o arquivo, mas
+        // abre-o no Bloco de Notas para o usuário fazer o contorno da campanha offline.
+        _btnEac.Margin = new Padding(0, 4, 8, 4);
+        _btnEac.Visible = false;
+        _btnEac.Click += (_, _) => AbrirSettingsDoEac();
+        bar.Controls.Add(_btnEac);
         bar.Controls.Add(Botao("Reiniciar o PC (opcional)…", (_, _) => ReiniciarSeOUsuarioQuiser()));
         bar.Controls.Add(Botao(Textos.BotaoAbrirLogs, (_, _) => AbrirPastaDeLogs()));
         bar.Controls.Add(Botao(Textos.BotaoExportarDiagnostico, (_, _) => ExportarDiagnostico()));
@@ -261,6 +268,7 @@ public sealed partial class MainForm
         // work_resolution é só D3D11 (o Feeder ignora noutras APIs): a barra segue a regra.
         _barraFeed.Visible = !direto && _profile.Api == GraphicsApi.D3D11;
         _btnReFramework.Visible = _profile.EhReEngine;
+        _btnEac.Visible = EasyAntiCheat.SettingsDe(_profile.GameFolder, _profile.ExeFolder) is not null;
         if (_barraFeed.Visible) SincronizarResolucaoDoFeed();
         if (direto) SincronizarHooksDoRenodx();
         AtualizarBotaoRenodx();
@@ -338,6 +346,28 @@ public sealed partial class MainForm
         CheckStatus.Manual => "MANUAL",
         _ => "N/A",
     };
+
+    /// <summary>
+    /// Abre o Settings.json do EAC no Bloco de Notas. O programa não mexe no arquivo: a
+    /// letra trocada no productid é decisão do usuário, e vale só para a campanha offline.
+    /// </summary>
+    private void AbrirSettingsDoEac()
+    {
+        var settings = EasyAntiCheat.SettingsDe(_profile?.GameFolder, _profile?.ExeFolder);
+        if (settings is null) { Aviso("Não achei o Settings.json do Easy Anti-Cheat nesta instalação."); return; }
+        Dialogos.Informar(this, "Easy Anti-Cheat", "Só para jogar a campanha OFFLINE",
+            EasyAntiCheat.ComoAbrir + "\r\n\r\nO arquivo vai abrir no Bloco de Notas: troque UMA letra do " +
+            "valor de \"productid\" (ex.: ...f03 → ...g03), salve, feche, e clique em Verificar de novo.");
+        try
+        {
+            Process.Start(new ProcessStartInfo("notepad.exe", $"\"{settings}\"") { UseShellExecute = true });
+            Status("Settings.json aberto no Bloco de Notas. Depois de salvar, clique em Verificar de novo: o item 23 confirma.");
+        }
+        catch (Exception ex)
+        {
+            Aviso("Não consegui abrir o Bloco de Notas: " + ex.Message + "\r\n\r\nO arquivo é: " + settings);
+        }
+    }
 
     private void LaunchGame()
     {

@@ -127,6 +127,27 @@ public static class EasyAntiCheat
         "com mods pode marcar a conta. Para voltar ao normal, desfaça a edição ou use Steam → Verificar " +
         "integridade dos arquivos. Este programa não mexe nesse arquivo.";
 
+    /// <summary>
+    /// O "productid" do Settings.json: 32 hexadecimais quando é o original — aí o EAC sobe
+    /// junto com o jogo. Uma letra fora do hexadecimal (o contorno da comunidade) e o EAC
+    /// não sobe. A verificação lê isto para dizer se o passo foi feito, sem adivinhar.
+    /// </summary>
+    public static (EstadoDoProductId Estado, string? Valor) LerProductId(string? settingsPath)
+    {
+        if (string.IsNullOrWhiteSpace(settingsPath) || !File.Exists(settingsPath))
+            return (EstadoDoProductId.SemArquivo, null);
+        string texto;
+        try { texto = File.ReadAllText(settingsPath); }
+        catch { return (EstadoDoProductId.SemArquivo, null); }
+
+        var m = System.Text.RegularExpressions.Regex.Match(texto,
+            "\"productid\"\\s*:\\s*\"([^\"]*)\"", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (!m.Success) return (EstadoDoProductId.Desconhecido, null);
+        var valor = m.Groups[1].Value.Trim();
+        bool hex32 = valor.Length == 32 && valor.All(Uri.IsHexDigit);
+        return (hex32 ? EstadoDoProductId.Valido : EstadoDoProductId.Invalido, valor);
+    }
+
     /// <summary>Uma linha para a tela de detecção, com o caminho encontrado.</summary>
     public static string Nota(string encontradoEm, string? gameFolder)
     {
@@ -135,4 +156,17 @@ public static class EasyAntiCheat
         catch { rel = encontradoEm; }
         return $"Easy Anti-Cheat na instalação ({rel}). " + Aviso + " " + ComoAbrir;
     }
+}
+
+/// <summary>O que o Settings.json do EAC diz sobre o productid.</summary>
+public enum EstadoDoProductId
+{
+    /// <summary>Não há Settings.json (ou não deu para ler).</summary>
+    SemArquivo,
+    /// <summary>32 hexadecimais: é o original, o EAC sobe junto com o jogo.</summary>
+    Valido,
+    /// <summary>Fora do formato: o contorno foi aplicado, o EAC não sobe.</summary>
+    Invalido,
+    /// <summary>Arquivo sem a chave "productid".</summary>
+    Desconhecido,
 }

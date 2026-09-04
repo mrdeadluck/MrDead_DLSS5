@@ -605,6 +605,38 @@ public static class CheckpointVerifier
             catch { }
         }
 
+        // 23 — Easy Anti-Cheat fora do caminho? Lê o productid do Settings.json em vez de
+        // adivinhar: original (32 hex) = o EAC sobe junto e o ReShade não carrega. O
+        // programa só lê; a edição é do usuário (só campanha offline).
+        const string tituloEac = "Easy Anti-Cheat fora do caminho (só campanha offline)";
+        if (EasyAntiCheat.SettingsDe(profile.GameFolder, exe) is { } settingsEac)
+        {
+            string relEac;
+            try { relEac = Path.GetRelativePath(profile.GameFolder, settingsEac); } catch { relEac = settingsEac; }
+            var (estadoEac, productId) = EasyAntiCheat.LerProductId(settingsEac);
+            r.Add(estadoEac switch
+            {
+                EstadoDoProductId.Valido => new CheckResult(23, tituloEac, CheckStatus.Fail,
+                    $"O productid do {relEac} ainda é o original ({productId}): o EAC sobe junto com o jogo, a DLL do " +
+                    "ReShade não carrega e o Gears fecha com \"does not support Direct3D 12\".",
+                    EasyAntiCheat.ComoAbrir + " O botão \"Abrir o Settings.json do EAC\" abre o arquivo no Bloco de Notas."),
+                EstadoDoProductId.Invalido => new CheckResult(23, tituloEac, CheckStatus.Pass,
+                    $"productid alterado ({productId}) em {relEac}: com o id inválido o EAC não sobe junto com o jogo. " +
+                    "Se a tela do EAC ainda aparecer antes do jogo, é outro Settings.json que está sendo lido — " +
+                    "mande a lista da pasta do jogo (raiz, Content e Binaries_x64).",
+                    null),
+                _ => new CheckResult(23, tituloEac, CheckStatus.Warning,
+                    $"Não achei \"productid\" em {relEac}; não dá para dizer se o EAC vai subir.",
+                    EasyAntiCheat.ComoAbrir),
+            });
+        }
+        else if (EasyAntiCheat.Presente(profile.GameFolder, exe))
+        {
+            r.Add(new CheckResult(23, tituloEac, CheckStatus.Warning,
+                "Easy Anti-Cheat na instalação, mas sem Settings.json para conferir o productid.",
+                EasyAntiCheat.ComoAbrir));
+        }
+
         r.AddRange(VerifyReShadeLog(exe, profile.GameFolder, reinicioPendente, profile.ReShadeLogPath,
             profile.ReShadeHookName, profile.UsarReFramework, profile.RealExePath, profile.PastaDoReShade, profile.Api,
             feedStatus));

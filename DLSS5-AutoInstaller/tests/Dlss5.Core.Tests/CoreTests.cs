@@ -5805,6 +5805,63 @@ public class EasyAntiCheatTests
     }
 
     [Fact]
+    public void Item23LeOProductIdEDizSeOEacAindaSobe()
+    {
+        var dir = Pasta();
+        try
+        {
+            var (raiz, binaries) = GearsReloaded(dir);
+            var perfil = new GameProfile
+            {
+                GameFolder = raiz,
+                RealExePath = Path.Combine(binaries, "GOWDE-Steam.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D12,
+                HasNativeDlss = true,
+            };
+
+            // Original (32 hex): o EAC sobe junto — falha, com o contorno como correção.
+            var c23 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 23);
+            Assert.Equal(CheckStatus.Fail, c23.State);
+            Assert.Contains("7e3756e03bda4408a9197c6f93437f03", c23.Detail);
+            Assert.Contains("productid", c23.FixHint!);
+
+            // Uma letra trocada: o EAC não sobe — passa.
+            var settings = EasyAntiCheat.SettingsDe(raiz, binaries)!;
+            File.WriteAllText(settings, File.ReadAllText(settings).Replace("437f03", "437g03"));
+            var lido = EasyAntiCheat.LerProductId(settings);
+            Assert.Equal(EstadoDoProductId.Invalido, lido.Estado);
+            Assert.Equal("7e3756e03bda4408a9197c6f93437g03", lido.Valor);
+            c23 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 23);
+            Assert.Equal(CheckStatus.Pass, c23.State);
+
+            // Sem a chave: não dá para dizer.
+            File.WriteAllText(settings, "{\"title_id\":\"1\"}");
+            Assert.Equal(EstadoDoProductId.Desconhecido, EasyAntiCheat.LerProductId(settings).Estado);
+            Assert.Equal(CheckStatus.Warning, CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 23).State);
+            Assert.Equal(EstadoDoProductId.SemArquivo, EasyAntiCheat.LerProductId(Path.Combine(dir, "nada.json")).Estado);
+            Assert.Equal(EstadoDoProductId.SemArquivo, EasyAntiCheat.LerProductId(null).Estado);
+
+            // Jogo sem EAC: o item nem aparece.
+            var semEac = Pasta();
+            try
+            {
+                var outro = new GameProfile
+                {
+                    GameFolder = semEac,
+                    RealExePath = Path.Combine(semEac, "game.exe"),
+                    Architecture = PeArchitecture.X64,
+                    Api = GraphicsApi.D3D12,
+                    HasNativeDlss = true,
+                };
+                Assert.DoesNotContain(CheckpointVerifier.Verify(outro, null), c => c.Number == 23);
+            }
+            finally { Directory.Delete(semEac, true); }
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
     public void ComReShadeLogOItem7NaoAcusaOEac()
     {
         // EAC já fora do caminho e o ReShade carregou: o item 7 segue o fluxo normal.
