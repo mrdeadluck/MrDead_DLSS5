@@ -149,13 +149,13 @@ public sealed partial class MainForm
 
         // Motion vectors
         _cboMv.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cboMv.Items.AddRange(new object[] { "Launchpad (iMMERSE) — recomendado", "DRME (MotionEstimation)" });
-        _cboMv.SelectedIndex = 0;
-        _cboMv.Width = 260;
+        _cboMv.Items.AddRange(MvProviders.Ordem.Select(p => (object)MvProviders.Rotulo(p)).ToArray());
+        _cboMv.SelectedIndex = MvProviders.Indice(MvProviders.Padrao);
+        _cboMv.Width = 300;
         _cboMv.Margin = new Padding(0, 4, 8, 4);
         _cboMv.SelectedIndexChanged += (_, _) =>
         {
-            _options.MvProvider = _cboMv.SelectedIndex == 1 ? MvProvider.Drme : MvProvider.Launchpad;
+            if (_cboMv.SelectedIndex >= 0) _options.MvProvider = MvProviders.Ordem[_cboMv.SelectedIndex];
             if (_profile is not null) _profile.MvProvider = _options.MvProvider;
         };
         _lblMvNote.AutoSize = true;
@@ -288,15 +288,15 @@ public sealed partial class MainForm
         _chkReFramework.Checked = _profile.UsarReFramework;
         PopularNomesDeReShade();
         _txtRenderer.Text = _profile.RendererFolder ?? _profile.ExeFolder;
-        _cboMv.SelectedIndex = _options.MvProvider == MvProvider.Drme ? 1 : 0;
+        // O provedor escolhido precisa estar no kit; se não está, cai no primeiro disponível
+        // (VORT vem no kit; LumeniteFX só se o usuário baixou).
+        _options.MvProvider = MvProviders.Resolver(kit, _options.MvProvider);
+        _cboMv.SelectedIndex = MvProviders.Indice(_options.MvProvider);
         _chkRegistry.Checked = _options.ApplyRegistryOverride;
         _chkClean.Checked = _options.CleanForbidden;
         _chkWatermark.Checked = _options.DgVoodooWatermark;
         SelectOverlayKey(_options.OverlayKey);
         UpdateMvAvailability();
-
-        if (kit.HasLaunchpad && !kit.HasDrme) _cboMv.SelectedIndex = 0;
-        else if (kit.HasDrme && !kit.HasLaunchpad) _cboMv.SelectedIndex = 1;
 
         var notes = new List<string>(detection.Notes);
         notes.Add($"Este executável: {AppInfo.Nome} {AppInfo.VersaoComBuild}.");
@@ -527,7 +527,9 @@ public sealed partial class MainForm
         if (kit.DxgiX86 is not null) have.Add("dxgi-x86");
         if (kit.ReShadeSetup is not null) have.Add("instalador ReShade");
         if (kit.ShadersDir is not null) have.Add("shaders");
+        if (kit.HasVort) have.Add("VORT");
         if (kit.HasLaunchpad) have.Add("Launchpad");
+        if (kit.HasLumenite) have.Add("LumeniteFX");
         if (kit.HasDrme) have.Add("DRME");
         if (kit.DgVoodooD3D9X86 is not null) have.Add("dgVoodoo-d3d9");
         if (kit.DgVoodooD3D8X86 is not null) have.Add("dgVoodoo-d3d8");

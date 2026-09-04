@@ -36,6 +36,11 @@ public sealed class KitInventory
 
     public bool HasDrme { get; set; }
     public bool HasLaunchpad { get; set; }
+    public bool HasVort { get; set; }
+    public bool HasLumenite { get; set; }
+
+    /// <summary>Algum provedor de motion vectors utilizável (o DRME não conta: não compila no 6.8).</summary>
+    public bool HasAnyMvProvider => HasVort || HasLaunchpad || HasLumenite;
     public bool HasDisplayDepth { get; set; }
 
     public List<string> Problems { get; } = new();
@@ -69,8 +74,8 @@ public sealed class KitInventory
         Need(NvngxDlss, "nvngx_dlss.dll (x64, ~56 MB)");
         Need(RenodxAddon64, "renodx-dlss5.addon64");
         Need(ShadersDir, "pasta reshade-shaders com DLSS5_Feed.fx");
-        if (!HasDrme && !HasLaunchpad)
-            missing.Add("um provedor de motion vectors (MotionEstimation.fx ou MartysMods_LAUNCHPAD.fx)");
+        if (!HasAnyMvProvider)
+            missing.Add("um provedor de motion vectors (vort_Motion.fx, MartysMods_LAUNCHPAD.fx ou lumenite_Kernel.fx)");
 
         if (route == InstallRoute.A)
         {
@@ -215,8 +220,10 @@ public static class KitResolver
         {
             int score = 0;
             var shaders = Path.Combine(root, "Shaders");
-            if (File.Exists(Path.Combine(shaders, "MotionEstimation.fx"))) score += 2;
+            if (File.Exists(Path.Combine(shaders, "MotionEstimation.fx"))) score += 1;
             if (File.Exists(Path.Combine(shaders, "MartysMods_LAUNCHPAD.fx"))) score += 2;
+            if (File.Exists(Path.Combine(shaders, "vort_Motion.fx"))) score += 2;
+            if (File.Exists(Path.Combine(shaders, "lumenite_Kernel.fx"))) score += 2;
             if (File.Exists(Path.Combine(shaders, "ReShade.fxh"))) score += 1;
             if (Directory.Exists(Path.Combine(root, "Textures"))) score += 1;
             return score;
@@ -228,6 +235,8 @@ public static class KitResolver
             var shaders = Path.Combine(inv.ShadersDir, "Shaders");
             inv.HasDrme = File.Exists(Path.Combine(shaders, "MotionEstimation.fx"));
             inv.HasLaunchpad = File.Exists(Path.Combine(shaders, "MartysMods_LAUNCHPAD.fx"));
+            inv.HasVort = File.Exists(Path.Combine(shaders, "vort_Motion.fx"));
+            inv.HasLumenite = File.Exists(Path.Combine(shaders, "lumenite_Kernel.fx"));
             inv.HasDisplayDepth = File.Exists(Path.Combine(shaders, "DisplayDepth.fx"));
         }
 

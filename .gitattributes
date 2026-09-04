@@ -26,3 +26,14 @@ DLSS[[:space:]]5[[:space:]]Files/MGSV/** !filter !diff !merge -text
 DLSS[[:space:]]5[[:space:]]Files/MGSV/*.txt !filter !diff !merge text
 DLSS[[:space:]]5[[:space:]]Files/MGSV/*.md !filter !diff !merge text
 DLSS[[:space:]]5[[:space:]]Files/MGSV/*.cpp !filter !diff !merge text
+
+# Texto que chegou com a atualização de 04/09/2026 (shaders do VORT, scripts e camada
+# Vulkan do Feeder, shaders das alternativas): fica FORA do LFS — são poucos KB, e o
+# objeto do LFS não sobe a partir do ambiente de desenvolvimento. Os binários dessas
+# pastas continuam no LFS e entram pelo workflow trocar-extras.yml.
+DLSS[[:space:]]5[[:space:]]Files/reshade-shaders/Shaders/vort_Motion.fx !filter !diff !merge text
+DLSS[[:space:]]5[[:space:]]Files/reshade-shaders/Shaders/Includes/** !filter !diff !merge text
+DLSS[[:space:]]5[[:space:]]Files/**/*.ps1 !filter !diff !merge -text
+DLSS[[:space:]]5[[:space:]]Files/**/*.json !filter !diff !merge -text
+DLSS[[:space:]]5[[:space:]]Files/**/*.bat !filter !diff !merge -text
+DLSS[[:space:]]5[[:space:]]Files/DLSS5-Reshade-AIO-*/*.fx !filter !diff !merge text

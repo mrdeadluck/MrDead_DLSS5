@@ -67,6 +67,19 @@ public static class InstallPlanBuilder
         foreach (var p in kit.Problems)
             plan.Blockers.Add(p);
 
+        if (profile.NeedsFeeder && kit.ShadersDir is not null && kit.HasAnyMvProvider)
+        {
+            if (!MvProviders.Disponivel(kit, options.MvProvider))
+                plan.Blockers.Add($"Provedor de motion vectors escolhido ({options.MvProvider}) não está no kit: " +
+                    $"falta reshade-shaders\\Shaders\\{MvProviders.ArquivoFx(options.MvProvider)}. " +
+                    (options.MvProvider == MvProvider.LumeniteKernel
+                        ? "O LumeniteFX não pode ser redistribuído: baixe em github.com/umar-afzaal/LumeniteFX e copie a pasta Shaders para o kit."
+                        : "Escolha outro provedor na tela de detecção."));
+            else if (options.MvProvider == MvProvider.Drme)
+                plan.Warnings.Add("DRME (MotionEstimation.fx) não compila no ReShade 6.8 (erro X3020): o efeito aparece " +
+                    "ligado mas não escreve nada, e o DLSS roda sem vetores de movimento. Prefira VORT ou Launchpad.");
+        }
+
         // O runtime do kit, pelo hash. É aviso e não bloqueio porque o original serve em
         // RTX 50 — mas é o aviso que teria poupado o RE9 de dias de teste.
         if (kit.NvngxDlssnr is not null)

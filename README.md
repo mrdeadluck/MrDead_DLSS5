@@ -41,7 +41,7 @@ Em Releases o download é ilimitado e não consome cota nenhuma.
 
 | Pasta | Conteúdo |
 |---|---|
-| [`DLSS 5 Files/`](DLSS%205%20Files) | O kit (230 MB), já sem duplicatas: as DLLs `nvngx_*`, os addons do RenoDX e do Feeder, o ReShade, o dgVoodoo2 e a pasta `reshade-shaders`. É esta pasta que você aponta no programa. |
+| [`DLSS 5 Files/`](DLSS%205%20Files) | O kit (~235 MB), já sem duplicatas: as DLLs `nvngx_*`, o addon do RenoDX (4.70), o Feeder (0.13.1-beta.1), o ReShade, o dgVoodoo2 (2.87.4) e a pasta `reshade-shaders` (com o VORT Motion). Versões antigas em `versoes-anteriores/`, alternativas (renodx-dlss do ShortFuse, AIO do kibblerz, MFG Unlock) em pastas próprias. Versão de cada peça, como os binários entram (workflows) e o que baixar do Discord: [`VERSOES.md`](DLSS%205%20Files/VERSOES.md). É esta pasta que você aponta no programa. |
 | [`DLSS5-AutoInstaller/`](DLSS5-AutoInstaller) | Código-fonte do programa (.NET 8 / WinForms) e [seu README](DLSS5-AutoInstaller/README.md) com o passo a passo de uso. |
 | [`docs/`](docs) | A especificação técnica: como o DLSS 5 funciona nesse contexto, matriz de suporte, os três caminhos de instalação, checkpoints e diagnóstico por sintoma. |
 

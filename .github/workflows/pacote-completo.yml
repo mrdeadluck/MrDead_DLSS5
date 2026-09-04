@@ -17,7 +17,10 @@ jobs:
       - name: Checkout com os arquivos do kit
         uses: actions/checkout@v4
         with:
-          lfs: true
+          lfs: false
+
+      - name: Baixar do LFS só a pasta do kit (o 7z do Discord na raiz tem 250 MB e não entra no pacote)
+        run: git lfs pull -I "DLSS 5 Files/**"
 
       - name: Instalar .NET 8
         uses: actions/setup-dotnet@v4

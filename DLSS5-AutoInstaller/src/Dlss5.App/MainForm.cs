@@ -649,7 +649,7 @@ public sealed partial class MainForm : Form
         _options.OverlayCtrl = _settings.OverlayCtrl;
         _options.OverlayShift = _settings.OverlayShift;
         _options.OverlayAlt = _settings.OverlayAlt;
-        _cboMv.SelectedIndex = _options.MvProvider == MvProvider.Drme ? 1 : 0;
+        _cboMv.SelectedIndex = MvProviders.Indice(_options.MvProvider);
         _chkCtrl.Checked = _options.OverlayCtrl;
         _chkShift.Checked = _options.OverlayShift;
         _chkAlt.Checked = _options.OverlayAlt;

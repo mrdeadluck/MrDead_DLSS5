@@ -505,7 +505,7 @@ public sealed partial class MainForm
         _options.OverlayAlt = o.OverlayAlt;
         _options.ApplyRegistryOverride = o.ApplyRegistryOverride;
         _options.DgVoodooWatermark = o.DgVoodooWatermark;
-        _cboMv.SelectedIndex = o.MvProvider == MvProvider.Drme ? 1 : 0;
+        _cboMv.SelectedIndex = MvProviders.Indice(o.MvProvider);
         _chkCtrl.Checked = o.OverlayCtrl;
         _chkShift.Checked = o.OverlayShift;
         _chkAlt.Checked = o.OverlayAlt;

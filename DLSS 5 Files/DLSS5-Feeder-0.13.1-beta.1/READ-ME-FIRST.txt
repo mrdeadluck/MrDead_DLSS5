@@ -1,0 +1,92 @@
+DLSS5-Feeder 0.13.1-beta.1
+==========================
+One new thing on top of 0.13.0-beta.1: the 32-bit add-on now supports DIRECT3D 10
+games directly, with no translation layer in front. Everything else is unchanged.
+
+Check dlss5-feed.log line 1 to confirm which build you are running; it will say
+"dlss5-feed 0.13.1-beta.1" (or "dlss5-feed32 0.13.1-beta.1" on 32-bit).
+
+32-BIT GAMES: take BOTH dlss5-feed.addon32 and host64\dlss5-feed-host64.exe from
+this zip. The helper protocol is UNCHANGED (still v7) and the helper itself is
+byte-for-byte the same code as 0.13.0-beta.1 -- but keep the pair together as a
+matter of habit; mixed halves are how confusing bug reports start.
+
+
+WHAT IS NEW
+-----------
+DIRECT3D 10 GAMES NOW WORK
+   Until now a D3D10 game was refused outright ("only Direct3D 11, OpenGL and
+   Vulkan games are supported"), and the README said D3D10 was not supported.
+   It is now, natively -- no dgVoodoo2, no DXVK, nothing extra to install.
+   Install exactly as for any other game of the same bitness; ReShade goes in
+   as dxgi.dll, which is what its installer picks for "Direct3D 10/11/12".
+
+   How it works, because it is not obvious: a D3D10 device cannot reach the
+   64-bit helper at all. Shared NT handles are a Direct3D 11.1 feature, so the
+   helper's D3D12 device can never open a texture a D3D10 device made; D3D10
+   has no fence of any kind, which is how every other transport here says a
+   frame is ready; and it has no UAVs, so the DLSS output could not be written.
+   So the add-on now creates a PRIVATE D3D11 RELAY DEVICE of its own, in the
+   game's process, on the game's adapter. The game copies its frame to the
+   relay over shared textures, and from the relay onwards this is the ordinary
+   32-bit D3D11 path, unchanged -- same helper, same protocol, same everything.
+
+   The frame comes home by a plain copy rather than a draw, so the add-on never
+   binds a shader, a viewport or a render target on the game's own device. That
+   matters on this API in particular: D3D10 has no device context, render state
+   lives directly on the device, and anything set would be inherited by the game.
+
+
+WHAT IT COSTS, AND WHAT IT DOES NOT DO
+--------------------------------------
+- Expect a real cost. Direct3D 10 has no fence, so each frame needs two GPU
+  drains -- one per device -- and a drain waits for everything that device has
+  outstanding. The add-on batches all three input copies behind a single drain
+  rather than paying for one each, but the lost pipelining is the honest price
+  of the API. The overlay's own GPU-cost figures will show it on your machine.
+
+- DLAA only, and that is the API rather than this add-on. A D3D10 game publishes
+  no NGX parameter block and no engine jitter, so what is reconstructed is the
+  finished frame plus whatever the ReShade motion-vector provider infers from it.
+  The DirectX 9 and 32-bit Vulkan paths sit under the same ceiling.
+
+- Pick a motion-vector provider that does not need compute. ReShade compiles
+  effects at shader model 4 on Direct3D 10, so a compute-based provider will not
+  build. LumeniteFX (DLSS5_MV_PROVIDER=3) is the safe first choice -- it checks
+  __RENDERER__ and has a non-compute path -- and the older pixel-shader
+  providers predate compute entirely.
+
+- The in-game panel's "Show as texture" button is unavailable on D3D10; the
+  panel would have to cross into the game's ReShade as a Direct3D 11 texture.
+  Use the compositor button beside it, or host_window=1.
+
+- Direct3D 10 support is 32-bit only. A 64-bit D3D10 game is rare enough that
+  the 64-bit add-on has no D3D10 backend.
+
+
+ALSO IN THIS BUILD
+------------------
+The automated installer used to scan for "d3d10.dll" but not "d3d10_1.dll",
+which is what a Direct3D 10 game actually imports. A game that also imports
+d3d9.dll for its debug markers -- Devil May Cry 4: Special Edition does -- was
+therefore detected as Direct3D 9 and sent down the dgVoodoo2 route, which
+implements DirectX 1-9 and cannot touch Direct3D 10. Fixed; such a game now
+takes the ordinary Direct3D 10/11/12 path.
+
+
+HOW FAR THIS HAS BEEN TESTED
+----------------------------
+Honestly: one game. Devil May Cry 4: Special Edition (32-bit, Direct3D 10.1),
+34,200 frames delivered at 1280x720 with no errors and a clean shutdown. The
+transport itself is also covered by a standalone probe that checks both
+directions pixel-by-pixel. It has not been tested at high resolution, on AMD or
+Intel hardware, or in any second D3D10 title -- so it is a beta in the real
+sense. Logs welcome, especially dlss5-feed.log line 1 and the "D3D10 bridges
+built" line.
+
+One finding worth passing on if you go reading the code: the design notes for
+this path say a Direct3D 10.1 device can synchronise with an IDXGIKeyedMutex.
+On real hardware it cannot -- every attempt to create such a texture returns
+E_INVALIDARG, on every format and bind flag, while the same call on a D3D11
+device succeeds. Modern drivers do not implement that legacy path, so this
+build uses event queries instead.

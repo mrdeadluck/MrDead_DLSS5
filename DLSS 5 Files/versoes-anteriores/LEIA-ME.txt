@@ -1,0 +1,25 @@
+Versões anteriores do kit — guardadas para voltar atrás. Nada aqui é usado pelo instalador.
+
+Os nomes foram trocados de propósito: o instalador procura os arquivos pelo nome exato
+em qualquer subpasta do kit, então um "renodx-dlss5.addon64" aqui dentro seria achado
+no lugar do novo. Para voltar a uma versão antiga, copie o arquivo para o lugar de
+origem com o nome original e clique em Instalar de novo no jogo.
+
+renodx-dlss5-4.1.5.addon64        -> renodx-dlss5.addon64  (Generic 4.1.5, build 30/08/2026)
+feeder-0.12.0/
+  dlss5-feed_0.12.0.addon64       -> dlss5-feed.addon64
+  dlss5-feed_0.12.0.addon32       -> dlss5-feed.addon32
+  dlss5-feed-host64_0.12.0.exe    -> dlss5-feed-host64.exe
+  DLSS5_Feed_0.12.0.fx            -> reshade-shaders\Shaders\DLSS5_Feed.fx
+  feeder-versao_0.12.0.txt        -> feeder-versao.txt (hashes do 0.12.0)
+  (os quatro binários voltam JUNTOS: addon32 e host64 precisam ser do mesmo build)
+dgVoodoo2-2.87.3/
+  D3D9-x86-2.87.3.dll             -> dgVoodoo2\MS\x86\D3D9.dll
+  D3D8-x86-2.87.3.dll             -> dgVoodoo2\MS\x86\D3D8.dll
+  D3D9-x64-2.87.3.dll             -> dgVoodoo2\MS\x64\D3D9.dll
+  dgVoodooCpl-2.87.3.exe          -> dgVoodoo2\dgVoodooCpl.exe
+  dgVoodoo-2.87.3.conf            -> dgVoodoo2\dgVoodoo.conf
+DRME-nao-compila-no-ReShade-6.8/
+  MotionEstimation.fx, MotionEstimation.fxh, MotionEstimationUI.fxh
+  -> reshade-shaders\Shaders\  (não compila no ReShade 6.8, erro X3020; só faz
+     sentido com um ReShade mais antigo)

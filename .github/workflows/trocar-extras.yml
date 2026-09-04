@@ -1,0 +1,133 @@
+name: Trocar os extras do kit (RenoDX, dgVoodoo2, alternativas)
+
+# Os binários do kit que não têm workflow próprio — o addon do RenoDX, o dgVoodoo2, a camada
+# Vulkan do Feeder, as alternativas (renodx-dlss do ShortFuse, AIO do kibblerz, MFG Unlock),
+# a textura do VORT e o que veio do Discord — vêm de "DLSS 5 Files/extras-desejado.txt":
+# uma linha por arquivo, com a origem (URL pública do GitHub, ou "repo:" + caminho de um
+# arquivo do próprio repositório, no LFS), o SHA-256 esperado e, quando é arquivo compactado,
+# o caminho dentro dele (zips e 7z aninhados são abertos também). Este job baixa, confere o
+# hash e commita no LFS — porque o objeto do LFS não sobe a partir do ambiente de
+# desenvolvimento. Os hashes conferidos ficam em extras-versao.txt.
+#
+# Não refaz o pacote: cada rebuild baixa o kit inteiro do LFS (cota de 1 GB/mês), e numa
+# mesma leva costumam rodar também o trocar-feeder e o trocar-runtime. Quando todos
+# terminarem, rode "Montar o DLSS5-Pacote-Completo.zip" uma vez, à mão (aba Actions).
+on:
+  push:
+    branches: ['claude/renodx-updates-e5mjc7', 'claude/upload-large-files-02562q', 'claude/executable-fixes-xytsgm', 'main']
+    paths:
+      - 'DLSS 5 Files/extras-desejado.txt'
+      - '.github/workflows/trocar-extras.yml'
+  workflow_dispatch:
+
+# Os workflows trocar-* commitam no mesmo ramo: um de cada vez.
+concurrency:
+  group: trocar-kit-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  trocar:
+    runs-on: windows-latest
+    outputs:
+      trocou: ${{ steps.commit.outputs.trocou }}
+    steps:
+      - name: Checkout (só os ponteiros do LFS)
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - name: Baixar, conferir e gravar cada linha do manifesto
+        shell: pwsh
+        run: |
+          $manifesto = "DLSS 5 Files\extras-desejado.txt"
+          $linhas = Get-Content $manifesto | Where-Object { $_ -match '\S' -and $_ -notmatch '^\s*#' }
+          if (-not $linhas) { throw "extras-desejado.txt não tem nenhuma linha de arquivo" }
+          $cache = "${{ github.workspace }}\extras-cache"
+          New-Item -ItemType Directory -Path $cache -Force | Out-Null
+          $baixados = @{}
+          $registro = @("# Gravado pelo workflow trocar-extras.yml. Não edite: mude extras-desejado.txt.", "data=$(Get-Date -Format 'yyyy-MM-dd HH:mm') UTC")
+          $n = 0
+          foreach ($linha in $linhas) {
+            $col = $linha -split '\s*\|\s*'
+            if ($col.Count -lt 3) { throw "Linha inválida (precisa de destino | url | sha256 [| entrada]): $linha" }
+            $destino = $col[0].Trim(); $url = $col[1].Trim(); $sha = $col[2].Trim().ToLowerInvariant()
+            $entrada = if ($col.Count -ge 4) { $col[3].Trim() } else { '' }
+            if ($sha -notmatch '^[0-9a-f]{64}$') { throw "SHA-256 inválido para ${destino}: '$sha'" }
+            if (-not $baixados.ContainsKey($url)) {
+              if ($url -like 'repo:*') {
+                # Arquivo do próprio repositório (no LFS): o token do checkout autentica o pull.
+                $rel = $url.Substring(5).Trim()
+                git lfs pull -I "$rel"
+                if ($LASTEXITCODE -ne 0) { throw "git lfs pull falhou para $rel" }
+                $nome = [IO.Path]::GetFileName($rel)
+                $alvo = Join-Path $cache ("{0:D3}-{1}" -f $baixados.Count, $nome)
+                Copy-Item $rel $alvo -Force
+                Write-Host ("Do repositório: {0} ({1} bytes)" -f $rel, (Get-Item $alvo).Length)
+              } else {
+                $nome = [IO.Path]::GetFileName(([uri]$url).AbsolutePath)
+                $alvo = Join-Path $cache ("{0:D3}-{1}" -f $baixados.Count, $nome)
+                Write-Host "Baixando $url"
+                Invoke-WebRequest -Uri $url -OutFile $alvo -MaximumRetryCount 3 -RetryIntervalSec 5
+              }
+              if ($nome -match '\.(zip|7z)$') {
+                $pasta = "$alvo.extraido"
+                & "C:\Program Files\7-Zip\7z.exe" x -y "-o$pasta" $alvo | Out-Null
+                if ($LASTEXITCODE -ne 0) { throw "7z não conseguiu abrir $nome" }
+                # Arquivos compactados dentro do compactado (o 7z do Discord traz um zip e um 7z):
+                # abre um nível, ao lado, em <nome>.extraido
+                Get-ChildItem $pasta -Recurse -File | Where-Object { $_.Extension -in '.zip', '.7z' } | ForEach-Object {
+                  & "C:\Program Files\7-Zip\7z.exe" x -y "-o$($_.FullName).extraido" $_.FullName | Out-Null
+                  if ($LASTEXITCODE -ne 0) { throw "7z não conseguiu abrir $($_.Name)" }
+                }
+                $baixados[$url] = $pasta
+              } else {
+                $baixados[$url] = $alvo
+              }
+            }
+            $origem = $baixados[$url]
+            if ($entrada) {
+              $origem = Join-Path $origem ($entrada -replace '/', '\')
+              if (-not (Test-Path $origem)) {
+                # zip com uma pasta raiz a mais (ex.: dgVoodoo2_87_4\MS\x86\...): procura pelo caminho relativo
+                $achado = Get-ChildItem $baixados[$url] -Recurse -File | Where-Object { $_.FullName.Replace('\', '/') -like "*/$entrada" } | Select-Object -First 1
+                if (-not $achado) { throw "'$entrada' não existe dentro de $url" }
+                $origem = $achado.FullName
+              }
+            }
+            $real = (Get-FileHash $origem -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($real -ne $sha) { throw "SHA-256 de $destino não bate: esperado $sha, baixado $real ($url $entrada). Nada foi trocado." }
+            $alvoFinal = Join-Path "DLSS 5 Files" ($destino -replace '/', '\')
+            New-Item -ItemType Directory -Path (Split-Path $alvoFinal -Parent) -Force | Out-Null
+            Copy-Item $origem $alvoFinal -Force
+            $tam = (Get-Item $alvoFinal).Length
+            Write-Host ("OK  {0,10} B  {1}" -f $tam, $destino)
+            $registro += "$destino=$sha $tam $url"
+            $n++
+          }
+          [IO.File]::WriteAllLines("DLSS 5 Files\extras-versao.txt", $registro, (New-Object Text.UTF8Encoding $false))
+          Write-Host "$n arquivo(s) conferido(s)."
+
+      - name: Commitar no LFS
+        id: commit
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git lfs install --local
+          git add "DLSS 5 Files"
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "Kit: extras de extras-desejado.txt baixados e conferidos (SHA-256)" -m "Cada arquivo veio da URL listada em DLSS 5 Files/extras-desejado.txt e teve o SHA-256 conferido antes de entrar no LFS. Os hashes estao em extras-versao.txt."
+            $env:GIT_LFS_SKIP_SMUDGE = "1"
+            git pull --rebase origin ${{ github.ref_name }}
+            git push origin HEAD:${{ github.ref_name }}
+            "trocou=1" >> $env:GITHUB_OUTPUT
+            Write-Host "Trocado e commitado."
+          } else {
+            "trocou=0" >> $env:GITHUB_OUTPUT
+            Write-Host "Nada a commitar: o kit já tem esses arquivos."
+          }
+

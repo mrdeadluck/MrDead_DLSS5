@@ -161,7 +161,10 @@ public static class RenodxLog
         bool recusada = logText.Contains("0xBAD00007", StringComparison.OrdinalIgnoreCase);
 
         bool hooksInstalados = logText.Contains("NGX hooks installed", StringComparison.OrdinalIgnoreCase);
-        bool criouFeature = logText.Contains("feature create intercepted", StringComparison.OrdinalIgnoreCase);
+        // 4.5+: quando o jogo criou o DLSS antes dos ganchos, o addon adota a feature na
+        // primeira avaliação ("registering lazily from evaluate contract") — conta igual.
+        bool criouFeature = logText.Contains("feature create intercepted", StringComparison.OrdinalIgnoreCase)
+                            || logText.Contains("registering lazily from evaluate contract", StringComparison.OrdinalIgnoreCase);
 
         int? enableHooks = null;
         var h = Hooks.Match(logText);

@@ -5,11 +5,16 @@ name: Trocar o REFramework do kit (nightly) e refazer o pacote
 # "DLSS 5 Files/reframework-desejado.txt", confere o arquivo e o commita — e refaz o pacote.
 on:
   push:
-    branches: ['claude/executable-fixes-xytsgm', 'main']
+    branches: ['claude/renodx-updates-e5mjc7', 'claude/upload-large-files-02562q', 'claude/executable-fixes-xytsgm', 'main']
     paths:
       - 'DLSS 5 Files/reframework-desejado.txt'
       - '.github/workflows/trocar-reframework.yml'
   workflow_dispatch:
+
+# Os workflows trocar-* commitam no mesmo ramo: um de cada vez.
+concurrency:
+  group: trocar-kit-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -100,6 +105,8 @@ jobs:
           git diff --cached --quiet
           if ($LASTEXITCODE -ne 0) {
             git commit -m "Kit: REFramework passa a ser a nightly ${{ steps.desejado.outputs.tag }}" -m "Baixado de praydog/REFramework-nightly e conferido (PE x64 com a assinatura do REFramework). O Dragon's Dogma 2 atualizado (TDB 83) recusa o ReShade sem o REFramework, e a nightly de 28/08 caia dentro do proprio REFramework nessa versao do jogo."
+            $env:GIT_LFS_SKIP_SMUDGE = "1"
+            git pull --rebase origin ${{ github.ref_name }}
             git push origin HEAD:${{ github.ref_name }}
             Write-Host "Trocado e commitado."
           } else {
@@ -125,7 +132,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
-          lfs: true
+          lfs: false
+
+      - name: Baixar do LFS só a pasta do kit (o 7z do Discord na raiz tem 250 MB e não entra no pacote)
+        run: git lfs pull -I "DLSS 5 Files/**"
 
       - name: Instalar .NET 8
         uses: actions/setup-dotnet@v4

@@ -148,15 +148,13 @@ public class ReShadeConfigWriterTests
     [Fact]
     public void Preset_PutsMvProviderBeforeFeed()
     {
-        foreach (var provider in new[] { MvProvider.Launchpad, MvProvider.Drme })
+        foreach (var provider in Enum.GetValues<MvProvider>())
         {
             var preset = ReShadeConfigWriter.BuildPresetIni(provider);
             var line = preset.Split('\n').First(l => l.StartsWith("Techniques=", StringComparison.Ordinal));
 
             int feedIdx = line.IndexOf("DLSS5_Feed@", StringComparison.Ordinal);
-            int mvIdx = provider == MvProvider.Drme
-                ? line.IndexOf("DRME@", StringComparison.Ordinal)
-                : line.IndexOf("MartysMods_Launchpad@", StringComparison.Ordinal);
+            int mvIdx = line.IndexOf(MvProviders.Technique(provider) + ",", StringComparison.Ordinal);
 
             Assert.True(mvIdx >= 0, $"provedor ausente para {provider}");
             Assert.True(feedIdx > mvIdx, $"DLSS5_Feed precisa vir depois do provedor ({provider})");
@@ -171,6 +169,47 @@ public class ReShadeConfigWriterTests
             ReShadeConfigWriter.BuildPresetIni(MvProvider.Drme));
         Assert.Contains("MartysMods_Launchpad@MartysMods_LAUNCHPAD.fx",
             ReShadeConfigWriter.BuildPresetIni(MvProvider.Launchpad));
+        Assert.Contains("vort_MotionEffects@vort_Motion.fx",
+            ReShadeConfigWriter.BuildPresetIni(MvProvider.Vort));
+        Assert.Contains("Lumenite_Kernel@lumenite_Kernel.fx",
+            ReShadeConfigWriter.BuildPresetIni(MvProvider.LumeniteKernel));
+    }
+
+    [Fact]
+    public void Preset_SelectsProviderWithPreprocessorDefinition()
+    {
+        // O DLSS5_Feed.fx lê a textura do provedor escolhido por DLSS5_MV_PROVIDER, na seção
+        // [DLSS5_Feed.fx] do preset; sem a definição ele lê texMotionVectors e roda sem vetores.
+        Assert.Equal(2, ReShadeConfigWriter.LerProvedorDoPreset(ReShadeConfigWriter.BuildPresetIni(MvProvider.Vort)));
+        Assert.Equal(1, ReShadeConfigWriter.LerProvedorDoPreset(ReShadeConfigWriter.BuildPresetIni(MvProvider.Launchpad)));
+        Assert.Equal(3, ReShadeConfigWriter.LerProvedorDoPreset(ReShadeConfigWriter.BuildPresetIni(MvProvider.LumeniteKernel)));
+        Assert.Equal(0, ReShadeConfigWriter.LerProvedorDoPreset(ReShadeConfigWriter.BuildPresetIni(MvProvider.Drme)));
+    }
+
+    [Fact]
+    public void Ini_WritesTheRenodxKeysTheFeederWouldWrite()
+    {
+        foreach (var feeder in new[] { true, false })
+        {
+            var ini = ReShadeConfigWriter.BuildReShadeIni(feederUsed: feeder);
+            var secao = ini[ini.IndexOf("[RenoDX.DLSS5]", StringComparison.Ordinal)..];
+            Assert.Contains("NeuralUplift=1", secao);
+            Assert.Contains("NREnableUpscaling=0", secao);
+            Assert.Equal(2, RenodxIni.Ler(ini));
+        }
+    }
+
+    [Fact]
+    public void MvProviders_ResolverCaiNoPrimeiroDisponivel()
+    {
+        var kit = new KitInventory { KitRoot = "k", HasLaunchpad = true };
+        Assert.Equal(MvProvider.Launchpad, MvProviders.Resolver(kit, MvProvider.Vort));
+        Assert.Equal(MvProvider.Launchpad, MvProviders.Resolver(kit, MvProvider.LumeniteKernel));
+        kit.HasVort = true;
+        Assert.Equal(MvProvider.Vort, MvProviders.Resolver(kit, MvProvider.Vort));
+        Assert.Equal(MvProvider.Vort, MvProviders.Resolver(kit, MvProvider.LumeniteKernel));
+        Assert.Equal(MvProviders.Padrao, MvProviders.Ordem[0]);
+        foreach (var p in Enum.GetValues<MvProvider>()) Assert.Equal(p, MvProviders.Ordem[MvProviders.Indice(p)]);
     }
 
     [Fact]
@@ -439,6 +478,7 @@ public class PlanBuilderTests
         DgVoodooCpl = @"C:\kit\dgVoodooCpl.exe",
         HasLaunchpad = true,
         HasDrme = true,
+        HasVort = true,
     };
 
     // Pasta com separador do sistema (o plano usa Path.Combine); o nome "game" é o que
@@ -1128,6 +1168,7 @@ public class KitResolverTests
             File.WriteAllText(Path.Combine(shaders, "DLSS5_Feed.fx"), "technique DLSS5_Feed");
             File.WriteAllText(Path.Combine(shaders, "MotionEstimation.fx"), "technique DRME");
             File.WriteAllText(Path.Combine(shaders, "MartysMods_LAUNCHPAD.fx"), "technique MartysMods_Launchpad");
+            File.WriteAllText(Path.Combine(shaders, "vort_Motion.fx"), "technique vort_MotionEffects");
             File.WriteAllText(Path.Combine(shaders, "ReShade.fxh"), "x");
             File.WriteAllText(Path.Combine(nested, "dgVoodoo2_87_3", "dgVoodoo.conf"), "[DirectX]\nVRAM = 256\n");
             File.WriteAllText(Path.Combine(nested, "dgVoodoo2_87_3", "dgVoodooCpl.exe"), "x");
@@ -1143,6 +1184,9 @@ public class KitResolverTests
             Assert.NotNull(inv.ShadersDir);
             Assert.True(inv.HasDrme);
             Assert.True(inv.HasLaunchpad);
+            Assert.True(inv.HasVort);
+            Assert.False(inv.HasLumenite);
+            Assert.True(inv.HasAnyMvProvider);
             Assert.NotNull(inv.DgVoodooConf);
             Assert.EndsWith("reshade-shaders", inv.ShadersDir!);
         }
@@ -5060,7 +5104,7 @@ public class FeederKitTests
         Assert.False(FeederKit.Antiga("0.12.0.0"));
         Assert.False(FeederKit.Antiga("v0.13.1"));
         Assert.False(FeederKit.Antiga("1.0.0"));
-        Assert.Equal("0.12.0", FeederKit.VersaoDoKit);
+        Assert.Equal("0.13.1-beta.1", FeederKit.VersaoDoKit);
         Assert.False(FeederKit.Antiga(FeederKit.VersaoDoKit));
     }
 

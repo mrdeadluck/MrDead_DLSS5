@@ -1,7 +1,7 @@
 # Gravado pelo workflow trocar-feeder.yml. Não edite: mude feeder-desejado.txt.
-versao=v0.12.0
-origem=https://github.com/jlrouzies-fr/DLSS5-Feeder/releases/tag/v0.12.0
-dlss5-feed.addon64=066eec8c797df2d656f2ab2324278921b1dd6e9116c9945294f4a00f7fec608a 224256
-dlss5-feed.addon32=d2df9fbf9b5e0cc24291b9240e4f8dd2aae063592571bbed37302878b6dac74c 141824
-dlss5-feed-host64.exe=397dbf49c3a2b5f3bc13cfa0e0b3df4316edae9c45be7379bcacad066ebb07f2 107008
-DLSS5_Feed.fx=955d911d3b567c57f4e0b44e528dae3f3df286fd8fd3e775b9f6b5ddd561aa94 45032
+versao=v0.13.1-beta.1
+origem=https://github.com/jlrouzies-fr/DLSS5-Feeder/releases/tag/v0.13.1-beta.1
+dlss5-feed.addon64=f01233a44f46d770cfce58b6cb9751038ccf55695aae8133dfa850398ae9934f 246272
+dlss5-feed.addon32=46586421a0097a8ad57d14d45a66331011ee38196856e6c906808bee8756beda 161792
+dlss5-feed-host64.exe=896cd4b3f0ebbe0054b6284c146c915e2f123b9b12f6eea6ab7169b01aa8a9d3 118784
+DLSS5_Feed.fx=491815122018d17d460f02adc0e5f03abb6e7489e3b8136ba003927ee06858e9 50240

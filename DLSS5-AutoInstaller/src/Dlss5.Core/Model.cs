@@ -34,13 +34,23 @@ public enum InstallRoute
     C,
 }
 
-/// <summary>Provedor de motion vectors.</summary>
+/// <summary>
+/// Provedor de motion vectors. O DLSS5_Feed.fx escolhe qual textura ler pela definição
+/// DLSS5_MV_PROVIDER, gravada por efeito no preset; ver <see cref="MvProviders"/>.
+/// </summary>
 public enum MvProvider
 {
     /// <summary>iMMERSE Launchpad (MartysMods_LAUNCHPAD.fx) — validado em RE2/Tomb Raider.</summary>
     Launchpad,
-    /// <summary>DRME (MotionEstimation.fx) — recomendado pelo projeto do Feeder.</summary>
+    /// <summary>
+    /// DRME (MotionEstimation.fx). Legado: NÃO compila no ReShade 6.8 (erro X3020) e o
+    /// Feed roda sem vetor nenhum. Fica só para ler manifestos antigos.
+    /// </summary>
     Drme,
+    /// <summary>VORT Motion (vort_Motion.fx, MIT) — o que o Feed.fx 0.13 recomenda; vem no kit.</summary>
+    Vort,
+    /// <summary>LumeniteFX Kernel (lumenite_Kernel.fx) — recomendado pelo README do Feeder; a licença não permite redistribuir, o usuário baixa.</summary>
+    LumeniteKernel,
 }
 
 /// <summary>Perfil do jogo: detecção automática + ajustes do usuário (spec 11.4).</summary>
@@ -83,7 +93,7 @@ public sealed class GameProfile
     /// <summary>Launcher separado detectado (informativo — nunca é o alvo da instalação).</summary>
     public string? LauncherExePath { get; set; }
 
-    public MvProvider MvProvider { get; set; } = MvProvider.Launchpad;
+    public MvProvider MvProvider { get; set; } = MvProviders.Padrao;
 
     /// <summary>Rota derivada de arch + api (árvore de decisão, spec 5).</summary>
     public InstallRoute Route
