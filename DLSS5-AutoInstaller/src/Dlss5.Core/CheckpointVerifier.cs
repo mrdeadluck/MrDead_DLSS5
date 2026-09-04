@@ -172,6 +172,13 @@ public static class CheckpointVerifier
                     "este arquivo. Depois: Steam → Propriedades → Arquivos instalados → Verificar " +
                     "integridade, abra o jogo sem instalar nada para confirmar, e só então reinstale."));
             }
+            else if (profile.UsesShortFuse)
+            {
+                r.Add(new CheckResult(3, "DLSS do jogo: ligado ou desligado, o RenoDX DLSS do ShortFuse trabalha", CheckStatus.Manual,
+                    "Motor ShortFuse com \"Require DLSS\" em Auto: com o DLSS do jogo ligado ele se pendura na chamada " +
+                    "que o jogo faz (com depth e vetores de verdade); desligado, avalia o swapchain sozinho." + (naPasta ? "" : VemDoDriver),
+                    "Prefira o DLSS do jogo LIGADO quando existir: a qualidade das passadas é melhor com os guias do jogo."));
+            }
             else if (profile.UsesRenodxDirectPath)
             {
                 r.Add(new CheckResult(3, "DLSS do jogo tem que ficar LIGADO", CheckStatus.Manual,
@@ -435,7 +442,8 @@ public static class CheckpointVerifier
         // aconteceu no primeiro teste do RE9 (jogo abriu, Home abriu, DLSS não carregou).
         if (profile.UsarReFramework)
         {
-            var addon = Path.Combine(exe, "renodx-dlss5.addon64");
+            var nomeAddon = profile.UsesShortFuse ? ShortFuseDlss.Addon : "renodx-dlss5.addon64";
+            var addon = Path.Combine(exe, nomeAddon);
             string textoRef;
             try { textoRef = File.Exists(profile.ReShadeIniPath) ? ReadShared(profile.ReShadeIniPath) : ""; }
             catch { textoRef = ""; }
@@ -444,8 +452,8 @@ public static class CheckpointVerifier
             r.Add(new CheckResult(12, "Addon alcançável pelo ReShade",
                 File.Exists(addon) ? CheckStatus.Pass : CheckStatus.Fail,
                 File.Exists(addon)
-                    ? "renodx-dlss5.addon64 está na pasta do exe, que é onde o AddonPath aponta."
-                    : "renodx-dlss5.addon64 não está na pasta do exe.",
+                    ? $"{nomeAddon} está na pasta do exe, que é onde o AddonPath aponta."
+                    : $"{nomeAddon} não está na pasta do exe.",
                 File.Exists(addon) ? null : "Rode a instalação de novo."));
         }
 
@@ -459,6 +467,24 @@ public static class CheckpointVerifier
                 : "DLSS5_Feed.fx não encontrado — o ReShade vai abrir reclamando que não há efeitos.",
             File.Exists(feedFx) ? null : "Rode a instalação (ou reinstale: o desinstalador do ReShade apaga reshade-shaders\\)."));
 
+        // 24 — passadas do motor ShortFuse: o ini tem que pedir o que o usuário escolheu.
+        if (profile.UsesShortFuse)
+        {
+            string iniSf;
+            try { iniSf = File.Exists(profile.ReShadeIniPath) ? ReadShared(profile.ReShadeIniPath) : ""; }
+            catch { iniSf = ""; }
+            var passadas = ShortFuseDlss.LerPassadas(iniSf);
+            r.Add(new CheckResult(24, "Passadas de Neural Rendering (Pass Count do RenoDX DLSS)",
+                passadas is null ? CheckStatus.Warning : passadas == profile.PassCount ? CheckStatus.Pass : CheckStatus.Warning,
+                passadas is null
+                    ? $"O ReShade.ini não tem [{ShortFuseDlss.Secao}] {ShortFuseDlss.ChavePassadas}: o addon vai usar o padrão dele (1 passada)."
+                    : passadas == profile.PassCount
+                        ? $"{ShortFuseDlss.ChavePassadas}={passadas}, como escolhido."
+                        : $"O ini pede {passadas} passada(s), e a detecção pede {profile.PassCount}: alguém mudou no painel do addon (ele grava no ini) ou a instalação é anterior.",
+                passadas == profile.PassCount ? null
+                    : "Instale de novo (Atualizar) para regravar o ini com o valor escolhido, ou ajuste o Pass Count no painel RenoDX DLSS dentro do jogo."));
+        }
+
         // 13 — preset com o provedor acima do Feed
         //
         // Só faz sentido quando o Feeder está instalado. No caminho direto do RenoDX
@@ -469,8 +495,11 @@ public static class CheckpointVerifier
         if (!profile.NeedsFeeder)
         {
             r.Add(new CheckResult(13, "Preset do ReShade", CheckStatus.NotApplicable,
-                "Sem efeitos, como esperado: em D3D12 com DLSS nativo quem trabalha é o addon " +
-                "do RenoDX, não um shader do ReShade.",
+                profile.UsesShortFuse
+                    ? "Sem efeitos, como esperado: o RenoDX DLSS do ShortFuse fabrica a chamada de DLSS sozinho, " +
+                      "sem shader de vetores nem Feeder."
+                    : "Sem efeitos, como esperado: em D3D12 com DLSS nativo quem trabalha é o addon " +
+                      "do RenoDX, não um shader do ReShade.",
                 "A aba Início do ReShade fica vazia neste caminho. O que importa está na aba " +
                 "Complementos, em DLSS 5 Neural Rendering."));
         }
@@ -639,7 +668,7 @@ public static class CheckpointVerifier
 
         r.AddRange(VerifyReShadeLog(exe, profile.GameFolder, reinicioPendente, profile.ReShadeLogPath,
             profile.ReShadeHookName, profile.UsarReFramework, profile.RealExePath, profile.PastaDoReShade, profile.Api,
-            feedStatus));
+            feedStatus, profile.UsesShortFuse, profile.PassCount));
 
         // 14/15/16 — dependem do jogo rodando
         r.AddRange(VerifyFeedLogs(exe, route, profile.NeedsFeeder));
@@ -684,7 +713,7 @@ public static class CheckpointVerifier
         string exeFolder, string? gameFolder = null, bool reinicioPendente = false,
         string? logPath = null, string nomeDoReShade = "dxgi.dll", bool hospedado = false,
         string? exePath = null, string? pastaDoReShade = null, GraphicsApi api = GraphicsApi.Unknown,
-        FeedStatus? feed = null)
+        FeedStatus? feed = null, bool shortFuse = false, int passCount = 0)
     {
         // Hospedado no REFramework, o ReShade grava o log ao lado da própria DLL.
         var log = logPath ?? Path.Combine(exeFolder, "ReShade.log");
@@ -769,8 +798,13 @@ public static class CheckpointVerifier
 
         // 14 — o DLSS 5 chegou a rodar? É a única pergunta que interessa, e até agora o
         // programa não sabia responder: ele conferia arquivo, não resultado.
-        var renodx = RenodxLog.Ler(text);
-        if (renodx is not null)
+        var renodx = shortFuse ? null : RenodxLog.Ler(text);
+        if (shortFuse)
+        {
+            // Motor ShortFuse: o log é outro ("RenoDX DLSS ..."), e o addon do Krish não está na pasta.
+            yield return ShortFuseLog.Ler(text).Checkpoint14(passCount, reinicioPendente);
+        }
+        else if (renodx is not null)
         {
             var estado = renodx.AssinaturaRecusada ? CheckStatus.Fail
                        : renodx.CompiladorAntigo ? CheckStatus.Fail

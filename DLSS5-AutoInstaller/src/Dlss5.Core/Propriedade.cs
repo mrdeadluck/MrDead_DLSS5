@@ -27,7 +27,7 @@ public static class Propriedade
     /// <summary>Nomes que só este programa põe numa pasta de jogo. Nenhum jogo traz nada disso.</summary>
     public static readonly string[] SoNossos =
     {
-        "renodx-dlss5.addon64", "dlss5-feed.addon64", "dlss5-feed.addon32",
+        "renodx-dlss5.addon64", ShortFuseDlss.Addon, "dlss5-feed.addon64", "dlss5-feed.addon32",
         "dlss5-feed-host64.exe", "dlss5-feed.cfg", "dlss5-feed.log", "dlss5-feed-host.log", "dlss5-feed-crash.dmp",
         "nvngx_dlssnr.dll",
         // O dgVoodoo encadeado atrás do DxWrapper: nenhum jogo traz um arquivo com esse nome.
@@ -75,7 +75,7 @@ public static class Propriedade
     /// <summary>Arquivos que provam que ESTE programa instalou nesta pasta.</summary>
     public static readonly string[] ProvasDoKit =
     {
-        "nvngx_dlssnr.dll", "renodx-dlss5.addon64", "dlss5-feed.addon64",
+        "nvngx_dlssnr.dll", "renodx-dlss5.addon64", ShortFuseDlss.Addon, "dlss5-feed.addon64",
         "dlss5-feed.addon32", "dlss5-feed-host64.exe",
     };
 
@@ -140,7 +140,7 @@ public static class Propriedade
     /// <summary>Nomes exclusivos do kit DLSS 5 (nunca de um ReShade instalado à parte pelo usuário).</summary>
     private static readonly string[] ExclusivosDoKit =
     {
-        "renodx-dlss5.addon64", "dlss5-feed.addon64", "dlss5-feed.addon32",
+        "renodx-dlss5.addon64", ShortFuseDlss.Addon, "dlss5-feed.addon64", "dlss5-feed.addon32",
         "dlss5-feed-host64.exe", "dlss5-feed.cfg", "dlss5-feed.log", "dlss5-feed-host.log", "dlss5-feed-crash.dmp",
         "nvngx_dlssnr.dll", "dgVoodoo_D3D9.dll", "dgVoodoo_D3D8.dll", InstallManifest.FileName,
     };

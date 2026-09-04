@@ -54,6 +54,13 @@ VERSÕES E O QUE FALTA BAIXAR
    kit). O DRME saiu da pasta de shaders porque não compila no ReShade
    6.8 — parecia ligado, mas o DLSS rodava sem vetor nenhum.
 
+   DLSS 5 "x2" (segunda passada de Neural Rendering): na tela de detecção
+   escolha o motor "RenoDX DLSS (ShortFuse)" e o número de passadas (1 a
+   10; padrão 2). É o renodx-dlss.addon64 do ShortFuse, que substitui o
+   Krish e o Feeder naquele jogo. Só 64-bit. Cada passada custa o mesmo
+   que a primeira em GPU e VRAM. Dentro do jogo: aba "RenoDX DLSS" >
+   Advanced > Pass Count.
+
    As pastas "(alternativa ...)" são outros projetos que fazem coisas que
    o caminho RenoDX + Feeder não faz (upscaling de verdade, frame
    generation, multi-frame em RTX 40). O instalador ainda não as usa:

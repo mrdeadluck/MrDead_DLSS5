@@ -53,6 +53,15 @@ public enum MvProvider
     LumeniteKernel,
 }
 
+/// <summary>Quem faz o Neural Rendering.</summary>
+public enum NeuralEngine
+{
+    /// <summary>renodx-dlss5 (Krish), com o Feeder quando o jogo não tem DLSS em D3D12. Uma passada.</summary>
+    RenodxDlss5Feeder,
+    /// <summary>renodx-dlss (ShortFuse): fabrica a chamada de DLSS sozinho, 64-bit D3D9/11/12, 1 a 10 passadas.</summary>
+    RenodxDlssShortFuse,
+}
+
 /// <summary>Perfil do jogo: detecção automática + ajustes do usuário (spec 11.4).</summary>
 public sealed class GameProfile
 {
@@ -137,6 +146,18 @@ public sealed class GameProfile
     /// </summary>
     public bool PreferirFeeder { get; set; }
 
+    /// <summary>Qual addon faz o Neural Rendering (ver <see cref="NeuralEngine"/>).</summary>
+    public NeuralEngine Engine { get; set; } = NeuralEngine.RenodxDlss5Feeder;
+
+    /// <summary>Passadas de Neural Rendering do motor ShortFuse (1 a 10).</summary>
+    public int PassCount { get; set; } = ShortFuseDlss.PassesPadrao;
+
+    /// <summary>
+    /// O renodx-dlss do ShortFuse no lugar do par Krish + Feeder. Só 64-bit: o addon não
+    /// tem versão x86 e o NGX também não, então em 32-bit a escolha é ignorada.
+    /// </summary>
+    public bool UsesShortFuse => Engine == NeuralEngine.RenodxDlssShortFuse && Architecture == PeArchitecture.X64;
+
     /// <summary>
     /// O RenoDX se pendura direto nas chamadas de DLSS que o jogo já faz, mas só enxerga
     /// NGX em D3D12 (spec 1: "só funciona em jogos com DLSS nativo, 64-bit, D3D12").
@@ -146,7 +167,7 @@ public sealed class GameProfile
     /// do jogo estava transplantado e o DLSS do jogo nem funcionava — ele nunca teve
     /// chance real até o Onimusha.
     /// </summary>
-    public bool UsesRenodxDirectPath => HasNativeDlss && Api == GraphicsApi.D3D12 && !PreferirFeeder;
+    public bool UsesRenodxDirectPath => !UsesShortFuse && HasNativeDlss && Api == GraphicsApi.D3D12 && !PreferirFeeder;
 
     /// <summary>
     /// O jogo entrega o DLSS pelo Streamline da NVIDIA (sl.*.dll ao lado do exe), e não
@@ -166,7 +187,7 @@ public sealed class GameProfile
     /// porque ele roda o NGX num device D3D12 privado e independe da API do jogo. Em
     /// jogo com DLSS nativo, o DLSS do jogo tem que ficar DESLIGADO neste caminho.
     /// </summary>
-    public bool NeedsFeeder => !UsesRenodxDirectPath;
+    public bool NeedsFeeder => !UsesShortFuse && !UsesRenodxDirectPath;
 
     /// <summary>Precisa do dgVoodoo2 (rota C).</summary>
     public bool NeedsDgVoodoo => Route == InstallRoute.C;

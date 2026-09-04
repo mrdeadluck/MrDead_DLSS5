@@ -155,7 +155,9 @@ public static class ReShadeConfigWriter
         bool feederUsed = true,
         int renodxHooks = RenodxIni.Padrao,
         string? baseDir = null,
-        string? basePath = null)
+        string? basePath = null,
+        bool shortFuse = false,
+        int passCount = ShortFuseDlss.PassesPadrao)
     {
         // Sem baseDir tudo continua relativo, como sempre foi.
         string Raiz(string relativo) => baseDir is null
@@ -190,6 +192,11 @@ public static class ReShadeConfigWriter
         sb.AppendLine();
         sb.AppendLine("[ADDON]");
         sb.AppendLine($"AddonPath={(baseDir is null ? @".\" : baseDir)}");
+        // O addon do ShortFuse pede para ser carregado no DllMain (ganchos cedo no NGX e no
+        // Streamline); sem a linha ele mesmo a grava na primeira abertura e pede reinício.
+        // O valor é o nome do arquivo: é assim que o próprio addon compara e grava.
+        if (shortFuse)
+            sb.AppendLine($"LoadFromDllMain={ShortFuseDlss.Addon}");
         if (!feederUsed)
             sb.AppendLine("DisabledAddons=Generic Depth");
         if (feederUsed)
@@ -200,6 +207,12 @@ public static class ReShadeConfigWriter
             sb.AppendLine("DepthCopyBeforeClears=1");
         }
         sb.AppendLine();
+        if (shortFuse)
+        {
+            // Motor ShortFuse: a seção dele, com as passadas; a seção do Krish não entra.
+            ShortFuseDlss.Gravar(sb, passCount);
+            return sb.ToString();
+        }
         sb.AppendLine(RenodxIni.Secao);
         sb.AppendLine($"{RenodxIni.Chave}={renodxHooks}");
         // As duas chaves que o Feeder 0.9+ grava quando estão ausentes (addon 4.5+):

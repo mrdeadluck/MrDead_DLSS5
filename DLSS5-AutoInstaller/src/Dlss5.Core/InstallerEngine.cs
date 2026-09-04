@@ -375,7 +375,9 @@ public sealed partial class InstallerEngine
                 renodxHooks: plan.Profile.HooksDoRenodx,
                 // DLL fora da raiz (Titanfall 2): o ReShade usaria a pasta da DLL como
                 // base; o BasePath traz a base de volta para a raiz, onde está tudo.
-                basePath: plan.Profile.ReShadeForaDaRaiz ? plan.Profile.ExeFolder : null)
+                basePath: plan.Profile.ReShadeForaDaRaiz ? plan.Profile.ExeFolder : null,
+                shortFuse: plan.Profile.UsesShortFuse,
+                passCount: plan.Profile.PassCount)
             : ReShadeConfigWriter.BuildPresetIni(plan.Options.MvProvider, feederUsed: plan.Profile.NeedsFeeder);
     }
 
@@ -636,7 +638,7 @@ public sealed partial class InstallerEngine
     {
         "dxgi.dll", "opengl32.dll", "ReShade.ini", "ReShade.log", "ReShadePreset.ini",
         "ReShade64.json", "ReShade32.json", "ReShade64_XR.json", "ReShade32_XR.json",
-        "renodx-dlss5.addon64", "nvngx_dlssnr.dll",
+        "renodx-dlss5.addon64", ShortFuseDlss.Addon, "nvngx_dlssnr.dll",
         "dlss5-feed.addon64", "dlss5-feed.addon32", "dlss5-feed.cfg", "dlss5-feed.log", "dlss5-feed-crash.dmp",
         "D3D9.dll", "D3D8.dll", "dgVoodoo.conf", "dgVoodooCpl.exe",
         "dgVoodoo_D3D9.dll", "dgVoodoo_D3D8.dll",

@@ -74,7 +74,7 @@ public static class NativeDlssDetector
     /// <summary>Arquivos que provam que ESTE programa instalou nesta pasta.</summary>
     private static readonly string[] SinaisDaNossaInstalacao =
     {
-        "renodx-dlss5.addon64", "dlss5-feed.addon64", "dlss5-feed.addon32",
+        "renodx-dlss5.addon64", ShortFuseDlss.Addon, "dlss5-feed.addon64", "dlss5-feed.addon32",
         "nvngx_dlssnr.dll", "ReShade.ini", InstallManifest.FileName,
     };
 

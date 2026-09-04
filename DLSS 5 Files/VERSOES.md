@@ -39,11 +39,26 @@ rodou (aba Actions do repositório).
 movimento. O instalador não o oferece mais como padrão (fica como último item da lista,
 marcado).
 
-## Pastas novas (alternativas — o instalador ainda NÃO usa; instalação manual pelo README de cada uma)
+## O "x2" do DLSS 5: passadas múltiplas de Neural Rendering
+
+A segunda camada que a comunidade mostra nos vídeos é o **Pass Count** do `renodx-dlss.addon64`
+do ShortFuse: "Runs 1 to 10 sequential Neural Rendering evaluations for each source. Additional
+passes consume the preceding Neural Rendering output directly". O addon do Krish (`renodx-dlss5`)
+não tem isso ("one-pass-per-output"); o AIO do kibblerz também não. O OptiScaler v10 pre1 tem
+`Passes=` de 1 a 5 e o Deep Fried Chicken vai a 30.
+
+**O instalador agora tem o motor "RenoDX DLSS (ShortFuse)"** na tela de detecção, para jogos
+64-bit, com o número de passadas de 1 a 10 (padrão 2). Ele copia o `renodx-dlss.addon64` no
+lugar do Krish e do Feeder (os dois saem da pasta, com backup), grava no `ReShade.ini`
+`[ADDON] LoadFromDllMain=renodx-dlss.addon64` e `[RENODX-DLSS] DirectNeuralRenderingPassCount=N`,
+e a verificação lê o log do addon (item 14) e o ini (item 24). Dentro do jogo o controle fica na
+aba **RenoDX DLSS**, seção Advanced, "Pass Count". Cada passada custa o mesmo que a primeira.
+
+## Pastas novas (alternativas — o instalador só usa a do ShortFuse; as outras são instalação manual pelo README de cada uma)
 
 | Pasta | O que é | Quando usar |
 |---|---|---|
-| `renodx-dlss-SF-0.52 (alternativa ShortFuse)/` | `renodx-dlss.addon64` **SF 0.52** (04/09/2026), do ShortFuse. Fabrica a chamada de DLSS sozinho: em jogo **64-bit D3D9/11/12 sem DLSS nativo** substitui o Feeder inteiro (um addon só). | Jogo 64-bit sem DLSS. **Nunca junto com `renodx-dlss5` nem com o Feeder.** Em D3D9 avalia só o backbuffer final, sem vetores. |
+| `renodx-dlss-SF-0.52 (alternativa ShortFuse)/` | `renodx-dlss.addon64` **SF 0.52** (build 04/09/2026 08:48), do ShortFuse. Fabrica a chamada de DLSS sozinho, com ou sem DLSS nativo, 64-bit D3D9/11/12, e faz **1 a 10 passadas** de Neural Rendering (Pass Count). **É o motor "ShortFuse" do instalador.** | Qualquer jogo 64-bit; é o caminho do "x2". **Nunca junto com `renodx-dlss5` nem com o Feeder** (o instalador tira os dois). Em D3D9 avalia só o backbuffer final, sem vetores. |
 | `DLSS5-Reshade-AIO-v2.0.3 (alternativa kibblerz)/` | `standalone-dlssnr.addon64` + `nvngx.dll` + `DLSS5_AIO_Feed.fx` + `StandaloneBoundary.fx`. Projeto **open source** que faz Neural Rendering + **DLSS Super Resolution** (ganho de FPS ao rodar o jogo abaixo da resolução do monitor) + **Frame Generation**, em 64-bit D3D9/11/12/Vulkan, sem depender do RenoDX nem do Feeder. Presets J/K/L/M (L recomendado), modelos NR 1–3. Log em `%LOCALAPPDATA%\RHI\Logs\standalone-dlssnr.log`. | Quando quiser upscaling de verdade (o caminho RenoDX/Feeder é só DLAA). Os dois binários precisam ir juntos; `nvngx_dlssg.dll` só para Frame Generation. A 2.0 mudou a apresentação; se um jogo regredir, use a `v1.7.24` ao lado. |
 | `DLSS5-Reshade-AIO-v1.7.24 (alternativa kibblerz)/` | Última versão 1.x do mesmo projeto. | Fallback da 2.0.3. |
 | `MFG-Unlock-0.6.1 (multi-frame generation RTX 40, alternativa mavismmg)/` | `renodx-mfgunlock.addon64` 0.6.1 (04/09/2026). Libera **multi-frame generation 3x/4x em RTX 40** (a NVIDIA limita à RTX 50) e corrige a interpolação. Convive com o `renodx-dlss5` desde a 0.6. Configuração em `[RenoDX.MFGUnlock]` no `ReShade.ini`. | Jogo **com** DLSS Frame Generation nativo (Streamline). Precisa de `nvngx_dlssg.dll` 310.x ([TechPowerUp](https://www.techpowerup.com/download/nvidia-dlss-3-frame-generation-dll/)). Com o DLSS5 junto, a combinação conhecida boa é Streamline 2.12.129 + DLLs 310.7.129; com 2.14 + 310.9 houve lentidão de menu. Só RTX 40: o snippet não tem código para Ampere. |
