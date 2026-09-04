@@ -1,0 +1,31 @@
+# Binários do kit que NÃO têm workflow próprio (o Feeder tem o trocar-feeder.yml, o runtime
+# o trocar-runtime.yml, o REFramework o trocar-reframework.yml). Mudar este arquivo e
+# commitar dispara o workflow trocar-extras.yml, que baixa cada linha, confere o SHA-256,
+# grava o arquivo no lugar indicado (relativo a "DLSS 5 Files") e commita no LFS — porque o
+# objeto do LFS não sobe a partir do ambiente de desenvolvimento. Depois refaz o pacote.
+#
+# Formato (colunas separadas por " | "):
+#   destino | url | sha256 do ARQUIVO FINAL | caminho dentro do zip (vazio = download direto)
+#
+# --- RenoDX DLSS5 (Krish) 4.70, espelho do #DLSS5 do Discord em RankFTW/rhi-repo ---
+renodx-dlss5.addon64 | https://github.com/RankFTW/rhi-repo/releases/download/renodx-dlss5-4.70/renodx-dlss5_4.70.zip | d5adf82eb44b065f4c590ac91fe824bab07afea0eb9f994bde936710c8593952 | renodx-dlss5.addon64
+# --- renodx-dlss (ShortFuse) SF 0.52: alternativa ao Feeder em 64-bit; nunca junto com o renodx-dlss5 ---
+renodx-dlss-SF-0.52 (alternativa ShortFuse)/renodx-dlss.addon64 | https://github.com/RankFTW/rhi-repo/releases/download/renodx-dlss-SF-0.52/renodx-dlss_SF_0.52.zip | fba3271626587f8b1f49c4fb40bbe23fd969282da6fe48be2da9b17beb708ee6 | renodx-dlss.addon64
+# --- dgVoodoo2 2.87.4 (corrige o crash em Windows 11 26H1+) ---
+dgVoodoo2/MS/x86/D3D9.dll | https://github.com/dege-diosg/dgVoodoo2/releases/download/v2.87.4/dgVoodoo2_87_4.zip | db1c445f7bcf699df1e175e974c779bdc7e19a468680a44884b1ab7078888d04 | MS/x86/D3D9.dll
+dgVoodoo2/MS/x86/D3D8.dll | https://github.com/dege-diosg/dgVoodoo2/releases/download/v2.87.4/dgVoodoo2_87_4.zip | d6e8931e785e267f926c049d4d1257b00771e2de8c57c8f39e434ddf6185df06 | MS/x86/D3D8.dll
+dgVoodoo2/MS/x64/D3D9.dll | https://github.com/dege-diosg/dgVoodoo2/releases/download/v2.87.4/dgVoodoo2_87_4.zip | ca777d0e1be467091d851d5dd41293f90c254beb35247e365fccc053abfc5678 | MS/x64/D3D9.dll
+dgVoodoo2/dgVoodooCpl.exe | https://github.com/dege-diosg/dgVoodoo2/releases/download/v2.87.4/dgVoodoo2_87_4.zip | f916497c2dc4378353108c6588082f042795b62854cd3e54051c7bcba4b53d1f | dgVoodooCpl.exe
+dgVoodoo2/dgVoodoo.conf | https://github.com/dege-diosg/dgVoodoo2/releases/download/v2.87.4/dgVoodoo2_87_4.zip | 3c7da2fac3eaad369df468e80c9ba9c4db632c419799b32bbc31279d10985801 | dgVoodoo.conf
+# --- Camada Vulkan de reserva do Feeder 0.13.1-beta.1 (jogos Vulkan; o instalador não usa) ---
+DLSS5-Feeder-0.13.1-beta.1/layer-x64/VkLayer_feed_vk.dll | https://github.com/jlrouzies-fr/DLSS5-Feeder/releases/download/v0.13.1-beta.1/DLSS5-Feeder-0.13.1-beta.1.zip | 5e38543e349100e376f8d178bee7bfd57d65004031513d9982962ac517829be1 | layer-x64/VkLayer_feed_vk.dll
+DLSS5-Feeder-0.13.1-beta.1/layer-x86/VkLayer_feed_vk32.dll | https://github.com/jlrouzies-fr/DLSS5-Feeder/releases/download/v0.13.1-beta.1/DLSS5-Feeder-0.13.1-beta.1.zip | fbbe9697962d038e639e37dfb569fad3bc0d2d80a3394c89d4e516a20be5deb0 | layer-x86/VkLayer_feed_vk32.dll
+# --- DLSS5 ReShade AIO (kibblerz): NR + DLSS Super Resolution + Frame Generation, open source ---
+DLSS5-Reshade-AIO-v2.0.3 (alternativa kibblerz)/standalone-dlssnr.addon64 | https://github.com/kibblerz/DLSS5-Reshade-AIO/releases/download/v2.0.3/standalone-dlssnr.addon64 | 8bb82ac27b41963c1bc46865488ec6b71ab6eed15d596f0d48f8ed53c7288819 |
+DLSS5-Reshade-AIO-v2.0.3 (alternativa kibblerz)/nvngx.dll | https://github.com/kibblerz/DLSS5-Reshade-AIO/releases/download/v2.0.3/nvngx.dll | 9d3ab47559381eb78ef853d1d360932853839a80e0fdcdbefce2b7210bee133a |
+DLSS5-Reshade-AIO-v1.7.24 (alternativa kibblerz)/standalone-dlssnr.addon64 | https://github.com/kibblerz/DLSS5-Reshade-AIO/releases/download/v1.7.24/standalone-dlssnr.addon64 | 46b15ab35dccb0e19e42076d0fe7776b37ad937cc5c71db48424a46aef4bd9fc |
+DLSS5-Reshade-AIO-v1.7.24 (alternativa kibblerz)/nvngx.dll | https://github.com/kibblerz/DLSS5-Reshade-AIO/releases/download/v1.7.24/nvngx.dll | 09abce4cd98e7397823be794e0739687a7752cc97e4889cc985b43a45e91c367 |
+# --- MFG Unlock 0.6.1 (mavismmg): multi-frame generation 3x/4x em RTX 40; convive com o renodx-dlss5 ---
+MFG-Unlock-0.6.1 (multi-frame generation RTX 40, alternativa mavismmg)/renodx-mfgunlock.addon64 | https://github.com/mavismmg/MFGAdaUnlock-RenoDx/releases/download/0.6.1/renodx-mfgunlock.addon64 | 334a750accb892a8422b88f2891d91344f9dfeea9473bcd248f5e43a80d06b8c |
+# --- Textura do VORT Motion (o .fx e os .fxh são texto e já estão no repositório) ---
+reshade-shaders/Textures/vort_BlueNoise.png | https://raw.githubusercontent.com/vortigern11/vort_Shaders/b410b9f0c0fbb83c8cb42164aaf1655fab386f4a/Textures/vort_BlueNoise.png | 050d26db9283fbaece3b6883e300d22403631d83a12a5f2f79dc8b789b860305 |

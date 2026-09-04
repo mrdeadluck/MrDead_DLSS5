@@ -52,8 +52,8 @@ Regra derivada: **32 bits obriga D3D11.** Se o jogo x86 oferece Vulkan e D3D9, e
 |---|---|---|---|---|
 | `nvngx_dlssnr.dll` | vazamento NBA 2K27 + patch Ada (Uncle Burrito) | 165.840.496 B | x64 | **Assinatura quebrada.** Dois builds circulam com mesmo tamanho: SHA256 `3973aaee…` e `368911e6…`. Use sempre o mesmo. |
 | `nvngx_dlss.dll` | Streamline SDK 2.13 | 58.956.400 B | x64 | Assinatura NVIDIA íntegra, v310.8.0.0 |
-| `renodx-dlss5.addon64` | RenoDX Discord / repacks | 1.694.720 B | x64 | v0.2026.828.517 (Generic 4.1.5). Lê `nvngx_dlssnr.dll`. |
-| `DLSS5_Feed.fx` | github.com/jlrouzies-fr/DLSS5-Feeder | 8.403 B | shader | Lê `texMotionVectors`; inclui `ReShade.fxh` |
+| `renodx-dlss5.addon64` | RenoDX Discord `#DLSS5` (Krish); espelho em github.com/RankFTW/rhi-repo (`extras-desejado.txt`) | 1.732.608 B | x64 | **4.70** (banner `RenoDX DLSS5 Generic v4.7`, build 02/09/2026). Lê `nvngx_dlssnr.dll`. Anterior (Generic 4.1.5, 1.694.720 B) em `versoes-anteriores/`. Não está no GitHub do ShortFuse: o addon é fechado. |
+| `DLSS5_Feed.fx` | github.com/jlrouzies-fr/DLSS5-Feeder 0.13.1-beta.1 (`feeder-desejado.txt`) | 50.240 B | shader | Provedor escolhido em compilação por `DLSS5_MV_PROVIDER` (ver 3.4); valida vetores e gera `DLSS5_Mask`. Inclui `ReShade.fxh`. |
 | `ReShade.fxh`, `ReShadeUI.fxh`, `Macros.fxh` | instalador do ReShade (pacote padrão) | — | shader | Sem eles o `DLSS5_Feed.fx` não compila |
 | Provedor de motion vectors | ver 3.4 | — | shader | Um deles, marcado **acima** do Feed |
 | ReShade com add-on support | reshade.me | instalador 4.318.424 B | — | v6.8.0.2156. Contém `ReShade32.dll` e `ReShade64.dll` internamente. |
@@ -62,15 +62,15 @@ Regra derivada: **32 bits obriga D3D11.** Se o jogo x86 oferece Vulkan e D3D9, e
 
 | Arquivo | Tamanho | Observações |
 |---|---|---|
-| `dlss5-feed.addon64` | 98.816 B | Compilado 30/08/2026. Suporta D3D11/D3D12/Vulkan. Fica na pasta do executável. |
+| `dlss5-feed.addon64` | 246.272 B | **0.13.1-beta.1** (04/09/2026). Suporta D3D11/D3D12/Vulkan/OpenGL. Fica na pasta do executável. Anterior (0.12.0) em `versoes-anteriores/feeder-0.12.0/`. |
 | `dxgi.dll` (ReShade x64) | 5.592.064 B | Extraído do instalador (`ReShade64.dll` renomeado) ou de instalação x64 |
 
 ### 3.3 Caminho B e C (32-bit) — adicionais
 
 | Arquivo | Tamanho | Arch | Local |
 |---|---|---|---|
-| `dlss5-feed.addon32` | 49.664 B | x86 | pasta do exe (única peça do Feeder fora de `host64\`) |
-| `dlss5-feed-host64.exe` | 64.512 B | x64 | `host64\` |
+| `dlss5-feed.addon32` | 161.792 B | x86 | pasta do exe (única peça do Feeder fora de `host64\`). 0.13.1: D3D10 nativo. |
+| `dlss5-feed-host64.exe` | 118.784 B | x64 | `host64\` — protocolo v7; **precisa ser do mesmo build do addon32** |
 | `dxgi.dll` (ReShade x86) | 4.398.080 B | x86 | pasta do exe |
 | `dxgi.dll` (ReShade x64) | 5.592.064 B | x64 | `host64\` |
 | `renodx-dlss5.addon64` | | x64 | `host64\` (**não** na raiz) |
@@ -81,20 +81,25 @@ Regra derivada: **32 bits obriga D3D11.** Se o jogo x86 oferece Vulkan e D3D9, e
 
 | Provedor | Arquivos | Licença | Status observado |
 |---|---|---|---|
-| **DRME** (ReshadeMotionEstimation, JakobPCoder) | `MotionEstimation.fx` + 3 `.fxh` | CC BY-NC | Recomendado pelo projeto. **Erro X3020 ao compilar em Vulkan** ("cannot sample from texture that is also used as render target"). Em D3D11 não foi testado até o fim. |
-| **Launchpad** (iMMERSE, Pascal Gilcher) | `MartysMods_LAUNCHPAD.fx` + `MartysMods\mmx_*.fxh` + texturas `iMMERSE_bluenoise_*.png` | Proprietário — repack circulando viola a licença | Compila. Funcionou no RE2 e Tomb Raider. |
-| qUINT motionvectors | `qUINT_motionvectors.fx` | — | Não testado |
-| VORT, LumeniteFX | — | — | Listados pelo addon, não testados |
+| Provedor | Arquivos | Licença | `DLSS5_MV_PROVIDER` | Technique | Status |
+|---|---|---|---|---|---|
+| **VORT Motion** (vortigern11) — **padrão do instalador** | `vort_Motion.fx` + `Includes\vort_*.fxh` + `Textures\vort_BlueNoise.png` | MIT — vem no kit | `2` | `vort_MotionEffects` | O que o Feed.fx 0.13 recomenda. |
+| **Launchpad** (iMMERSE, Pascal Gilcher) | `MartysMods_LAUNCHPAD.fx` + `MartysMods\mmx_*.fxh` + texturas `iMMERSE_bluenoise_*.png` | Proprietário — repack circulando viola a licença | `1` | `MartysMods_Launchpad` | Compila. Funcionou no RE2 e Tomb Raider. O Feed 0.13 dispara o pedido de fluxo por frame que o Launchpad exige. |
+| **LumeniteFX Kernel** (umar-afzaal) | `lumenite_Kernel.fx` + `include\lumenite_*.fxh` | AGNYA — **proíbe redistribuir**, o usuário baixa do GitHub | `3` | `Lumenite_Kernel` | Recomendado pelo README do Feeder (fluxo 1/8 + mapa de confiança). Único que compila em D3D10 (SM4). O instalador oferece se `lumenite_Kernel.fx` estiver no kit. |
+| **DRME** (ReshadeMotionEstimation, JakobPCoder) | `MotionEstimation.fx` + 3 `.fxh` (em `versoes-anteriores/`) | CC BY-NC | `0` | `DRME` | **Não compila no ReShade 6.8** (X3020) em nenhuma API: aparece ligado, escreve nada, DLSS roda sem vetores. O Feeder 0.6.1+ detecta e avisa. |
+| qUINT motionvectors, dh_uber_motion | escrevem `texMotionVectors` | — | `0` | — | Não testados |
 
-Seleção no `DLSS5_Feed.fx` via definição `DLSS5_MV_PROVIDER` (0 = genérico `texMotionVectors`).
+O instalador grava a definição na seção `[DLSS5_Feed.fx]` do `ReShadePreset.ini` junto com a
+lista de techniques (checkpoint 13 confere). Sem a definição o Feed lê `texMotionVectors`,
+que nenhum provedor do kit escreve.
 
 ### 3.5 Caminho C (D3D9) — dgVoodoo2
 
 | Arquivo | Origem | Tamanho | Observações |
 |---|---|---|---|
-| `D3D9.dll` | dgVoodoo2 v2.87.3, pasta **`MS\x86\`** | 485.888 B | Produto "dgVoodoo", versão 4.9.0.904 |
+| `D3D9.dll` | dgVoodoo2 **v2.87.4**, pasta **`MS\x86\`** (`extras-desejado.txt`) | 482.304 B | Corrige o crash em Windows 11 builds 26H1+. A 2.87.3 (485.888 B) ficou em `versoes-anteriores/`. |
 | `dgVoodoo.conf` | mesmo zip | ~21 KB | Editado pelo `dgVoodooCpl.exe` ou por script |
-| `dgVoodooCpl.exe` | mesmo zip | 449.536 B | Só edita o `.conf` da própria pasta |
+| `dgVoodooCpl.exe` | mesmo zip | 450.560 B | Só edita o `.conf` da própria pasta |
 
 **Não confundir com dgVoodoo 1.x** (`dgVoodoo1_50Beta2.zip`, 2007): é wrapper Glide/3dfx, tem `glide2x.dll` e `.vxd`, não tem pasta `MS`. Não serve.
 
@@ -138,7 +143,7 @@ C:\DLSS5-Kit\
 │  └─ nvngx_dlss.dll
 └─ shaders\
    ├─ DLSS5_Feed.fx
-   ├─ MotionEstimation.fx + .fxh
+   ├─ vort_Motion.fx + Includes\vort_*.fxh (+ Textures\vort_BlueNoise.png)
    └─ (ReShade.fxh, ReShadeUI.fxh — do pacote padrão)
 ```
 
@@ -371,7 +376,7 @@ Estado final HL2: dgVoodoo em `bin\`, ReShade `dxgi.dll` na raiz, overlays desli
 ### 8.4 Ordem de efeitos
 - Provedor de motion vectors **acima** do DLSS 5 Feed, sempre.
 - Tudo abaixo do Feed é aplicado por cima da saída neural.
-- Automatizável via `ReShadePreset.ini`: `Techniques=DRME@MotionEstimation.fx,DLSS5_Feed@DLSS5_Feed.fx` (ordem da lista = ordem de execução).
+- Automatizável via `ReShadePreset.ini`: `Techniques=vort_MotionEffects@vort_Motion.fx,DLSS5_Feed@DLSS5_Feed.fx` (ordem da lista = ordem de execução) mais `[DLSS5_Feed.fx]` / `PreprocessorDefinitions=DLSS5_MV_PROVIDER=2`.
 
 ### 8.5 Depth
 - Generic Depth precisa estar ativo e pegando o buffer da cena.
@@ -380,8 +385,9 @@ Estado final HL2: dgVoodoo em `bin\`, ReShade `dxgi.dll` na raiz, overlays desli
 - `DisplayDepth.fx` para verificar.
 
 ### 8.6 Motion vectors
-- DRME: erro X3020 em Vulkan (validação mais rígida). D3D11 não confirmado.
-- Launchpad: funciona, mas é proprietário.
+- DRME: erro X3020 no ReShade 6.8 em qualquer API — não é só Vulkan. Fora do kit.
+- VORT (MIT, no kit) é o padrão; Launchpad funciona, mas é proprietário; LumeniteFX é o recomendado pelo Feeder, mas o usuário precisa baixar.
+- O Feed.fx só lê o provedor certo se `DLSS5_MV_PROVIDER` estiver definido para ele; provedor marcado ≠ provedor lido.
 - Sintoma de MV zerado: imagem nítida parada, borra em movimento.
 - Sintoma de MV com sinal errado: imagem duplica/arrasta. Fix: inverter componente do `MV_SIGN` no `DLSS5_Feed.fx`.
 
@@ -616,9 +622,9 @@ Get-FileHash $dll -Algorithm SHA256
 
 ---
 
-## 14. Chaves úteis do `dlss5-feed.cfg` (Feeder 0.12.0)
+## 14. Chaves úteis do `dlss5-feed.cfg` (Feeder 0.13.1-beta.1)
 
-O kit traz o **dlss5-feed 0.12.0** (`DLSS 5 Files/feeder-versao.txt` registra a release e os
+O kit traz o **dlss5-feed 0.13.1-beta.1** (desde 04/09; antes 0.12.0, guardado em `versoes-anteriores/feeder-0.12.0/`) (`DLSS 5 Files/feeder-versao.txt` registra a release e os
 hashes; `feeder-desejado.txt` é o que se muda para trocar). Até 02/09 o kit trazia o 0.5.0,
 que derrubava a sessão inteira quando o jogo recriava a swapchain — trocar resolução, tela
 cheia ou qualidade dentro do jogo — e criava a feature de novo bem quando o addon do RenoDX
@@ -628,8 +634,8 @@ tenta até três vezes e fica com a anterior se falhar.
 
 O `DLSS5_Feed.fx` 0.12.0 escolhe o provedor de MV por `DLSS5_MV_PROVIDER`, definição de
 pré-processador **por efeito** — na seção `[DLSS5_Feed.fx]` do `ReShadePreset.ini`, não no
-`[GENERAL]` do `ReShade.ini`. O instalador grava `1` (Launchpad) ou `0` (DRME/texMotionVectors);
-o checkpoint 13 confere.
+`[GENERAL]` do `ReShade.ini`. O instalador grava `2` (VORT, padrão), `1` (Launchpad), `3` (LumeniteFX Kernel) ou `0`
+(DRME/texMotionVectors); o checkpoint 13 confere.
 
 | Chave | Padrão | Uso |
 |---|---|---|
@@ -644,6 +650,8 @@ o checkpoint 13 confere.
 | `gpu_timeout_ms` | 2000 | quanto um frame espera a GPU; três seguidos estourados param o feed |
 | `mv_scale_x/y` | 1.0 | multiplicador extra |
 | `host_window` | 0 | jogos 32-bit: 0 esconde a janela do auxiliar (o painel é projetado no jogo); 1 dá janela própria |
+| `async_home` | 1 | 32-bit: handoff em pipeline (tira o teto de ~35 fps); 0 = mesmo frame |
+| `enabled` | 1 | 0.13.0+: 0 desliga tudo de verdade (antes só parava o trabalho neural) |
 
 ---
 

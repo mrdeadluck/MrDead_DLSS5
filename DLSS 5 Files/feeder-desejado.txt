@@ -9,4 +9,9 @@
 # recriava a swapchain (trocar resolução, tela cheia ou qualidade dentro do jogo) e criava
 # a feature de novo bem quando o addon do RenoDX rearma os hooks — o jogo caía. O 0.12.0
 # mantém a feature viva na recriação, tenta de novo com calma e fica com a anterior se falhar.
-versao=v0.12.0
+#
+# Por que 0.13.1-beta.1 (04/09/2026): D3D10 nativo em 32-bit, `enabled=0` desliga tudo de
+# verdade, dumps de crash, Smooth Motion em D3D11/12, interop com o Deep Fried Chicken e
+# suporte às gerações 4.5/4.6/4.7 do addon do RenoDX (o kit traz o 4.70). O 0.12.0 fica em
+# versoes-anteriores/feeder-0.12.0/ com os nomes trocados.
+versao=v0.13.1-beta.1

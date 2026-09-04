@@ -3,7 +3,7 @@ namespace Dlss5.Core;
 /// <summary>Opções escolhidas pelo usuário antes de gerar o plano.</summary>
 public sealed class InstallOptions
 {
-    public MvProvider MvProvider { get; set; } = MvProvider.Launchpad;
+    public MvProvider MvProvider { get; set; } = MvProviders.Padrao;
 
     /// <summary>Tecla do overlay do ReShade (qualquer Virtual-Key Code; Home por padrão).</summary>
     public int OverlayKey { get; set; } = ReShadeConfigWriter.KeyHome;

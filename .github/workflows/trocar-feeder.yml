@@ -13,11 +13,16 @@ name: Trocar o Feeder do kit (dlss5-feed) e refazer o pacote
 # Feeder (DLSS5-Feeder-kit.zip), para atualizar um kit já baixado sem os 230 MB.
 on:
   push:
-    branches: ['claude/executable-fixes-xytsgm', 'main']
+    branches: ['claude/renodx-updates-e5mjc7', 'claude/upload-large-files-02562q', 'claude/executable-fixes-xytsgm', 'main']
     paths:
       - 'DLSS 5 Files/feeder-desejado.txt'
       - '.github/workflows/trocar-feeder.yml'
   workflow_dispatch:
+
+# Os workflows trocar-* commitam no mesmo ramo: um de cada vez.
+concurrency:
+  group: trocar-kit-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -197,6 +202,8 @@ jobs:
           git diff --cached --quiet
           if ($LASTEXITCODE -ne 0) {
             git commit -m "Kit: o Feeder passa a ser o dlss5-feed ${{ steps.desejado.outputs.versao }}" -m "Baixado da release ${{ steps.desejado.outputs.versao }} de jlrouzies-fr/DLSS5-Feeder e conferido (PE, FileVersion e string de versao). Os hashes estao em feeder-versao.txt. O 0.5.0 derrubava o jogo quando a swapchain era recriada ao trocar uma configuracao; o novo mantem a feature viva nessa hora."
+            $env:GIT_LFS_SKIP_SMUDGE = "1"
+            git pull --rebase origin ${{ github.ref_name }}
             git push origin HEAD:${{ github.ref_name }}
             "trocou=1" >> $env:GITHUB_OUTPUT
             Write-Host "Trocado e commitado."

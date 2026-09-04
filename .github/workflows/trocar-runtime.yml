@@ -11,11 +11,16 @@ name: Trocar o runtime do kit (nvngx_dlssnr.dll) e refazer o pacote
 # Cada execução consome ~166 MB de armazenamento do LFS e ~230 MB de download.
 on:
   push:
-    branches: ['claude/executable-fixes-xytsgm', 'main']
+    branches: ['claude/renodx-updates-e5mjc7', 'claude/upload-large-files-02562q', 'claude/executable-fixes-xytsgm', 'main']
     paths:
       - 'DLSS 5 Files/runtime-desejado.txt'
       - '.github/workflows/trocar-runtime.yml'
   workflow_dispatch:
+
+# Os workflows trocar-* commitam no mesmo ramo: um de cada vez.
+concurrency:
+  group: trocar-kit-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -77,6 +82,8 @@ jobs:
           git diff --cached --quiet
           if ($LASTEXITCODE -ne 0) {
             git commit -m "Kit: nvngx_dlssnr.dll passa a ser o ${{ steps.desejado.outputs.versao }} (build do ShortFuse, RTX 20-50)" -m "Baixado de RankFTW/rhi-repo e conferido pelo SHA-256 ${{ steps.desejado.outputs.sha256 }}. O arquivo anterior era um remendo do original de RTX 50: dizia ACTIVE e nao desenhava nada."
+            $env:GIT_LFS_SKIP_SMUDGE = "1"
+            git pull --rebase origin ${{ github.ref_name }}
             git push origin HEAD:${{ github.ref_name }}
             "trocou=1" >> $env:GITHUB_OUTPUT
             Write-Host "Trocado e commitado."

@@ -1,0 +1,160 @@
+name: Trocar os extras do kit (RenoDX, dgVoodoo2, alternativas) e refazer o pacote
+
+# Os binários do kit que não têm workflow próprio — o addon do RenoDX, o dgVoodoo2, a camada
+# Vulkan do Feeder, as alternativas (renodx-dlss do ShortFuse, AIO do kibblerz, MFG Unlock) e
+# a textura do VORT — vêm de "DLSS 5 Files/extras-desejado.txt": uma linha por arquivo, com
+# a URL (release pública do GitHub), o SHA-256 esperado e, quando é zip, o caminho dentro
+# dele. Este job baixa, confere o hash e commita no LFS — porque o objeto do LFS não sobe a
+# partir do ambiente de desenvolvimento. Os hashes conferidos ficam em extras-versao.txt.
+# Depois refaz o DLSS5-Pacote-Completo.zip.
+on:
+  push:
+    branches: ['claude/renodx-updates-e5mjc7', 'claude/upload-large-files-02562q', 'claude/executable-fixes-xytsgm', 'main']
+    paths:
+      - 'DLSS 5 Files/extras-desejado.txt'
+      - '.github/workflows/trocar-extras.yml'
+  workflow_dispatch:
+
+# Os workflows trocar-* commitam no mesmo ramo: um de cada vez.
+concurrency:
+  group: trocar-kit-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  trocar:
+    runs-on: windows-latest
+    outputs:
+      trocou: ${{ steps.commit.outputs.trocou }}
+    steps:
+      - name: Checkout (só os ponteiros do LFS)
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - name: Baixar, conferir e gravar cada linha do manifesto
+        shell: pwsh
+        run: |
+          $manifesto = "DLSS 5 Files\extras-desejado.txt"
+          $linhas = Get-Content $manifesto | Where-Object { $_ -match '\S' -and $_ -notmatch '^\s*#' }
+          if (-not $linhas) { throw "extras-desejado.txt não tem nenhuma linha de arquivo" }
+          $cache = "${{ github.workspace }}\extras-cache"
+          New-Item -ItemType Directory -Path $cache -Force | Out-Null
+          $baixados = @{}
+          $registro = @("# Gravado pelo workflow trocar-extras.yml. Não edite: mude extras-desejado.txt.", "data=$(Get-Date -Format 'yyyy-MM-dd HH:mm') UTC")
+          $n = 0
+          foreach ($linha in $linhas) {
+            $col = $linha -split '\s*\|\s*'
+            if ($col.Count -lt 3) { throw "Linha inválida (precisa de destino | url | sha256 [| entrada]): $linha" }
+            $destino = $col[0].Trim(); $url = $col[1].Trim(); $sha = $col[2].Trim().ToLowerInvariant()
+            $entrada = if ($col.Count -ge 4) { $col[3].Trim() } else { '' }
+            if ($sha -notmatch '^[0-9a-f]{64}$') { throw "SHA-256 inválido para ${destino}: '$sha'" }
+            if (-not $baixados.ContainsKey($url)) {
+              $nome = [IO.Path]::GetFileName(([uri]$url).AbsolutePath)
+              $alvo = Join-Path $cache ("{0:D3}-{1}" -f $baixados.Count, $nome)
+              Write-Host "Baixando $url"
+              Invoke-WebRequest -Uri $url -OutFile $alvo -MaximumRetryCount 3 -RetryIntervalSec 5
+              if ($nome -like '*.zip') {
+                $pasta = "$alvo.extraido"
+                Expand-Archive -Path $alvo -DestinationPath $pasta -Force
+                $baixados[$url] = $pasta
+              } else {
+                $baixados[$url] = $alvo
+              }
+            }
+            $origem = $baixados[$url]
+            if ($entrada) {
+              $origem = Join-Path $origem ($entrada -replace '/', '\')
+              if (-not (Test-Path $origem)) {
+                # zip com uma pasta raiz a mais (ex.: dgVoodoo2_87_4\MS\x86\...): procura pelo caminho relativo
+                $achado = Get-ChildItem $baixados[$url] -Recurse -File | Where-Object { $_.FullName.Replace('\', '/') -like "*/$entrada" } | Select-Object -First 1
+                if (-not $achado) { throw "'$entrada' não existe dentro de $url" }
+                $origem = $achado.FullName
+              }
+            }
+            $real = (Get-FileHash $origem -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($real -ne $sha) { throw "SHA-256 de $destino não bate: esperado $sha, baixado $real ($url $entrada). Nada foi trocado." }
+            $alvoFinal = Join-Path "DLSS 5 Files" ($destino -replace '/', '\')
+            New-Item -ItemType Directory -Path (Split-Path $alvoFinal -Parent) -Force | Out-Null
+            Copy-Item $origem $alvoFinal -Force
+            $tam = (Get-Item $alvoFinal).Length
+            Write-Host ("OK  {0,10} B  {1}" -f $tam, $destino)
+            $registro += "$destino=$sha $tam $url"
+            $n++
+          }
+          [IO.File]::WriteAllLines("DLSS 5 Files\extras-versao.txt", $registro, (New-Object Text.UTF8Encoding $false))
+          Write-Host "$n arquivo(s) conferido(s)."
+
+      - name: Commitar no LFS
+        id: commit
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git lfs install --local
+          git add "DLSS 5 Files"
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "Kit: extras de extras-desejado.txt baixados e conferidos (SHA-256)" -m "Cada arquivo veio da URL listada em DLSS 5 Files/extras-desejado.txt e teve o SHA-256 conferido antes de entrar no LFS. Os hashes estao em extras-versao.txt."
+            $env:GIT_LFS_SKIP_SMUDGE = "1"
+            git pull --rebase origin ${{ github.ref_name }}
+            git push origin HEAD:${{ github.ref_name }}
+            "trocou=1" >> $env:GITHUB_OUTPUT
+            Write-Host "Trocado e commitado."
+          } else {
+            "trocou=0" >> $env:GITHUB_OUTPUT
+            Write-Host "Nada a commitar: o kit já tem esses arquivos."
+          }
+
+  pacote:
+    needs: trocar
+    if: needs.trocar.outputs.trocou == '1'
+    runs-on: windows-latest
+    steps:
+      - name: Checkout com os arquivos do kit (no commit novo)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          lfs: true
+
+      - name: Instalar .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Compilar o executável
+        working-directory: DLSS5-AutoInstaller
+        run: >
+          dotnet publish src/Dlss5.App/Dlss5.App.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:DebugType=None
+          -p:SourceRevisionId=${{ github.sha }}
+          -o ${{ github.workspace }}\publish
+
+      - name: Montar o pacote
+        shell: pwsh
+        run: |
+          $dest = "${{ github.workspace }}\DLSS5-Pacote"
+          New-Item -ItemType Directory -Path $dest -Force | Out-Null
+          Copy-Item "${{ github.workspace }}\publish\DLSS5-AutoInstaller.exe" $dest
+          Copy-Item "${{ github.workspace }}\DLSS 5 Files" (Join-Path $dest 'DLSS 5 Files') -Recurse
+          Copy-Item (Join-Path $dest 'DLSS 5 Files\LEIA-ME.txt') (Join-Path $dest 'LEIA-ME.txt')
+          $ponteiros = Get-ChildItem $dest -Recurse -File |
+            Where-Object { $_.Length -lt 300 -and ((Get-Content $_.FullName -TotalCount 1 -ErrorAction SilentlyContinue) -like 'version https://git-lfs.github.com/spec/*') }
+          $graves = $ponteiros | Where-Object { $_.Extension -in '.dll', '.exe', '.addon64', '.addon32', '.fx', '.fxh', '.png', '.conf' }
+          $ponteiros | ForEach-Object { Write-Host "PONTEIRO LFS: $($_.FullName)" }
+          if ($graves) { throw "O checkout nao materializou os arquivos do LFS." }
+          Compress-Archive -Path "$dest\*" -DestinationPath "${{ github.workspace }}\DLSS5-Pacote-Completo.zip" -CompressionLevel Optimal
+          $z = Get-Item "${{ github.workspace }}\DLSS5-Pacote-Completo.zip"
+          Write-Host ("Zip com {0} MB, sha256={1}" -f [math]::Round($z.Length / 1MB, 1), (Get-FileHash $z.FullName -Algorithm SHA256).Hash.ToLowerInvariant())
+
+      - name: Publicar na Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: installer-latest
+          name: DLSS 5 AutoInstaller (build mais recente)
+          prerelease: true
+          overwrite_files: true
+          files: DLSS5-Pacote-Completo.zip

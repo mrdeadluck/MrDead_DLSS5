@@ -27,7 +27,7 @@ public static class FeederKit
     public const string CrashDump = "dlss5-feed-crash.dmp";
 
     /// <summary>A versão que o kit deve trazer (é a que o workflow trocar-feeder baixa).</summary>
-    public const string VersaoDoKit = "0.12.0";
+    public const string VersaoDoKit = "0.13.1-beta.1";
 
     /// <summary>Abaixo disto a recriação do runtime derruba o jogo.</summary>
     public static readonly Version Minima = new(0, 12, 0);

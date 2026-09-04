@@ -202,6 +202,12 @@ public static class ReShadeConfigWriter
         sb.AppendLine();
         sb.AppendLine(RenodxIni.Secao);
         sb.AppendLine($"{RenodxIni.Chave}={renodxHooks}");
+        // As duas chaves que o Feeder 0.9+ grava quando estão ausentes (addon 4.5+):
+        // NeuralUplift=1 liga o Neural Rendering; NREnableUpscaling=0 deixa desligado o
+        // upscaling experimental do 4.6, que com o contrato 1:1 do Feeder não engata e
+        // estaciona o NR. No caminho direto valem do mesmo jeito.
+        sb.AppendLine("NeuralUplift=1");
+        sb.AppendLine("NREnableUpscaling=0");
         return sb.ToString();
 
         static int Bit(bool b) => b ? 1 : 0;
@@ -225,13 +231,9 @@ public static class ReShadeConfigWriter
             return sb.ToString();
         }
 
-        // Nomes reais das techniques (lidos dos .fx do kit):
-        //   MotionEstimation.fx      -> DRME
-        //   MartysMods_LAUNCHPAD.fx  -> MartysMods_Launchpad
-        //   DLSS5_Feed.fx            -> DLSS5_Feed
-        string mv = provider == MvProvider.Drme
-            ? "DRME@MotionEstimation.fx"
-            : "MartysMods_Launchpad@MartysMods_LAUNCHPAD.fx";
+        // Nomes reais das techniques (lidos dos .fx do kit): ver MvProviders.Technique.
+        //   DLSS5_Feed.fx -> DLSS5_Feed
+        string mv = MvProviders.Technique(provider);
         const string feed = "DLSS5_Feed@DLSS5_Feed.fx";
 
         // A ordem da lista = ordem de execução; o provedor vem primeiro.
@@ -258,7 +260,7 @@ public static class ReShadeConfigWriter
     /// O valor de DLSS5_MV_PROVIDER que o DLSS5_Feed.fx espera para cada provedor do kit:
     /// 0 = texMotionVectors (DRME, qUINT), 1 = iMMERSE Launchpad, 2 = VORT, 3/4 = LumeniteFX.
     /// </summary>
-    public static int ProvedorNoShader(MvProvider provider) => provider == MvProvider.Drme ? 0 : 1;
+    public static int ProvedorNoShader(MvProvider provider) => MvProviders.Definicao(provider);
 
     /// <summary>O DLSS5_MV_PROVIDER gravado na seção [DLSS5_Feed.fx] do preset; null se não há.</summary>
     public static int? LerProvedorDoPreset(string? preset)
