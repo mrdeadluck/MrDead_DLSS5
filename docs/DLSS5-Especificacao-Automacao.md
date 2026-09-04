@@ -414,6 +414,12 @@ Estado final HL2: dgVoodoo em `bin\`, ReShade `dxgi.dll` na raiz, overlays desli
 - Ada não tem Neural Texture Compression. DLAA only = pior caso de consumo.
 - Crashes em RTX 40 com < 16 GB são quase sempre VRAM. Testar em 1080p janela primeiro.
 
+### 8.12 Anticheat que sobe junto com o exe (EA Javelin, Easy Anti-Cheat)
+- Os arquivos instalados são os de sempre; o que muda é que o processo não carrega DLL que o anticheat não reconhece. Sintoma fixo: `ReShade.log` **nem nasce** (não é overlay, não é nome de DLL).
+- **EA Javelin** (FC, Battlefield, F1…): a Steam chama `EAAntiCheat.GameServiceLauncher.exe`. O programa reconhece pelo launcher na pasta e explica o caminho do Live Editor (offline).
+- **Easy Anti-Cheat** (Gears of War Reloaded): `GOWDE-Steam.exe` em `Binaries_x64`, `Content\EasyAntiCheat\Settings.json` na raiz. Com o kit na pasta o jogo fecha com **"Your machine does not support Direct3D 12. Force quitting."** — é o EAC recusando o `dxgi.dll`, não a placa. O programa reconhece a pasta `EasyAntiCheat` (ou `start_protected_game.exe`, `EasyAntiCheat_EOS_Setup.exe`…) e diz o contorno da comunidade para jogar a campanha offline: uma letra trocada no `productid` do `Settings.json`, o EAC não sobe, o jogo abre pela Steam. Multiplayer recusa sem o EAC. **O programa não edita arquivo de anticheat** — reconhece, avisa (detecção, plano, item 7, passos manuais, "Isolar a causa", botão Abrir o jogo) e deixa a decisão com o usuário.
+- O exe do Gears é cifrado (25 MB sem uma string de API). O `ApiDetector` dizia "Vulkan" por causa de `vulkan-1.dll` dentro do `nvngx_dlss.dll`. Regra nova: DLL de fornecedor (nvngx*, sl.*, XeSS, FidelityFX, d3dcompiler) e proxies (dxgi/d3d11/d3d12/dinput8…) não entram na varredura de renderizador; `GOWDE-*` é D3D12 pelo nome; exe que exporta `D3D12SDKVersion` ou traz `D3D12\D3D12Core.dll` (Agility SDK) é D3D12; `D3D12CreateDevice` no `ReShade.log` conta como D3D12 quando não há Feeder na pasta. Exe sem pista nenhuma vira a nota "exe cifrado" na detecção.
+
 ---
 
 ## 9. Checkpoints de verificação (em ordem)

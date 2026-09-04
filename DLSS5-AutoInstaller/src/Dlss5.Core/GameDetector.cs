@@ -104,6 +104,11 @@ public static class GameDetector
                              "no EA App (Configurações → Sobreposição no jogo) antes de abrir. Se mesmo assim não houver " +
                              "log, troque \"ReShade entra como\" para o outro nome (d3d11.dll) e instale de novo.");
 
+        // Easy Anti-Cheat (Gears of War Reloaded): a DLL do ReShade não carrega sob ele e
+        // o jogo fecha com "does not support Direct3D 12". Dito aqui, antes de instalar.
+        if (EasyAntiCheat.Encontrar(profile.GameFolder, profile.ExeFolder) is { } eac)
+            result.Notes.Add(EasyAntiCheat.Nota(eac, profile.GameFolder));
+
         if (MotorFox.EhFoxEngine(profile.RealExePath))
         {
             result.Notes.Add(MotorFox.Aviso);
@@ -231,6 +236,12 @@ public static class GameDetector
 
         var detection = ApiDetector.Detect(profile.RealExePath, exeDir);
         profile.ApiDetection = detection;
+
+        if (detection.ExeOpaco)
+            notes.Add("O executável não mostra pista nenhuma de API (nem import, nem string, nem NGX): é a cara de " +
+                      "exe cifrado ou empacotado (Arxan, Denuvo, stub da Steam). A detecção fica com o que há ao " +
+                      "lado dele e com os logs da última execução — as DLLs da NVIDIA (nvngx_*.dll) e os proxies " +
+                      "não contam, porque citam todas as APIs.");
 
         if (detection.Api != GraphicsApi.Unknown)
         {

@@ -687,6 +687,18 @@ public static class CheckpointVerifier
                 yield break;
             }
 
+            if (EasyAntiCheat.Presente(gameFolder, exeFolder))
+            {
+                // Gears of War Reloaded: sob o Easy Anti-Cheat a DLL não roda, o log não
+                // nasce e o jogo fecha com "does not support Direct3D 12". Overlays não
+                // têm nada a ver com isso.
+                yield return new CheckResult(7, "ReShade carregou", CheckStatus.Fail,
+                    "ReShade.log não existe — e este jogo abre sob o Easy Anti-Cheat, que não deixa a DLL do " +
+                    "ReShade carregar (no Gears Reloaded o jogo fecha com \"Your machine does not support " +
+                    "Direct3D 12\"). " + EasyAntiCheat.Aviso, EasyAntiCheat.ComoAbrir);
+                yield break;
+            }
+
             // "Abre, sem Home, sem log" tem uma escada curta, e ela vai na ordem do que mais
             // acontece: sobreposição (EA App na Frostbite — NFS — é o caso clássico), depois o
             // OUTRO nome que o jogo aceita para a mesma DLL (dxgi.dll ↔ d3d11.dll / d3d12.dll),

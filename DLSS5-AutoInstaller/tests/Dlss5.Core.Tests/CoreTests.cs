@@ -5702,3 +5702,321 @@ public class NrDesligadoNoHostTests
         finally { Directory.Delete(dir, true); }
     }
 }
+
+/// <summary>
+/// Gears of War Reloaded: GOWDE-Steam.exe em Binaries_x64, Content\EasyAntiCheat\Settings.json
+/// na raiz. Sob o EAC a DLL do ReShade não carrega, o log não nasce e o jogo fecha com
+/// "Your machine does not support Direct3D 12". O programa reconhece, explica e não mexe
+/// em arquivo de anticheat.
+/// </summary>
+public class EasyAntiCheatTests
+{
+    private static string Pasta()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-eac-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    private static (string Raiz, string Binaries) GearsReloaded(string raiz)
+    {
+        var binaries = Path.Combine(raiz, "Binaries_x64");
+        Directory.CreateDirectory(binaries);
+        var eac = Path.Combine(raiz, "Content", "EasyAntiCheat");
+        Directory.CreateDirectory(eac);
+        File.WriteAllText(Path.Combine(eac, "Settings.json"),
+            "{\"title_id\":\"1\",\"productid\":\"7e3756e03bda4408a9197c6f93437f03\",\"executable\":\"Binaries_x64\\\\GOWDE-Steam.exe\"}");
+        return (raiz, binaries);
+    }
+
+    [Fact]
+    public void ReconheceContentEasyAntiCheatDoGearsEOsArquivosSoltos()
+    {
+        var dir = Pasta();
+        try
+        {
+            Assert.False(EasyAntiCheat.Presente(dir, dir));
+            Assert.False(EasyAntiCheat.Presente(null, null));
+
+            // Pasta EasyAntiCheat vazia (sobra) não é EAC.
+            Directory.CreateDirectory(Path.Combine(dir, EasyAntiCheat.Pasta));
+            Assert.False(EasyAntiCheat.Presente(dir, dir));
+
+            var (raiz, binaries) = GearsReloaded(dir);
+            var onde = EasyAntiCheat.Encontrar(raiz, binaries);
+            Assert.NotNull(onde);
+            Assert.EndsWith(Path.Combine("Content", "EasyAntiCheat"), onde!);
+            Assert.EndsWith("Settings.json", EasyAntiCheat.SettingsDe(raiz, binaries)!);
+            Assert.Contains("Content", EasyAntiCheat.Nota(onde!, raiz));
+            Assert.Contains("productid", EasyAntiCheat.Nota(onde!, raiz));
+
+            // Arquivo solto na raiz (outros jogos com EAC).
+            var outro = Pasta();
+            try
+            {
+                File.WriteAllText(Path.Combine(outro, "start_protected_game.exe"), "x");
+                Assert.True(EasyAntiCheat.Presente(outro, outro));
+                Assert.Null(EasyAntiCheat.SettingsDe(outro, outro));
+            }
+            finally { Directory.Delete(outro, true); }
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void SemReShadeLogNumJogoComEacOItem7ApontaOEacENaoOsOverlays()
+    {
+        var dir = Pasta();
+        try
+        {
+            var (raiz, binaries) = GearsReloaded(dir);
+            var perfil = new GameProfile
+            {
+                GameFolder = raiz,
+                RealExePath = Path.Combine(binaries, "GOWDE-Steam.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D12,
+                HasNativeDlss = true,
+            };
+            Assert.Equal(binaries, perfil.ExeFolder);
+
+            var c7 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 7);
+            Assert.Equal(CheckStatus.Fail, c7.State);
+            Assert.Contains("Easy Anti-Cheat", c7.Detail);
+            Assert.Contains("Direct3D 12", c7.Detail);
+            Assert.Contains("productid", c7.FixHint!);
+            Assert.Contains("OFFLINE", c7.FixHint!);
+            Assert.DoesNotContain("sobreposi", c7.Detail, StringComparison.OrdinalIgnoreCase);
+
+            var plan = InstallPlanBuilder.Build(perfil, PlanBuilderTests.KitCompleto(), new InstallOptions());
+            Assert.True(plan.CanRun);   // os arquivos são os mesmos: aviso, não bloqueio
+            Assert.Contains(plan.Warnings, w => w.Contains("Easy Anti-Cheat", StringComparison.Ordinal));
+            // E o plano não toca no arquivo do anticheat.
+            Assert.DoesNotContain(plan.Actions, a => (a.TargetPath ?? "").Contains("EasyAntiCheat", StringComparison.OrdinalIgnoreCase));
+
+            var passo = ManualSteps.For(perfil, new InstallOptions()).First(s => s.Title.Contains("Easy Anti-Cheat"));
+            Assert.True(passo.CriticalBeforeLaunch);
+            Assert.Contains("Settings.json", passo.Detail);
+
+            var diag = SymptomDiagnoser.Diagnose(perfil);
+            Assert.Contains(diag, d => d.Source == "Easy Anti-Cheat");
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void ComReShadeLogOItem7NaoAcusaOEac()
+    {
+        // EAC já fora do caminho e o ReShade carregou: o item 7 segue o fluxo normal.
+        var dir = Pasta();
+        try
+        {
+            var (raiz, binaries) = GearsReloaded(dir);
+            File.WriteAllText(Path.Combine(binaries, "ReShade.log"), "INFO | Initializing crosire's ReShade version '6.8.0'\n");
+            var perfil = new GameProfile
+            {
+                GameFolder = raiz,
+                RealExePath = Path.Combine(binaries, "GOWDE-Steam.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D12,
+                HasNativeDlss = true,
+            };
+            var c7 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 7);
+            Assert.DoesNotContain("Easy Anti-Cheat", c7.Detail);
+            Assert.DoesNotContain(SymptomDiagnoser.Diagnose(perfil), d => d.Source == "Easy Anti-Cheat");
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}
+
+/// <summary>
+/// O Gears Reloaded saía como "Vulkan" porque o exe (cifrado, 25 MB) não mostra string
+/// nenhuma e a única pista era "vulkan-1.dll" dentro do nvngx_dlss.dll — que fala em
+/// Vulkan porque o DLSS também roda em Vulkan. DLL da NVIDIA e proxies não são o
+/// renderizador; e o nome GOWDE-*.exe entrega o D3D12.
+/// </summary>
+public class ApiNoGearsReloadedTests
+{
+    private static string Pasta()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-gears-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    private static byte[] Com(params string[] textos)
+    {
+        var buffer = new byte[64 * 1024];
+        int offset = 1024;
+        foreach (var t in textos)
+        {
+            var bytes = System.Text.Encoding.ASCII.GetBytes(t);
+            Array.Copy(bytes, 0, buffer, offset, bytes.Length);
+            offset += 4096;
+        }
+        return buffer;
+    }
+
+    [Fact]
+    public void NvngxDlssNaoFazOJogoVirarVulkanEONomeGowdeEntregaOD3D12()
+    {
+        var dir = Pasta();
+        try
+        {
+            var exe = Path.Combine(dir, "GOWDE-Steam.exe");
+            File.WriteAllBytes(exe, new byte[32 * 1024]);                       // cifrado: nada legível
+            File.WriteAllBytes(Path.Combine(dir, "nvngx_dlss.dll"), Com("vulkan-1.dll", "NVSDK_NGX_VULKAN_Init"));
+
+            var r = ApiDetector.Detect(exe, dir);
+            Assert.Equal(GraphicsApi.D3D12, r.Api);
+            Assert.True(r.Confident);
+            Assert.True(r.ExeOpaco);
+            Assert.DoesNotContain(r.Evidence, e => e.Api == GraphicsApi.Vulkan);
+            Assert.Contains("Gears of War", r.TopSources());
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void SemNomeConhecidoONvngxContinuaSemContarEADeteccaoFicaEmAberto()
+    {
+        var dir = Pasta();
+        try
+        {
+            var exe = Path.Combine(dir, "game.exe");
+            File.WriteAllBytes(exe, new byte[32 * 1024]);
+            File.WriteAllBytes(Path.Combine(dir, "nvngx_dlss.dll"), Com("vulkan-1.dll"));
+            File.WriteAllBytes(Path.Combine(dir, "sl.interposer.dll"), Com("vkCreateSwapchainKHR", "D3D12CreateDevice"));
+
+            var r = ApiDetector.Detect(exe, dir);
+            Assert.Equal(GraphicsApi.Unknown, r.Api);
+            Assert.True(r.ExeOpaco);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void ProxiesNaPastaNaoContamMasORenderizadorDeVerdadeConta()
+    {
+        var dir = Pasta();
+        try
+        {
+            var exe = Path.Combine(dir, "game.exe");
+            File.WriteAllBytes(exe, new byte[32 * 1024]);
+            // O dxgi.dll do ReShade e o dinput8.dll do REFramework citam tudo.
+            File.WriteAllBytes(Path.Combine(dir, "dxgi.dll"), Com("vkCreateSwapchainKHR", "Direct3DCreate9", "D3D12CreateDevice"));
+            File.WriteAllBytes(Path.Combine(dir, "dinput8.dll"), Com("D3D12CreateDevice", "D3D11CreateDevice"));
+            Assert.Equal(GraphicsApi.Unknown, ApiDetector.Detect(exe, dir).Api);
+
+            // A DLL grande do motor, essa sim.
+            File.WriteAllBytes(Path.Combine(dir, "Engine.dll"), Com("D3D11CreateDeviceAndSwapChain", "d3d11.dll"));
+            Assert.Equal(GraphicsApi.D3D11, ApiDetector.Detect(exe, dir).Api);
+
+            Assert.True(ApiDetector.EhDllQueNaoRenderiza("nvngx_dlssg.dll"));
+            Assert.True(ApiDetector.EhDllQueNaoRenderiza("sl.dlss.dll"));
+            Assert.True(ApiDetector.EhDllQueNaoRenderiza("D3DCOMPILER_47.dll"));
+            Assert.True(ApiDetector.EhDllQueNaoRenderiza("libxess.dll"));
+            Assert.False(ApiDetector.EhDllQueNaoRenderiza("Engine.dll"));
+            Assert.False(ApiDetector.EhDllQueNaoRenderiza("materialsystem_dx11.dll"));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    /// <summary>PE32+ mínimo com uma tabela de exports contendo um nome.</summary>
+    internal static byte[] PeComExport(string nome)
+    {
+        var img = new byte[0x600];
+        img[0] = (byte)'M'; img[1] = (byte)'Z';
+        BitConverter.GetBytes(0x80u).CopyTo(img, 0x3C);
+        int pe = 0x80;
+        img[pe] = (byte)'P'; img[pe + 1] = (byte)'E';
+        BitConverter.GetBytes((ushort)0x8664).CopyTo(img, pe + 4);   // Machine x64
+        BitConverter.GetBytes((ushort)1).CopyTo(img, pe + 6);        // NumberOfSections
+        BitConverter.GetBytes((ushort)240).CopyTo(img, pe + 20);     // SizeOfOptionalHeader
+        BitConverter.GetBytes((ushort)0x22).CopyTo(img, pe + 22);    // Characteristics
+        int opt = pe + 24;
+        BitConverter.GetBytes((ushort)0x20B).CopyTo(img, opt);       // PE32+
+        BitConverter.GetBytes(16u).CopyTo(img, opt + 108);           // NumberOfRvaAndSizes
+        int dd = opt + 112;
+        BitConverter.GetBytes(0x1000u).CopyTo(img, dd);              // export RVA
+        BitConverter.GetBytes(0x100u).CopyTo(img, dd + 4);           // export size
+        int sec = opt + 240;
+        System.Text.Encoding.ASCII.GetBytes(".rdata").CopyTo(img, sec);
+        BitConverter.GetBytes(0x200u).CopyTo(img, sec + 8);          // VirtualSize
+        BitConverter.GetBytes(0x1000u).CopyTo(img, sec + 12);        // VirtualAddress
+        BitConverter.GetBytes(0x200u).CopyTo(img, sec + 16);         // SizeOfRawData
+        BitConverter.GetBytes(0x400u).CopyTo(img, sec + 20);         // PointerToRawData
+        int ed = 0x400;                                              // RVA 0x1000
+        BitConverter.GetBytes(1u).CopyTo(img, ed + 20);              // NumberOfFunctions
+        BitConverter.GetBytes(1u).CopyTo(img, ed + 24);              // NumberOfNames
+        BitConverter.GetBytes(0x1040u).CopyTo(img, ed + 28);         // AddressOfFunctions
+        BitConverter.GetBytes(0x1050u).CopyTo(img, ed + 32);         // AddressOfNames
+        BitConverter.GetBytes(0x1060u).CopyTo(img, ed + 36);         // AddressOfNameOrdinals
+        BitConverter.GetBytes(0x1080u).CopyTo(img, 0x450);           // nome[0] RVA
+        System.Text.Encoding.ASCII.GetBytes(nome).CopyTo(img, 0x480);
+        return img;
+    }
+
+    [Fact]
+    public void ExeQueExportaD3D12SDKVersionEhD3D12()
+    {
+        var dir = Pasta();
+        try
+        {
+            var exe = Path.Combine(dir, "game.exe");
+            File.WriteAllBytes(exe, PeComExport("D3D12SDKVersion"));
+            Assert.Equal(PeArchitecture.X64, PeFile.GetArchitecture(exe));
+            Assert.Contains("D3D12SDKVersion", PeFile.GetExportedNames(exe));
+            Assert.Empty(PeFile.GetImportedDlls(exe));
+
+            var r = ApiDetector.Detect(exe, dir);
+            Assert.Equal(GraphicsApi.D3D12, r.Api);
+            Assert.True(r.Confident);
+            Assert.False(r.ExeOpaco);
+            Assert.Contains("D3D12SDKVersion", r.TopSources());
+
+            // Export qualquer não decide nada.
+            File.WriteAllBytes(exe, PeComExport("SomeOtherExport"));
+            Assert.Equal(GraphicsApi.Unknown, ApiDetector.Detect(exe, dir).Api);
+            Assert.Empty(PeFile.GetExportedNames(Path.Combine(dir, "nao-existe.exe")));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void AgilitySdkAoLadoContaParaD3D12()
+    {
+        var dir = Pasta();
+        try
+        {
+            var exe = Path.Combine(dir, "game.exe");
+            File.WriteAllBytes(exe, new byte[32 * 1024]);
+            Directory.CreateDirectory(Path.Combine(dir, "D3D12"));
+            File.WriteAllBytes(Path.Combine(dir, "D3D12", "D3D12Core.dll"), new byte[8 * 1024]);
+
+            var r = ApiDetector.Detect(exe, dir);
+            Assert.Equal(GraphicsApi.D3D12, r.Api);
+            Assert.Contains(r.Evidence, e => e.Source.Contains("Agility"));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void D3D12CreateDeviceNoReShadeLogSoContaSemFeederNaPasta()
+    {
+        var dir = Pasta();
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "ReShade.log"),
+                "INFO | Redirecting D3D12CreateDevice(pAdapter = 0000, MinimumFeatureLevel = c100, ...)\n" +
+                "INFO | Redirecting ID3D12Device::CreateCommandQueue(this = 0000)\n");
+            var pistas = ApiDetector.LogEvidence(dir).ToList();
+            Assert.Contains(pistas, p => p.Api == GraphicsApi.D3D12 && p.Weight >= 60);
+
+            // Com o Feeder na pasta o D3D12CreateDevice pode ser o device privado dele.
+            File.WriteAllBytes(Path.Combine(dir, FeederKit.Addon64), new byte[16]);
+            Assert.DoesNotContain(ApiDetector.LogEvidence(dir), p => p.Api == GraphicsApi.D3D12);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}

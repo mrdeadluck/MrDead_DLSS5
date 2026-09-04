@@ -49,68 +49,16 @@ public static class PeFile
         {
             using var fs = File.OpenRead(path);
             using var br = new BinaryReader(fs);
-            if (br.ReadUInt16() != 0x5A4D) return result;
-            fs.Position = 0x3C;
-            uint peOffset = br.ReadUInt32();
-            fs.Position = peOffset;
-            if (br.ReadUInt32() != 0x00004550) return result;
+            var pe = LerCabecalhos(fs, br);
+            if (pe is null) return result;
 
-            // COFF header
-            fs.Position = peOffset + 4 + 2; // pula Machine
-            ushort numberOfSections = br.ReadUInt16();
-            fs.Position = peOffset + 4 + 16;
-            ushort sizeOfOptionalHeader = br.ReadUInt16();
-            fs.Position += 2; // Characteristics
-
-            long optionalHeaderStart = peOffset + 4 + 20;
-            fs.Position = optionalHeaderStart;
-            ushort magic = br.ReadUInt16();
-            bool isPe32Plus = magic == 0x20B;
-            if (magic != 0x10B && magic != 0x20B) return result;
-
-            // Data directories: PE32 em +96, PE32+ em +112. Import = índice 1.
-            long dataDirStart = optionalHeaderStart + (isPe32Plus ? 112 : 96);
-            fs.Position = dataDirStart + 8; // índice 1 (import), 8 bytes por entrada
+            // Data directories: Import = índice 1.
+            fs.Position = pe.DataDirStart + 8;
             uint importRva = br.ReadUInt32();
             uint importSize = br.ReadUInt32();
             if (importRva == 0 || importSize == 0) return result;
 
-            // Tabela de seções para converter RVA -> offset de arquivo
-            long sectionTableStart = optionalHeaderStart + sizeOfOptionalHeader;
-            var sections = new List<(uint va, uint rawSize, uint rawPtr)>();
-            for (int i = 0; i < numberOfSections; i++)
-            {
-                long s = sectionTableStart + i * 40L;
-                fs.Position = s + 12;
-                uint virtualAddress = br.ReadUInt32();
-                fs.Position = s + 16;
-                uint sizeOfRawData = br.ReadUInt32();
-                uint pointerToRawData = br.ReadUInt32();
-                sections.Add((virtualAddress, sizeOfRawData, pointerToRawData));
-            }
-
-            long RvaToOffset(uint rva)
-            {
-                foreach (var (va, rawSize, rawPtr) in sections)
-                {
-                    if (rva >= va && rva < va + rawSize)
-                        return rawPtr + (rva - va);
-                }
-                return -1;
-            }
-
-            string? ReadAsciiZ(long offset)
-            {
-                if (offset < 0 || offset >= fs.Length) return null;
-                fs.Position = offset;
-                var bytes = new List<byte>(32);
-                int b;
-                while ((b = fs.ReadByte()) > 0 && bytes.Count < 256)
-                    bytes.Add((byte)b);
-                return bytes.Count == 0 ? null : System.Text.Encoding.ASCII.GetString(bytes.ToArray());
-            }
-
-            long importOffset = RvaToOffset(importRva);
+            long importOffset = pe.RvaToOffset(importRva);
             if (importOffset < 0) return result;
 
             // Import descriptors: 20 bytes cada; termina num descriptor todo zero.
@@ -124,7 +72,7 @@ public static class PeFile
                 uint nameRva = br.ReadUInt32();
                 uint firstThunk = br.ReadUInt32();
                 if (originalFirstThunk == 0 && nameRva == 0 && firstThunk == 0) break;
-                string? name = ReadAsciiZ(RvaToOffset(nameRva));
+                string? name = ReadAsciiZ(fs, pe.RvaToOffset(nameRva));
                 if (!string.IsNullOrEmpty(name))
                     result.Add(name.ToLowerInvariant());
             }
@@ -134,5 +82,124 @@ public static class PeFile
             // dica opcional: falha silenciosa
         }
         return result;
+    }
+
+    /// <summary>
+    /// Lê os nomes exportados pelo PE. Um exe quase nunca exporta nada — a exceção que
+    /// interessa é D3D12SDKVersion/D3D12SDKPath, que o Agility SDK do D3D12 exige do
+    /// executável: quem exporta isso renderiza em D3D12. A tabela fica legível mesmo em
+    /// exe cifrado (o loader precisa dela). Nunca lança.
+    /// </summary>
+    public static IReadOnlyList<string> GetExportedNames(string path)
+    {
+        var result = new List<string>();
+        try
+        {
+            using var fs = File.OpenRead(path);
+            using var br = new BinaryReader(fs);
+            var pe = LerCabecalhos(fs, br);
+            if (pe is null) return result;
+
+            // Export = índice 0.
+            fs.Position = pe.DataDirStart;
+            uint exportRva = br.ReadUInt32();
+            uint exportSize = br.ReadUInt32();
+            if (exportRva == 0 || exportSize == 0) return result;
+
+            long exportOffset = pe.RvaToOffset(exportRva);
+            if (exportOffset < 0 || exportOffset + 40 > fs.Length) return result;
+
+            // IMAGE_EXPORT_DIRECTORY: NumberOfNames em +24, AddressOfNames em +32.
+            fs.Position = exportOffset + 24;
+            uint numberOfNames = br.ReadUInt32();
+            fs.Position = exportOffset + 32;
+            uint addressOfNames = br.ReadUInt32();
+            long namesOffset = pe.RvaToOffset(addressOfNames);
+            if (namesOffset < 0) return result;
+
+            uint limite = Math.Min(numberOfNames, 4096);
+            for (uint i = 0; i < limite; i++)
+            {
+                long entry = namesOffset + i * 4L;
+                if (entry + 4 > fs.Length) break;
+                fs.Position = entry;
+                uint nameRva = br.ReadUInt32();
+                string? name = ReadAsciiZ(fs, pe.RvaToOffset(nameRva));
+                if (!string.IsNullOrEmpty(name)) result.Add(name);
+            }
+        }
+        catch
+        {
+            // dica opcional: falha silenciosa
+        }
+        return result;
+    }
+
+    private sealed class Cabecalhos
+    {
+        public long DataDirStart;
+        public List<(uint va, uint rawSize, uint rawPtr)> Sections = new();
+
+        public long RvaToOffset(uint rva)
+        {
+            foreach (var (va, rawSize, rawPtr) in Sections)
+            {
+                if (rva >= va && rva < va + rawSize)
+                    return rawPtr + (rva - va);
+            }
+            return -1;
+        }
+    }
+
+    /// <summary>Cabeçalhos DOS/COFF/opcional e a tabela de seções; null se não for PE.</summary>
+    private static Cabecalhos? LerCabecalhos(FileStream fs, BinaryReader br)
+    {
+        fs.Position = 0;
+        if (fs.Length < 0x40 || br.ReadUInt16() != 0x5A4D) return null;
+        fs.Position = 0x3C;
+        uint peOffset = br.ReadUInt32();
+        if (peOffset + 24 > fs.Length) return null;
+        fs.Position = peOffset;
+        if (br.ReadUInt32() != 0x00004550) return null;
+
+        // COFF header
+        fs.Position = peOffset + 4 + 2; // pula Machine
+        ushort numberOfSections = br.ReadUInt16();
+        fs.Position = peOffset + 4 + 16;
+        ushort sizeOfOptionalHeader = br.ReadUInt16();
+
+        long optionalHeaderStart = peOffset + 4 + 20;
+        fs.Position = optionalHeaderStart;
+        ushort magic = br.ReadUInt16();
+        bool isPe32Plus = magic == 0x20B;
+        if (magic != 0x10B && magic != 0x20B) return null;
+
+        // Data directories: PE32 em +96, PE32+ em +112.
+        var pe = new Cabecalhos { DataDirStart = optionalHeaderStart + (isPe32Plus ? 112 : 96) };
+
+        long sectionTableStart = optionalHeaderStart + sizeOfOptionalHeader;
+        for (int i = 0; i < numberOfSections; i++)
+        {
+            long s = sectionTableStart + i * 40L;
+            if (s + 40 > fs.Length) break;
+            fs.Position = s + 12;
+            uint virtualAddress = br.ReadUInt32();
+            fs.Position = s + 16;
+            uint sizeOfRawData = br.ReadUInt32();
+            uint pointerToRawData = br.ReadUInt32();
+            pe.Sections.Add((virtualAddress, sizeOfRawData, pointerToRawData));
+        }
+        return pe;
+    }
+
+    private static string? ReadAsciiZ(FileStream fs, long offset)
+    {
+        if (offset < 0 || offset >= fs.Length) return null;
+        fs.Position = offset;
+        var bytes = new List<byte>(32);
+        int b;
+        while ((b = fs.ReadByte()) > 0 && bytes.Count < 256)
+            bytes.Add((byte)b);
+        return bytes.Count == 0 ? null : System.Text.Encoding.ASCII.GetString(bytes.ToArray());
     }
 }

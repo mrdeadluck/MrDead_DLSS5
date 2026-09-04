@@ -453,6 +453,11 @@ public static class InstallPlanBuilder
         if (EaJavelin.EhJavelin(exe))
             plan.Warnings.Add(EaJavelin.Aviso + " " + EaJavelin.ComoAbrir);
 
+        // Easy Anti-Cheat: os arquivos são os mesmos, mas o jogo só os carrega com o EAC
+        // fora. Aviso, não bloqueio — e o programa não toca em arquivo de anticheat.
+        if (EasyAntiCheat.Encontrar(profile.GameFolder, exe) is { } eac)
+            plan.Warnings.Add(EasyAntiCheat.Nota(eac, profile.GameFolder));
+
         if (MotorFox.EhFoxEngine(profile.RealExePath) && !MotorFox.PatchAplicado(profile.RealExePath))
         {
             var exeFox = profile.RealExePath!;

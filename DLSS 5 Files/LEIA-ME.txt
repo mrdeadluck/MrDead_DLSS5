@@ -64,6 +64,14 @@ AVISOS
    - NÃO use em jogos online com anti-cheat (EAC, BattlEye, Vanguard).
      A liberação de assinatura vale para o sistema inteiro e pode ser
      interpretada como violação de integridade.
+   - Jogo que sobe o Easy Anti-Cheat junto com o exe (Gears of War
+     Reloaded) não carrega a DLL do ReShade: o ReShade.log nem nasce e
+     o Gears fecha com "Your machine does not support Direct3D 12".
+     O programa reconhece a pasta EasyAntiCheat e explica o contorno
+     que a comunidade usa para jogar a campanha OFFLINE (uma letra no
+     "productid" do Content\EasyAntiCheat\Settings.json). Ele não
+     mexe nesse arquivo — é você quem decide, e o multiplayer não
+     funciona sem o EAC.
    - Desligue as sobreposições da Steam e do NVIDIA App no jogo que for
      usar: elas disputam o mesmo ponto de interceptação.
    - Desligue MSAA/SSAA nas opções gráficas do jogo. FXAA e SMAA podem

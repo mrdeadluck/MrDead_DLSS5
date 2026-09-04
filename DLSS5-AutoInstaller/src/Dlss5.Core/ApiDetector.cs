@@ -13,6 +13,14 @@ public sealed class ApiDetection
     public IReadOnlyList<ApiEvidence> Evidence { get; init; } = Array.Empty<ApiEvidence>();
 
     /// <summary>
+    /// O exe não rendeu pista NENHUMA: nem import, nem string de API, nem família de NGX,
+    /// nem export do Agility. É a cara de executável cifrado ou empacotado (Arxan, Denuvo,
+    /// stub da Steam) — o Gears of War Reloaded tem 25 MB e não mostra nada. Nesse caso a
+    /// detecção só tem o que há ao lado do exe, e isso precisa ser dito.
+    /// </summary>
+    public bool ExeOpaco { get; init; }
+
+    /// <summary>
     /// Confiante quando há pista forte E folga sobre a segunda colocada. Um jogo que
     /// menciona duas APIs (comum: D3D11 e D3D12 no mesmo binário) cai fora daqui de
     /// propósito — nesse caso o usuário confirma.
@@ -87,6 +95,37 @@ public static class ApiDetector
             ["maxpayne2"] = GraphicsApi.D3D9,
         };
 
+    /// <summary>
+    /// Jogos de uma API só cujo exe não mostra string nenhuma (cifrado), reconhecidos pelo
+    /// prefixo do nome. Peso de pista forte: aqui o nome é a única prova que existe.
+    /// Gears of War Reloaded/Ultimate (GOWDE-Steam.exe, GOWDE-*.exe) é D3D12 e nada mais —
+    /// ele mesmo diz "does not support Direct3D 12" quando não consegue criar o device.
+    /// </summary>
+    private static readonly (string Prefixo, GraphicsApi Api, string Motivo)[] KnownPrefixes =
+    {
+        ("GOWDE", GraphicsApi.D3D12, "Gears of War Reloaded/Ultimate (GOWDE-*.exe) é só D3D12 — o exe é cifrado e não mostra as strings"),
+    };
+    private const int KnownPrefixWeight = 70;
+
+    /// <summary>
+    /// DLLs ao lado do exe que NÃO são o renderizador do jogo e citam todas as APIs: as da
+    /// NVIDIA (o nvngx_dlss.dll fala em vulkan-1.dll porque o DLSS também roda em Vulkan —
+    /// foi o que fez o Gears Reloaded sair como "Vulkan"), Streamline, XeSS, FidelityFX,
+    /// o compilador de shaders, e os proxies (o dxgi.dll do próprio ReShade, o dinput8.dll
+    /// do REFramework) que carregam ganchos para tudo. Olhar dentro delas só confunde.
+    /// </summary>
+    private static readonly string[] DllsQueNaoRenderizam =
+    {
+        "nvngx", "nvapi", "nvlowlatency", "nvpmodel", "sl.", "gfsdk_", "libxess", "xess",
+        "amd_fidelityfx", "ffx_", "amd_ags", "d3dcompiler", "dxcompiler", "dxil",
+        "steam_api", "eossdk", "easyanticheat", "galaxy", "reshade",
+    };
+    private static readonly string[] ProxiesConhecidos =
+    {
+        "dxgi.dll", "d3d12.dll", "d3d11.dll", "d3d10.dll", "d3d9.dll", "d3d8.dll", "opengl32.dll",
+        "vulkan-1.dll", "dinput8.dll", "version.dll", "winmm.dll", "xinput1_3.dll",
+    };
+
     private static readonly (string Fragment, GraphicsApi Api)[] FolderHints =
     {
         ("dx12", GraphicsApi.D3D12),
@@ -131,6 +170,15 @@ public static class ApiDetector
         ("Redirecting D3D10CreateDevice", GraphicsApi.D3D10, 70, "o ReShade.log da última execução viu D3D10CreateDevice"),
         ("Redirecting wglCreateContext", GraphicsApi.OpenGL, 70, "o ReShade.log da última execução viu wglCreateContext"),
     };
+
+    /// <summary>
+    /// D3D12CreateDevice no ReShade.log só conta quando o Feeder não está na pasta (nem o
+    /// addon nem o log dele): aí não há device D3D12 privado e a chamada é do jogo. É o
+    /// caminho direto, o único em que o Feeder não deixa o próprio rastro.
+    /// </summary>
+    private static readonly (string Text, GraphicsApi Api, int Weight, string Source) MarcadorD3D12SemFeeder =
+        ("Redirecting D3D12CreateDevice", GraphicsApi.D3D12, 60,
+            "o ReShade.log da última execução viu D3D12CreateDevice (sem Feeder na pasta, a chamada é do jogo)");
     private static readonly (string Text, GraphicsApi Api, int Weight, string Source)[] FeedLogMarkers =
     {
         ("opening same-device D3D12 session", GraphicsApi.D3D12, 70, "o dlss5-feed.log da última execução abriu sessão D3D12 no device do jogo"),
@@ -147,6 +195,7 @@ public static class ApiDetector
     {
         var scores = new Dictionary<GraphicsApi, int>();
         var evidence = new List<ApiEvidence>();
+        bool exeDeuPista = false;
 
         void Add(GraphicsApi api, int weight, string source)
         {
@@ -166,7 +215,18 @@ public static class ApiDetector
             {
                 var api = ApiFromDllName(dll);
                 if (api != GraphicsApi.Unknown)
+                {
                     Add(api, 45, $"import de {dll.ToLowerInvariant()}");
+                    exeDeuPista = true;
+                }
+            }
+
+            // Exe que exporta D3D12SDKVersion carrega o Agility SDK: só jogo D3D12 faz isso.
+            // A tabela de exports fica legível mesmo em exe cifrado (o loader precisa dela).
+            if (PeFile.GetExportedNames(exePath).Any(n => n.Equals("D3D12SDKVersion", StringComparison.Ordinal)))
+            {
+                Add(GraphicsApi.D3D12, 70, "o exe exporta D3D12SDKVersion (Agility SDK): só jogo D3D12 faz isso");
+                exeDeuPista = true;
             }
         }
 
@@ -174,7 +234,10 @@ public static class ApiDetector
         if (exePath is not null)
         {
             foreach (var m in MarkersFoundIn(exePath, ExeScanBudget))
+            {
                 Add(m.Api, m.Weight, $"\"{m.Text}\" no exe");
+                exeDeuPista = true;
+            }
         }
 
         // 2b. A família de NGX do DLSS nativo, quando há uma só.
@@ -185,6 +248,20 @@ public static class ApiDetector
             if (familias.Count == 1)
                 Add(familias[0].Api, NgxFamilyWeight,
                     $"o DLSS do próprio jogo é {familias[0].Text.Replace("_Init", "")}: quem integra NGX nessa API renderiza nela");
+            if (familias.Count > 0) exeDeuPista = true;
+        }
+
+        // 2c. Agility SDK ao lado do exe (D3D12\D3D12Core.dll): só jogo D3D12 carrega isso.
+        if (AgilityAoLado(exeFolder) is { } agility)
+            Add(GraphicsApi.D3D12, 40, $"{agility} (Agility SDK do D3D12) ao lado do exe");
+
+        // 2d. Jogo de uma API só cujo exe não mostra nada (Gears Reloaded).
+        if (exePath is not null)
+        {
+            var nome = Path.GetFileNameWithoutExtension(exePath);
+            foreach (var (prefixo, api, motivo) in KnownPrefixes)
+                if (nome.StartsWith(prefixo, StringComparison.OrdinalIgnoreCase))
+                    Add(api, KnownPrefixWeight, motivo);
         }
 
         // 3. Ainda empatado? O renderizador pode estar numa DLL ao lado do exe.
@@ -218,13 +295,28 @@ public static class ApiDetector
             Runner = ranked.Count > 1 ? second.Key : GraphicsApi.Unknown,
             RunnerScore = ranked.Count > 1 ? second.Value : 0,
             Evidence = evidence,
+            ExeOpaco = exePath is not null && File.Exists(exePath) && !exeDeuPista,
         };
     }
 
+    /// <summary>O D3D12Core.dll do Agility SDK, na pasta D3D12\ ou solto ao lado do exe.</summary>
+    private static string? AgilityAoLado(string exeFolder)
+    {
+        try
+        {
+            if (File.Exists(Path.Combine(exeFolder, "D3D12", "D3D12Core.dll"))) return "D3D12\\D3D12Core.dll";
+            if (File.Exists(Path.Combine(exeFolder, "D3D12Core.dll"))) return "D3D12Core.dll";
+        }
+        catch { }
+        return null;
+    }
+
     /// <summary>Pistas dos logs que a última execução deixou ao lado do exe.</summary>
-    internal static IEnumerable<(string Text, GraphicsApi Api, int Weight, string Source)> LogEvidence(string exeFolder)
+    public static IEnumerable<(string Text, GraphicsApi Api, int Weight, string Source)> LogEvidence(string exeFolder)
     {
         var reshade = LerLog(Path.Combine(exeFolder, "ReShade.log"));
+        var feed = LerLog(Path.Combine(exeFolder, "dlss5-feed.log"));
+        bool feederNaPasta = feed is not null || File.Exists(Path.Combine(exeFolder, FeederKit.Addon64));
         if (reshade is not null)
         {
             bool comSwapchain = reshade.Contains("D3D11CreateDeviceAndSwapChain", StringComparison.OrdinalIgnoreCase);
@@ -234,8 +326,9 @@ public static class ApiDetector
                 if (m.Text.EndsWith("D3D11CreateDevice(", StringComparison.Ordinal) && comSwapchain) continue;
                 if (reshade.Contains(m.Text, StringComparison.OrdinalIgnoreCase)) yield return m;
             }
+            if (!feederNaPasta && reshade.Contains(MarcadorD3D12SemFeeder.Text, StringComparison.OrdinalIgnoreCase))
+                yield return MarcadorD3D12SemFeeder;
         }
-        var feed = LerLog(Path.Combine(exeFolder, "dlss5-feed.log"));
         if (feed is not null)
         {
             foreach (var m in FeedLogMarkers)
@@ -367,6 +460,7 @@ public static class ApiDetector
             return new DirectoryInfo(exeFolder)
                 .EnumerateFiles("*.dll", SearchOption.TopDirectoryOnly)
                 .Where(f => f.Length > 4096 && f.Length < 128L * 1024 * 1024)
+                .Where(f => !EhDllQueNaoRenderiza(f.Name))
                 .OrderByDescending(f => f.Length)
                 .Take(16)
                 .Select(f => f.FullName)
@@ -376,6 +470,13 @@ public static class ApiDetector
         {
             return new List<string>();
         }
+    }
+
+    /// <summary>DLL de fornecedor ou proxy: cita todas as APIs sem renderizar nenhuma.</summary>
+    public static bool EhDllQueNaoRenderiza(string nome)
+    {
+        if (ProxiesConhecidos.Any(p => p.Equals(nome, StringComparison.OrdinalIgnoreCase))) return true;
+        return DllsQueNaoRenderizam.Any(p => nome.StartsWith(p, StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool FolderMentions(string folder, string fragment)

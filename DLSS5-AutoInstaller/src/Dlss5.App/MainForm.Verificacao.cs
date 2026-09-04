@@ -373,6 +373,14 @@ public sealed partial class MainForm
                 return;
             }
 
+            // Sob o Easy Anti-Cheat o ReShade não carrega: abrir sem avisar seria a rodada
+            // perdida de sempre (Gears Reloaded fecha com "does not support Direct3D 12").
+            if (EasyAntiCheat.Presente(_profile.GameFolder, _profile.ExeFolder) &&
+                !Dialogos.Pergunta(this, "Jogo sob Easy Anti-Cheat",
+                    "Com o EAC ativo a DLL do ReShade não carrega. Já tirou o EAC do caminho? Abrir assim mesmo?",
+                    EasyAntiCheat.Aviso + "\r\n\r\n" + EasyAntiCheat.ComoAbrir))
+                return;
+
             var appId = SteamGame.FindAppId(_profile.GameFolder);
             if (appId is not null)
             {

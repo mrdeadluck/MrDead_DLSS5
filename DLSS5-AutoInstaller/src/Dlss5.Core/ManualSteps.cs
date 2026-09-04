@@ -28,6 +28,11 @@ public static class ManualSteps
             "Isso não dá para automatizar de forma confiável: a Steam restaura o arquivo do overlay ao reabrir. " +
             "Overlays podem carregar o DXGI antes do ReShade e roubar a interceptação.", false));
 
+        // Sob o EAC nada disto abaixo acontece: a DLL do ReShade nem carrega.
+        if (EasyAntiCheat.Presente(profile.GameFolder, profile.ExeFolder))
+            steps.Add(new ManualStep(n++, "Tirar o Easy Anti-Cheat do caminho (só para jogar OFFLINE)",
+                EasyAntiCheat.Aviso + "\r\n\r\n" + EasyAntiCheat.ComoAbrir, true));
+
         if (profile.HasNativeDlss && profile.NeedsFeeder)
             steps.Add(new ManualStep(n++, "DESLIGAR o DLSS nas opções do jogo",
                 "Este jogo tem DLSS próprio e o kit NÃO mexe nele — mas o Feeder roda um NGX dele dentro " +
