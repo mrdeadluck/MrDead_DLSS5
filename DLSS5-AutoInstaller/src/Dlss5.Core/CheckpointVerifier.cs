@@ -1014,6 +1014,34 @@ public static class CheckpointVerifier
                 File.Exists(hostLog) ? CheckStatus.Pass : CheckStatus.Manual,
                 File.Exists(hostLog) ? "host64\\dlss5-feed-host.log presente." : "Log do host ainda não existe.",
                 null);
+
+            // 22 — o NR está LIGADO dentro do host? Max Payne 3: o feed entregava 30 mil quadros,
+            // o host avaliava o DLSS, e o addon do host estava com NeuralUplift=0 ("NR toggled
+            // OFF") desde uma troca de configuração. Em jogo 32-bit o F6 do jogo não chega ao
+            // host; quem liga e desliga é o painel projetado (ou o host64\ReShade.ini).
+            var hostIni = Path.Combine(exeFolder, "host64", "ReShade.ini");
+            var hostReShadeLog = Path.Combine(exeFolder, "host64", "ReShade.log");
+            int? uplift = null;
+            RenodxStatus? renodxHost = null;
+            try { if (File.Exists(hostIni)) uplift = RenodxIni.Ler(ReadShared(hostIni), RenodxIni.ChaveNeuralUplift); } catch { }
+            try { if (File.Exists(hostReShadeLog)) renodxHost = RenodxLog.Ler(ReadShared(hostReShadeLog)); } catch { }
+            if (uplift is not null || renodxHost is not null)
+            {
+                bool desligado = uplift == 0 || (renodxHost?.NrDesligadoPorToggle ?? false);
+                yield return new CheckResult(22, "Neural Rendering ligado dentro do host64",
+                    desligado ? CheckStatus.Fail : renodxHost is { Ativo: true } ? CheckStatus.Pass : CheckStatus.Warning,
+                    desligado
+                        ? $"O addon do host está com o NR DESLIGADO ({(uplift == 0 ? "NeuralUplift=0 no host64\\ReShade.ini" : "o último \"NR toggled\" do host64\\ReShade.log é OFF")}). " +
+                          "O feed entrega os quadros, o host roda o DLSS, e o Neural Rendering fica de fora — imagem igual."
+                        : renodxHost is { Ativo: true }
+                            ? $"NR ativo no host: {renodxHost.Avaliacoes} avaliação(ões) registradas no host64\\ReShade.log."
+                            : "NeuralUplift=1, mas o host64\\ReShade.log ainda não registra avaliação de NR.",
+                    desligado
+                        ? "Ligue o NR pelo painel projetado: no jogo, Home → Complementos → DLSS 5 Feed (32-bit) → \"Show the DLSS 5 panel " +
+                          "in-game\" → marque \"Enable DLSS Neural Rendering\". Ou feche o jogo e ponha NeuralUplift=1 na seção " +
+                          "[RenoDX.DLSS5] do host64\\ReShade.ini. O F6 apertado no jogo NÃO chega ao host em jogo 32-bit."
+                        : null);
+            }
         }
     }
 

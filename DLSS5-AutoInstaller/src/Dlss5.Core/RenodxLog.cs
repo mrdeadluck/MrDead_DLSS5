@@ -27,6 +27,11 @@ namespace Dlss5.Core;
 /// O jogo ligou a geração de quadros (DLSSG, feature 11). O addon anuncia no log que
 /// NÃO encosta nela: os quadros gerados saem sem o Neural Rendering.
 /// </param>
+/// <param name="NrDesligadoPorToggle">
+/// O último "NR toggled" do log é OFF: o NR terminou a rodada desligado. Max Payne 3
+/// (32-bit): o host64 subiu assim depois de uma troca de configuração, e o feed entregava
+/// 30 mil quadros para um NR desligado.
+/// </param>
 /// <param name="RecriacoesSemToggle">
 /// Quantas vezes o addon recriou a feature do NR ("feature 18 created") além das que o F6
 /// provocou. Onimusha (demo): dez recriações em dois minutos, duas do F6 — o addon está
@@ -60,7 +65,8 @@ public sealed record RenodxStatus(
     bool FrameGeneration = false,
     bool RayReconstruction = false,
     bool CompiladorAntigo = false,
-    int RecriacoesSemToggle = 0)
+    int RecriacoesSemToggle = 0,
+    bool NrDesligadoPorToggle = false)
 {
     /// <summary>
     /// O jogo abriu a própria tela de erro antes de criar qualquer DLSS. Nesse quadro o
@@ -198,9 +204,14 @@ public static class RenodxLog
         // A primeira criação é a normal; cada F6 (ligar) vale uma; o resto é o addon se resetando.
         int recriacoes = Math.Max(0, criadas - 1 - ligadas);
 
+        int ultimoOn = logText.LastIndexOf("NR toggled ON", StringComparison.OrdinalIgnoreCase);
+        int ultimoOff = logText.LastIndexOf("NR toggled OFF", StringComparison.OrdinalIgnoreCase);
+        bool desligado = ultimoOff >= 0 && ultimoOff > ultimoOn;
+
         return new RenodxStatus(ativo, avaliacoes, hooksSemUso, recusada,
             hooksInstalados, criouFeature, enableHooks, streamline, pedeStreamline,
-            SegundosAteDialogo(logText), encerrou, criouDevice, criouSwapchain, frameGen, rayRec, compiladorAntigo, recriacoes);
+            SegundosAteDialogo(logText), encerrou, criouDevice, criouSwapchain, frameGen, rayRec, compiladorAntigo, recriacoes,
+            desligado);
     }
 
     /// <summary>

@@ -5643,3 +5643,62 @@ public class RecriacoesDoNrTests
         finally { Directory.Delete(dir, true); }
     }
 }
+
+public class NrDesligadoNoHostTests
+{
+    // Max Payne 3 (32-bit): feed entregando, host rodando o DLSS, e o addon do host com o NR
+    // desligado desde a troca de configuração.
+    private const string HostReShadeLog =
+        "01:54:26:849 [29092] | INFO  | Registered add-on \"DLSS 5 Neural Rendering\" v0.2026.828.517 using ReShade API version 18.\n" +
+        "01:54:27:872 [29092] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: NR toggled OFF via F6\n" +
+        "01:54:29:673 [29092] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: D3D12 NGX hooks installed across 2 module copy(ies); inline DLSS contract capture armed\n" +
+        "01:54:29:678 [29092] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: first NGX evaluate intercepted (slot=0)\n";
+
+    [Fact]
+    public void LeOUltimoToggleEAChaveDoIni()
+    {
+        Assert.True(RenodxLog.Ler(HostReShadeLog)!.NrDesligadoPorToggle);
+        Assert.False(RenodxLog.Ler(HostReShadeLog + "01:55:00:000 [29092] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: NR toggled ON via F6\n")!.NrDesligadoPorToggle);
+        Assert.Equal(0, RenodxIni.Ler("[RenoDX.DLSS5]\nEnableHooks=2\nNeuralUplift=0\n", RenodxIni.ChaveNeuralUplift));
+        Assert.Equal(2, RenodxIni.Ler("[RenoDX.DLSS5]\nEnableHooks=2\nNeuralUplift=0\n"));
+        Assert.Null(RenodxIni.Ler("[RenoDX.DLSS5]\nEnableHooks=2\n", RenodxIni.ChaveNeuralUplift));
+    }
+
+    [Fact]
+    public void Checkpoint22AcusaONrDesligadoNoHost()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-host-nr-" + Guid.NewGuid().ToString("N"));
+        var host = Path.Combine(dir, "host64");
+        Directory.CreateDirectory(host);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "dlss5-feed.log"),
+                "01:48:41.747  dlss5-feed32 0.12.0 (built Sep  2 2026 17:38:42) attached.\n" +
+                "01:48:48.022  [feed32] effects: technique found, DLSS5_MV found, DLSS5_Depth found, DLSS5_MV_PROVIDER=1 (Launchpad) -> MartysMods_Launchpad (enabled), depth reversed=1\n" +
+                "01:48:54.036  [feed32] shared set ready: 2560x1440 (100% of 2560x1440) color fmt=28 output fmt=28 (host ngx 0x00000001, DLSS)\n" +
+                "01:55:23.633  [feed32] frame 30600 delivered (2560x1440, reset=0)\n");
+            File.WriteAllText(Path.Combine(host, "dlss5-feed-host.log"), "01:54:29.657  [host] feature ready: 2560x1440 DLAA flags=74\n");
+            File.WriteAllText(Path.Combine(host, "ReShade.log"), HostReShadeLog);
+            File.WriteAllText(Path.Combine(host, "ReShade.ini"), "[RenoDX.DLSS5]\r\nEnableHooks=2\r\nNeuralUplift=0\r\n");
+            File.WriteAllText(Path.Combine(dir, "dlss5-feed.addon32"), "x");
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "MaxPayne3.exe"),
+                Architecture = PeArchitecture.X86,
+                Api = GraphicsApi.D3D11,
+            };
+            var c22 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 22);
+            Assert.Equal(CheckStatus.Fail, c22.State);
+            Assert.Contains("NeuralUplift=0", c22.Detail);
+            Assert.Contains("painel", c22.FixHint!);
+
+            // Ligado de novo pelo painel: o ini muda e o log ganha um ON.
+            File.WriteAllText(Path.Combine(host, "ReShade.ini"), "[RenoDX.DLSS5]\r\nEnableHooks=2\r\nNeuralUplift=1\r\n");
+            File.AppendAllText(Path.Combine(host, "ReShade.log"), "01:56:00:000 [29092] | INFO  | [DLSS 5 Neural Rendering] DLSS5 Generic: NR toggled ON via F6\n");
+            c22 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 22);
+            Assert.NotEqual(CheckStatus.Fail, c22.State);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}
