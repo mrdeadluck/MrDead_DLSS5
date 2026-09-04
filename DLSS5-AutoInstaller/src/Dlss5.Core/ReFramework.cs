@@ -115,6 +115,32 @@ public static class ReFramework
     }
 
     /// <summary>
+    /// Jogos que RECUSAM a DLL do ReShade na abertura (tela de erro do jogo 1 a 3 s depois
+    /// de o runtime subir) e só abrem com o REFramework desarmando a checagem. Fora desta
+    /// lista, a RE Engine aceita o ReShade direto — e o REFramework, que mexe na memória do
+    /// jogo, é quem dispara a checagem quando não consegue desarmá-la. O Dragon's Dogma 2
+    /// ensinou: com a caixa marcada ele entra, não acha os padrões desta versão
+    /// ("Could not find conditional_jmp for DD2", "stack destroyer") e o jogo cai na tela
+    /// inicial, com o crash registrado pelo próprio REFramework.
+    /// </summary>
+    private static readonly string[] ExesQuePrecisam = { "re9.exe" };
+
+    /// <summary>O jogo precisa do REFramework para o ReShade entrar.</summary>
+    public static bool PrecisaDoBypass(string? exePath)
+    {
+        if (string.IsNullOrWhiteSpace(exePath)) return false;
+        // O nome do arquivo, aceitando os dois separadores: os testes rodam fora do Windows.
+        var nome = exePath.Split('\\', '/')[^1];
+        return ExesQuePrecisam.Contains(nome, StringComparer.OrdinalIgnoreCase);
+    }
+
+    public const string QuandoMarcar =
+        "Marque só em jogo da RE Engine que abre a própria tela de erro logo depois do ReShade subir " +
+        "(Resident Evil Requiem). Dragon's Dogma 2, RE4, RE Village e Monster Hunter Wilds aceitam o " +
+        "ReShade direto — neles o REFramework, quando não consegue desarmar a checagem desta versão do " +
+        "jogo, é quem derruba o jogo.";
+
+    /// <summary>
     /// O dinput8.dll da pasta é o REFramework que este kit traz? Byte a byte, a mesma
     /// prova usada no transplante: sem ela a desinstalação apagaria um REFramework que o
     /// usuário instalou por conta própria, ou outro mod que use o mesmo nome de arquivo.

@@ -320,7 +320,30 @@ public static class CheckpointVerifier
                 try { textoRefLog = ReadShared(Path.Combine(pastaRef, ReFramework.LogDoFramework)); }
                 catch { textoRefLog = ""; }
                 bool desarmou = textoRefLog.Contains("REFramework entry", StringComparison.OrdinalIgnoreCase);
+                var estadoRef = ReFrameworkLog.Ler(textoRefLog);
 
+                // Dragon's Dogma 2: entrou, não achou os padrões desta versão, e o jogo caiu
+                // na tela inicial com o crash registrado pelo próprio REFramework. Aqui ele
+                // não é o remédio — é a causa. O jogo aceita o ReShade sem ele.
+                if (estadoRef is { Entrou: true, BypassFalhou: true })
+                {
+                    bool precisa = ReFramework.PrecisaDoBypass(profile.RealExePath);
+                    r.Add(new CheckResult(17, "REFramework desarmou a checagem de integridade", CheckStatus.Fail,
+                        $"O REFramework entrou, mas NÃO conseguiu desarmar a checagem deste jogo{(estadoRef.Jogo is null ? "" : $" ({estadoRef.Jogo})")}: " +
+                        "os padrões dele não batem com esta versão do exe (\"Could not find conditional_jmp\" / \"stack destroyer\" no " +
+                        $"{ReFramework.LogDoFramework})." +
+                        (estadoRef.Caiu
+                            ? " E o processo caiu com o crash registrado pelo próprio REFramework" +
+                              (estadoRef.CaiuDentroDele ? " (a exceção está dentro do dinput8.dll dele)" : "") +
+                              ": é a checagem do jogo derrubando quem mexeu na memória dele."
+                            : ""),
+                        precisa
+                            ? "Este jogo precisa do REFramework, e a nightly do kit não cobre esta versão dele. Troque o dinput8.dll do kit " +
+                              "por uma nightly mais nova (github.com/praydog/REFramework-nightly) quando houver uma com o patch."
+                            : "Este jogo aceita o ReShade direto: clique em Desinstalar e depois em Instalar com a caixa \"Instalar o " +
+                              "REFramework junto\" DESMARCADA. " + ReFramework.QuandoMarcar));
+                }
+                else
                 r.Add(new CheckResult(17, "REFramework rodou no jogo",
                     naPastaDoJogo && desarmou ? CheckStatus.Pass : CheckStatus.Fail,
                     !desarmou

@@ -78,6 +78,15 @@ public static class GameDetector
         DetectApiAndRenderer(profile, result.Notes);
         DetectNativeDlss(profile, result.Notes);
 
+        // Só o jogo que recusa o ReShade na abertura sai com o REFramework marcado. Nos
+        // outros da RE Engine ele é a causa do crash, não o remédio (Dragon's Dogma 2).
+        profile.UsarReFramework = ReFramework.PrecisaDoBypass(profile.RealExePath);
+        if (profile.UsarReFramework)
+            result.Notes.Add("Este jogo recusa a DLL do ReShade na abertura: o REFramework entra junto para " +
+                             "desarmar a checagem (caixa marcada).");
+        else if (profile.EhReEngine)
+            result.Notes.Add("RE Engine: este jogo aceita o ReShade direto. " + ReFramework.QuandoMarcar);
+
         // Jogo que recusa o dxgi.dll já sai da detecção com o nome que ele aceita. Isto
         // ficava na tela e chegava tarde: cada atribuição de controle dispara o
         // sincronismo do formulário, que gravava o nome do combo no perfil ANTES — e a

@@ -5504,3 +5504,75 @@ public class CompiladorD3DTests
         }
     }
 }
+
+public class ReFrameworkNoDragonsDogma2Tests
+{
+    // Trecho real do re2_framework_log.txt do Dragon's Dogma 2.
+    private const string LogDd2 =
+        "[2026-09-04 00:05:30.825] [REFramework] [info] REFramework entry\n" +
+        "[2026-09-04 00:05:32.505] [REFramework] [info] [IntegrityCheckBypass]: Scanning DD2...\n" +
+        "[2026-09-04 00:05:32.701] [REFramework] [error] [IntegrityCheckBypass]: Could not find conditional_jmp for DD2, attempting fallback.\n" +
+        "[2026-09-04 00:05:32.757] [REFramework] [error] [IntegrityCheckBypass]: Could not find second_conditional_jmp for DD2.\n" +
+        "[2026-09-04 00:05:32.969] [REFramework] [error] [IntegrityCheckBypass]: Could not find stack destroyer!\n" +
+        "[2026-09-04 00:06:23.599] [REFramework] [error] Exception occurred: c0000005\n" +
+        "[2026-09-04 00:06:23.599] [REFramework] [error] RIP (exception record): 7ffcb95443ca\n" +
+        "[2026-09-04 00:06:23.606] [REFramework] [error] Module: 7ffcb9510000 m:\\steamlibrary\\steamapps\\common\\dragons dogma 2\\_storage_\\dinput8.dll\n";
+
+    [Fact]
+    public void LeAFalhaDoBypassEOCrash()
+    {
+        var e = ReFrameworkLog.Ler(LogDd2)!;
+        Assert.True(e.Entrou);
+        Assert.True(e.BypassFalhou);
+        Assert.True(e.Caiu);
+        Assert.True(e.CaiuDentroDele);
+        Assert.Equal("DD2", e.Jogo);
+        Assert.True(e.DerrubouOJogo);
+
+        var re9 = ReFrameworkLog.Ler("[REFramework] [info] REFramework entry\n[IntegrityCheckBypass]: Scanning RE9...\n[IntegrityCheckBypass]: Patched stack destroyer!\n")!;
+        Assert.False(re9.BypassFalhou);
+        Assert.False(re9.Caiu);
+        Assert.Null(ReFrameworkLog.Ler(""));
+    }
+
+    [Fact]
+    public void SoORe9SaiDaDeteccaoComOReFrameworkMarcado()
+    {
+        Assert.True(ReFramework.PrecisaDoBypass(@"C:\Games\RE9\re9.exe"));
+        Assert.False(ReFramework.PrecisaDoBypass(@"C:\Games\DD2\DD2.exe"));
+        Assert.False(ReFramework.PrecisaDoBypass(null));
+    }
+
+    [Fact]
+    public void Checkpoint17MandaReinstalarSemOReFrameworkNoDd2()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-dd2-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "re2_framework_log.txt"), LogDd2);
+            File.WriteAllText(Path.Combine(dir, "dinput8.dll"), "x");
+            File.WriteAllText(Path.Combine(dir, "dxgi.dll"), "x");
+            var perfil = new GameProfile
+            {
+                GameFolder = dir,
+                RealExePath = Path.Combine(dir, "DD2.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D12,
+                HasNativeDlss = true,
+                UsarReFramework = true,
+            };
+            var c17 = CheckpointVerifier.Verify(perfil, null).Where(c => c.Number == 17).ToList();
+            var falha = c17.First(c => c.State == CheckStatus.Fail && c.Detail.Contains("NÃO conseguiu desarmar", StringComparison.Ordinal));
+            Assert.Contains("DD2", falha.Detail);
+            Assert.Contains("caiu", falha.Detail);
+            Assert.Contains("DESMARCADA", falha.FixHint!);
+
+            // No RE9 o mesmo quadro vira "espere uma nightly nova", não "desmarque".
+            perfil.RealExePath = Path.Combine(dir, "re9.exe");
+            var re9 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 17 && c.State == CheckStatus.Fail);
+            Assert.Contains("nightly", re9.FixHint!);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}
