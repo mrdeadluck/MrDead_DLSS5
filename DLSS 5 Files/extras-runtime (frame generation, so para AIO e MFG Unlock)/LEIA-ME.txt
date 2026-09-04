@@ -1,0 +1,12 @@
+nvngx_dlssg.dll 310.8.0 (7.453.808 B) — runtime de DLSS Frame Generation da NVIDIA.
+
+Veio do DLSS310.8.0-Streamline2.13.zip que está dentro do pacote baixado do Discord
+(OptiScaler_v10.0.0-pre1_20260904 (2).7z, na raiz do repositório). Entra no kit pelo
+workflow trocar-extras.yml (extras-desejado.txt).
+
+O instalador NÃO copia este arquivo para o jogo: no caminho RenoDX + Feeder ele só gasta
+VRAM (spec 3.7). Ele serve para:
+  - DLSS5-Reshade-AIO (kibblerz): Frame Generation do próprio addon — copie ao lado do
+    standalone-dlssnr.addon64;
+  - MFG Unlock (mavismmg): multi-frame generation em RTX 40 exige um nvngx_dlssg.dll 310.x
+    ao lado do exe (o README dele aponta o mais novo no TechPowerUp; este 310.8 serve).

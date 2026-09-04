@@ -5,7 +5,9 @@
 # objeto do LFS não sobe a partir do ambiente de desenvolvimento. Depois refaz o pacote.
 #
 # Formato (colunas separadas por " | "):
-#   destino | url | sha256 do ARQUIVO FINAL | caminho dentro do zip (vazio = download direto)
+#   destino | origem | sha256 do ARQUIVO FINAL | caminho dentro do compactado (vazio = arquivo direto)
+#   origem = URL pública, ou "repo:" + caminho de um arquivo deste repositório (no LFS).
+#   Zips e 7z aninhados são abertos: basta o caminho relativo dentro do último deles.
 #
 # --- RenoDX DLSS5 (Krish) 4.70, espelho do #DLSS5 do Discord em RankFTW/rhi-repo ---
 renodx-dlss5.addon64 | https://github.com/RankFTW/rhi-repo/releases/download/renodx-dlss5-4.70/renodx-dlss5_4.70.zip | d5adf82eb44b065f4c590ac91fe824bab07afea0eb9f994bde936710c8593952 | renodx-dlss5.addon64
@@ -29,3 +31,7 @@ DLSS5-Reshade-AIO-v1.7.24 (alternativa kibblerz)/nvngx.dll | https://github.com/
 MFG-Unlock-0.6.1 (multi-frame generation RTX 40, alternativa mavismmg)/renodx-mfgunlock.addon64 | https://github.com/mavismmg/MFGAdaUnlock-RenoDx/releases/download/0.6.1/renodx-mfgunlock.addon64 | 334a750accb892a8422b88f2891d91344f9dfeea9473bcd248f5e43a80d06b8c |
 # --- Textura do VORT Motion (o .fx e os .fxh são texto e já estão no repositório) ---
 reshade-shaders/Textures/vort_BlueNoise.png | https://raw.githubusercontent.com/vortigern11/vort_Shaders/b410b9f0c0fbb83c8cb42164aaf1655fab386f4a/Textures/vort_BlueNoise.png | 050d26db9283fbaece3b6883e300d22403631d83a12a5f2f79dc8b789b860305 |
+# --- Do pacote baixado do Discord (raiz do repositório, no LFS): nvngx_dlssg.dll 310.8 é o runtime de
+#     Frame Generation que o AIO do kibblerz e o MFG Unlock pedem. O nvngx_dlssnr.dll desse zip é o
+#     310.8.0 original (só RTX 50) e o nvngx_dlss.dll é idêntico ao do kit — não entram.
+extras-runtime (frame generation, so para AIO e MFG Unlock)/nvngx_dlssg.dll | repo:OptiScaler_v10.0.0-pre1_20260904 (2).7z | 5d5cbf14d2727d47f93fd10bf77bd91708ae122482a6f86fd564971641ebd47b | nvngx_dlssg.dll

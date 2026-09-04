@@ -75,6 +75,20 @@ do NGX (0.13.0), **Direct3D 10 nativo em 32-bit** (0.13.1). Suporte a Vulkan (64
 DXVK) e OpenGL. Em 32-bit, `addon32` e `host64\dlss5-feed-host64.exe` precisam ser do mesmo
 build. Suporta as gerações 4.5/4.6/4.7 do addon do RenoDX pelo marcador de cada build.
 
+## O pacote que você baixou do Discord (`OptiScaler_v10.0.0-pre1_20260904 (2).7z`, raiz do repositório)
+
+Conferido arquivo por arquivo (SHA-256):
+
+| Dentro do 7z | O que é | Situação |
+|---|---|---|
+| `renodx-dlss.addon64` (2.520.576 B) | ShortFuse renodx-dlss | **Idêntico** ao SF 0.52 do rhi-repo já listado em `extras-desejado.txt`. |
+| `ReShade_Setup_6.8.0_Addon.exe` | ReShade 6.8.0 | **Idêntico** ao do kit. |
+| `DLSS310.8.0-Streamline2.13.zip` → `nvngx_dlss.dll` | DLSS SR 310.8.0 | **Idêntico** ao do kit. |
+| `DLSS310.8.0-Streamline2.13.zip` → `nvngx_dlssnr.dll` (165.840.496 B) | DLSSNR 310.8.0 **original** do NBA 2K27 | Não entra: só roda em RTX 50. O kit usa o 310.8.SF-v2 (`runtime-desejado.txt`), que roda em RTX 20/30/40/50. |
+| `DLSS310.8.0-Streamline2.13.zip` → `nvngx_dlssg.dll` (7.453.808 B) | DLSS Frame Generation 310.8.0 | **Entra** em `extras-runtime (frame generation, so para AIO e MFG Unlock)/` — é o que o AIO do kibblerz e o MFG Unlock pedem. |
+| `DLSS310.8.0-Streamline2.13.zip` → `nvngx_dlssd.dll`, `sl.*.dll` | Ray Reconstruction e interposer do Streamline 2.13 | Não entram: o instalador remove `sl.*.dll` de propósito (spec 3.7); ficam no 7z se precisar. |
+| `OptiScaler_v10.0.0-pre1_20260904.7z` (55 MB → 210 MB) | **OptiScaler v10.0.0-pre1** (nightly de 04/09/2026, não está nos releases do GitHub) com seção **`[DlssNr]`**: DLSS 5 Neural Rendering dentro do próprio OptiScaler (código de cor derivado do addon do RenoDX, com atribuição MIT). Precisa de `nvngx_dlssnr.dll` ao lado e do `nvngx.dll_dlssnr.dll` do pacote. Em D3D11 só no modo `dlss_12` (dx11on12). | **Fica no 7z**, não vai para o kit: são 210 MB de DLLs (XeSS, FSR) que estourariam a cota do LFS, e o Feeder não convive com ele (README do Feeder: "turn OptiScaler off"). Para testar: extraia, rode `setup_windows.bat` na pasta do jogo, ponha o `nvngx_dlssnr.dll` do kit ao lado e ligue `Enabled=true` em `[DlssNr]` no `OptiScaler.ini`. É um quarto caminho, alternativo ao RenoDX + Feeder. |
+
 ## O que só existe no Discord — baixe à mão
 
 | Arquivo | Onde | Para quê | Onde colocar |
