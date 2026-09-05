@@ -48,7 +48,8 @@ jobs:
           $cache = "${{ github.workspace }}\extras-cache"
           New-Item -ItemType Directory -Path $cache -Force | Out-Null
           $baixados = @{}
-          $registro = @("# Gravado pelo workflow trocar-extras.yml. Não edite: mude extras-desejado.txt.", "data=$(Get-Date -Format 'yyyy-MM-dd HH:mm') UTC")
+          # Sem data no registro: com ela cada execução gerava um commit novo mesmo sem nada ter mudado.
+          $registro = @("# Gravado pelo workflow trocar-extras.yml. Não edite: mude extras-desejado.txt.")
           $n = 0
           foreach ($linha in $linhas) {
             $col = $linha -split '\s*\|\s*'
