@@ -609,32 +609,47 @@ public static class CheckpointVerifier
         // adivinhar: original (32 hex) = o EAC sobe junto e o ReShade não carrega. O
         // programa só lê; a edição é do usuário (só campanha offline).
         const string tituloEac = "Easy Anti-Cheat fora do caminho (só campanha offline)";
-        if (EasyAntiCheat.SettingsDe(profile.GameFolder, exe) is { } settingsEac)
+        if (EasyAntiCheat.Presente(profile.GameFolder, exe))
         {
-            string relEac;
-            try { relEac = Path.GetRelativePath(profile.GameFolder, settingsEac); } catch { relEac = settingsEac; }
-            var (estadoEac, productId) = EasyAntiCheat.LerProductId(settingsEac);
-            r.Add(estadoEac switch
+            var settingsEac = EasyAntiCheat.SettingsDe(profile.GameFolder, exe);
+            var (estadoEac, _) = EasyAntiCheat.LerProductId(settingsEac);
+            var appIdEac = SteamGame.FindAppId(profile.GameFolder);
+            var opcao = appIdEac is null ? null : SteamGame.LaunchOptions(appIdEac);
+            var linha = profile.RealExePath is null ? null : EasyAntiCheat.OpcaoDeInicializacao(profile.RealExePath);
+
+            if (estadoEac == EstadoDoProductId.Invalido)
             {
-                EstadoDoProductId.Valido => new CheckResult(23, tituloEac, CheckStatus.Fail,
-                    $"O productid do {relEac} ainda é o original ({productId}): o EAC sobe junto com o jogo, a DLL do " +
-                    "ReShade não carrega e o Gears fecha com \"does not support Direct3D 12\".",
-                    EasyAntiCheat.ComoAbrir + " O botão \"Abrir o Settings.json do EAC\" abre o arquivo no Bloco de Notas."),
-                EstadoDoProductId.Invalido => new CheckResult(23, tituloEac, CheckStatus.Pass,
-                    $"productid alterado ({productId}) em {relEac}: com o id inválido o EAC não sobe junto com o jogo. " +
-                    "Se a tela do EAC ainda aparecer antes do jogo, é outro Settings.json que está sendo lido — " +
-                    "mande a lista da pasta do jogo (raiz, Content e Binaries_x64).",
-                    null),
-                _ => new CheckResult(23, tituloEac, CheckStatus.Warning,
-                    $"Não achei \"productid\" em {relEac}; não dá para dizer se o EAC vai subir.",
-                    EasyAntiCheat.ComoAbrir),
-            });
-        }
-        else if (EasyAntiCheat.Presente(profile.GameFolder, exe))
-        {
-            r.Add(new CheckResult(23, tituloEac, CheckStatus.Warning,
-                "Easy Anti-Cheat na instalação, mas sem Settings.json para conferir o productid.",
-                EasyAntiCheat.ComoAbrir));
+                // O contorno do Game Pass aplicado na Steam: o bootstrapper recusa e nada abre.
+                r.Add(new CheckResult(23, tituloEac, CheckStatus.Fail, EasyAntiCheat.ProductIdAlterado,
+                    "Abra o Settings.json (pasta EasyAntiCheat na raiz do jogo), devolva a letra do productid e salve. " +
+                    "Depois: " + EasyAntiCheat.ComoAbrir));
+            }
+            else if (EasyAntiCheat.OpcaoContornaOBootstrapper(opcao, profile.RealExePath))
+            {
+                r.Add(new CheckResult(23, tituloEac, CheckStatus.Pass,
+                    $"Opções de inicialização da Steam: {opcao}. A Steam abre o exe real direto — o " +
+                    "start_protected_game.exe e o EAC ficam de fora. Só campanha offline; para voltar ao " +
+                    "multiplayer, apague a opção.", null));
+            }
+            else if (opcao is not null && linha is not null)
+            {
+                r.Add(new CheckResult(23, tituloEac, CheckStatus.Fail,
+                    string.IsNullOrWhiteSpace(opcao)
+                        ? "A Steam abre este jogo pelo start_protected_game.exe (sem opção de inicialização): o EAC " +
+                          "sobe junto, a DLL do ReShade não carrega e o Gears fecha com \"does not support Direct3D 12\"."
+                        : $"A opção de inicialização atual ({opcao}) não aponta para o exe real com %command%: a " +
+                          "Steam continua abrindo pelo start_protected_game.exe e o EAC sobe junto.",
+                    "Steam → clique direito no jogo → Propriedades → Geral → Opções de inicialização → cole:  " + linha +
+                    "  (o botão \"Copiar opção de inicialização\" põe a linha na área de transferência). " + EasyAntiCheat.ComoAbrir));
+            }
+            else
+            {
+                r.Add(new CheckResult(23, tituloEac, CheckStatus.Warning,
+                    "Easy Anti-Cheat na instalação. Não consegui ler as Opções de inicialização da Steam (jogo fora de " +
+                    "uma biblioteca da Steam, ou localconfig.vdf não achado), então não dá para dizer se o bootstrapper " +
+                    "está sendo pulado.",
+                    (linha is null ? "" : "Opção de inicialização a colar na Steam:  " + linha + "  ") + EasyAntiCheat.ComoAbrir));
+            }
         }
 
         r.AddRange(VerifyReShadeLog(exe, profile.GameFolder, reinicioPendente, profile.ReShadeLogPath,

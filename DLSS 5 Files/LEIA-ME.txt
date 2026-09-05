@@ -67,11 +67,14 @@ AVISOS
    - Jogo que sobe o Easy Anti-Cheat junto com o exe (Gears of War
      Reloaded) não carrega a DLL do ReShade: o ReShade.log nem nasce e
      o Gears fecha com "Your machine does not support Direct3D 12".
-     O programa reconhece a pasta EasyAntiCheat e explica o contorno
-     que a comunidade usa para jogar a campanha OFFLINE (uma letra no
-     "productid" do EasyAntiCheat\Settings.json da raiz do jogo). Ele não
-     mexe nesse arquivo — é você quem decide, e o multiplayer não
-     funciona sem o EAC.
+     O programa reconhece a pasta EasyAntiCheat e mostra o contorno
+     para jogar a campanha OFFLINE: em Opções de inicialização da
+     Steam, o caminho do exe real entre aspas seguido de %command%
+     (o botão "Copiar opção de inicialização" monta a linha). Assim
+     a Steam abre o jogo sem o start_protected_game.exe. Trocar o
+     productid do Settings.json NÃO funciona na Steam (o bootstrapper
+     recusa abrir). O programa não mexe na Steam nem no anticheat, e
+     o multiplayer não funciona sem o EAC.
    - Desligue as sobreposições da Steam e do NVIDIA App no jogo que for
      usar: elas disputam o mesmo ponto de interceptação.
    - Desligue MSAA/SSAA nas opções gráficas do jogo. FXAA e SMAA podem

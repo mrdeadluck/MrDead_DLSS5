@@ -26,7 +26,7 @@ public sealed partial class MainForm
     // botão baixa o build do ShortFuse que o RHI instala e o põe no kit, conferido.
     private readonly Button _btnRuntime = Ui.Secondary("Baixar o runtime do RHI (166 MB)");
     private readonly Button _btnReFramework = Ui.Secondary("Baixar REFramework nightly (23 MB)");
-    private readonly Button _btnEac = Ui.Secondary("Abrir o Settings.json do EAC");
+    private readonly Button _btnEac = Ui.Secondary("Copiar opção de inicialização (EAC)");
     // Caminho direto: a chave EnableHooks do RenoDX, trocada no ReShade.ini sem reinstalar.
     private readonly FlowLayoutPanel _barraHooks = Ui.Fila();
     private readonly ComboBox _cboHooks = new();
@@ -153,11 +153,11 @@ public sealed partial class MainForm
         _btnReFramework.Visible = false;
         _btnReFramework.Click += (_, _) => _ = BaixarReFrameworkAsync();
         bar.Controls.Add(_btnReFramework);
-        // Jogo sob Easy Anti-Cheat (Gears Reloaded): o programa não edita o arquivo, mas
-        // abre-o no Bloco de Notas para o usuário fazer o contorno da campanha offline.
+        // Jogo sob Easy Anti-Cheat (Gears Reloaded): o programa não mexe na Steam nem em
+        // arquivo de anticheat; monta a linha de Opções de inicialização e copia.
         _btnEac.Margin = new Padding(0, 4, 8, 4);
         _btnEac.Visible = false;
-        _btnEac.Click += (_, _) => AbrirSettingsDoEac();
+        _btnEac.Click += (_, _) => CopiarOpcaoDeInicializacao();
         bar.Controls.Add(_btnEac);
         bar.Controls.Add(Botao("Reiniciar o PC (opcional)…", (_, _) => ReiniciarSeOUsuarioQuiser()));
         bar.Controls.Add(Botao(Textos.BotaoAbrirLogs, (_, _) => AbrirPastaDeLogs()));
@@ -268,7 +268,7 @@ public sealed partial class MainForm
         // work_resolution é só D3D11 (o Feeder ignora noutras APIs): a barra segue a regra.
         _barraFeed.Visible = !direto && _profile.Api == GraphicsApi.D3D11;
         _btnReFramework.Visible = _profile.EhReEngine;
-        _btnEac.Visible = EasyAntiCheat.SettingsDe(_profile.GameFolder, _profile.ExeFolder) is not null;
+        _btnEac.Visible = EasyAntiCheat.Presente(_profile.GameFolder, _profile.ExeFolder);
         if (_barraFeed.Visible) SincronizarResolucaoDoFeed();
         if (direto) SincronizarHooksDoRenodx();
         AtualizarBotaoRenodx();
@@ -348,25 +348,21 @@ public sealed partial class MainForm
     };
 
     /// <summary>
-    /// Abre o Settings.json do EAC no Bloco de Notas. O programa não mexe no arquivo: a
-    /// letra trocada no productid é decisão do usuário, e vale só para a campanha offline.
+    /// Copia a linha de Opções de inicialização que faz a Steam abrir o exe real sem passar
+    /// pelo start_protected_game.exe (o bootstrapper do EAC). O programa não mexe na Steam:
+    /// quem cola a linha, e decide jogar a campanha sem o EAC, é o usuário.
     /// </summary>
-    private void AbrirSettingsDoEac()
+    private void CopiarOpcaoDeInicializacao()
     {
-        var settings = EasyAntiCheat.SettingsDe(_profile?.GameFolder, _profile?.ExeFolder);
-        if (settings is null) { Aviso("Não achei o Settings.json do Easy Anti-Cheat nesta instalação."); return; }
+        if (_profile?.RealExePath is null) { Aviso("Executável do jogo não identificado."); return; }
+        var linha = EasyAntiCheat.OpcaoDeInicializacao(_profile.RealExePath);
+        try { Clipboard.SetText(linha); } catch { }
         Dialogos.Informar(this, "Easy Anti-Cheat", "Só para jogar a campanha OFFLINE",
-            EasyAntiCheat.ComoAbrir + "\r\n\r\nO arquivo vai abrir no Bloco de Notas: troque UMA letra do " +
-            "valor de \"productid\" (ex.: ...f03 → ...g03), salve, feche, e clique em Verificar de novo.");
-        try
-        {
-            Process.Start(new ProcessStartInfo("notepad.exe", $"\"{settings}\"") { UseShellExecute = true });
-            Status("Settings.json aberto no Bloco de Notas. Depois de salvar, clique em Verificar de novo: o item 23 confirma.");
-        }
-        catch (Exception ex)
-        {
-            Aviso("Não consegui abrir o Bloco de Notas: " + ex.Message + "\r\n\r\nO arquivo é: " + settings);
-        }
+            "Linha copiada para a área de transferência:\r\n\r\n" + linha + "\r\n\r\n" +
+            "Steam → clique direito no jogo → Propriedades → Geral → Opções de inicialização → cole (Ctrl+V) → " +
+            "feche a janela → Jogar. Depois clique em Verificar de novo: o item 23 lê a opção gravada pela Steam.\r\n\r\n" +
+            EasyAntiCheat.ComoAbrir);
+        Status("Opção de inicialização copiada. Cole na Steam (Propriedades → Opções de inicialização) e clique em Verificar de novo.");
     }
 
     private void LaunchGame()

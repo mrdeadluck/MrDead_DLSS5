@@ -5711,6 +5711,9 @@ public class NrDesligadoNoHostTests
 /// </summary>
 public class EasyAntiCheatTests
 {
+    private const string AppId = "2523720";
+    private const string ProductId = "7e3756e03bda4408a9197c6f93437f03";
+
     private static string Pasta()
     {
         var dir = Path.Combine(Path.GetTempPath(), "dlss5-eac-" + Guid.NewGuid().ToString("N"));
@@ -5718,24 +5721,55 @@ public class EasyAntiCheatTests
         return dir;
     }
 
-    /// <summary>O layout real: start_protected_game.exe e EasyAntiCheat\ na raiz, exe em Binaries_x64.</summary>
-    private static (string Raiz, string Binaries) GearsReloaded(string raiz)
+    /// <summary>
+    /// O layout real, dentro de uma biblioteca da Steam: steamapps\appmanifest, a raiz do
+    /// jogo com start_protected_game.exe e EasyAntiCheat\Settings.json, o exe em Binaries_x64.
+    /// </summary>
+    private static (string Raiz, string Binaries) GearsReloaded(string dir)
     {
+        var steamapps = Path.Combine(dir, "SteamLibrary", "steamapps");
+        var raiz = Path.Combine(steamapps, "common", "Gears of War Reloaded");
         var binaries = Path.Combine(raiz, "Binaries_x64");
         Directory.CreateDirectory(binaries);
+        File.WriteAllText(Path.Combine(steamapps, "appmanifest_" + AppId + ".acf"),
+            "\"AppState\"\n{\n\t\"appid\"\t\t\"" + AppId + "\"\n\t\"installdir\"\t\t\"Gears of War Reloaded\"\n}\n");
         File.WriteAllText(Path.Combine(raiz, "start_protected_game.exe"), "x");
         var eac = Path.Combine(raiz, "EasyAntiCheat");
         Directory.CreateDirectory(eac);
         File.WriteAllText(Path.Combine(eac, "Settings.json"),
             "{\n\t\"title\": \"GOWDE-Steam\",\n\t\"executable\": \"Binaries_x64/GOWDE-Steam.exe\",\n" +
-            "\t\"productid\": \"7e3756e03bda4408a9197c6f93437f03\",\n\t\"sandboxid\": \"e2b262fd0d994e3e8606073a783e1da5\",\n" +
+            "\t\"productid\": \"" + ProductId + "\",\n\t\"sandboxid\": \"e2b262fd0d994e3e8606073a783e1da5\",\n" +
             "\t\"deploymentid\": \"6e7ce561c1e2471fb9535c35bc3633e3\",\n\t\"requested_splash\": \"EasyAntiCheat/SplashScreen.png\",\n" +
             "\t\"wait_for_game_process_exit\": \"false\",\n\t\"hide_bootstrapper\": \"false\",\n\t\"hide_gui\": \"false\"\n}");
         return (raiz, binaries);
     }
 
+    /// <summary>Um cliente da Steam falso, com o localconfig.vdf de uma conta.</summary>
+    private static string SteamCom(string dir, string? launchOptionsEscapada)
+    {
+        var steam = Path.Combine(dir, "Steam");
+        var config = Path.Combine(steam, "userdata", "1001", "config");
+        Directory.CreateDirectory(config);
+        var opcao = launchOptionsEscapada is null ? "" : "\t\t\t\t\t\t\"LaunchOptions\"\t\t\"" + launchOptionsEscapada + "\"\n";
+        File.WriteAllText(Path.Combine(config, "localconfig.vdf"),
+            "\"UserLocalConfigStore\"\n{\n\t\"Software\"\n\t{\n\t\t\"Valve\"\n\t\t{\n\t\t\t\"Steam\"\n\t\t\t{\n\t\t\t\t\"apps\"\n\t\t\t\t{\n" +
+            "\t\t\t\t\t\"" + AppId + "\"\n\t\t\t\t\t{\n" + opcao +
+            "\t\t\t\t\t\t\"cloud\"\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"last_sync_state\"\t\t\"synchronized\"\n\t\t\t\t\t\t}\n" +
+            "\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n}\n");
+        return steam;
+    }
+
+    private static GameProfile Perfil(string raiz, string binaries) => new()
+    {
+        GameFolder = raiz,
+        RealExePath = Path.Combine(binaries, "GOWDE-Steam.exe"),
+        Architecture = PeArchitecture.X64,
+        Api = GraphicsApi.D3D12,
+        HasNativeDlss = true,
+    };
+
     [Fact]
-    public void ReconheceContentEasyAntiCheatDoGearsEOsArquivosSoltos()
+    public void ReconheceAPastaEasyAntiCheatDaRaizEOsArquivosSoltos()
     {
         var dir = Pasta();
         try
@@ -5753,7 +5787,8 @@ public class EasyAntiCheatTests
             Assert.EndsWith("EasyAntiCheat", onde!);
             Assert.EndsWith(Path.Combine("EasyAntiCheat", "Settings.json"), EasyAntiCheat.SettingsDe(raiz, binaries)!);
             Assert.Contains("EasyAntiCheat", EasyAntiCheat.Nota(onde!, raiz));
-            Assert.Contains("productid", EasyAntiCheat.Nota(onde!, raiz));
+            Assert.Contains("%command%", EasyAntiCheat.Nota(onde!, raiz));
+            Assert.Equal(AppId, SteamGame.FindAppId(raiz));
 
             // Jogo que guarda a pasta em Content\ também é achado.
             var comContent = Pasta();
@@ -5773,7 +5808,7 @@ public class EasyAntiCheatTests
             var outro = Pasta();
             try
             {
-                File.WriteAllText(Path.Combine(outro, "start_protected_game.exe"), "x");
+                File.WriteAllText(Path.Combine(outro, "EasyAntiCheat_EOS_Setup.exe"), "x");
                 Assert.True(EasyAntiCheat.Presente(outro, outro));
                 Assert.Null(EasyAntiCheat.SettingsDe(outro, outro));
             }
@@ -5789,22 +5824,15 @@ public class EasyAntiCheatTests
         try
         {
             var (raiz, binaries) = GearsReloaded(dir);
-            var perfil = new GameProfile
-            {
-                GameFolder = raiz,
-                RealExePath = Path.Combine(binaries, "GOWDE-Steam.exe"),
-                Architecture = PeArchitecture.X64,
-                Api = GraphicsApi.D3D12,
-                HasNativeDlss = true,
-            };
+            var perfil = Perfil(raiz, binaries);
             Assert.Equal(binaries, perfil.ExeFolder);
 
             var c7 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 7);
             Assert.Equal(CheckStatus.Fail, c7.State);
             Assert.Contains("Easy Anti-Cheat", c7.Detail);
             Assert.Contains("Direct3D 12", c7.Detail);
-            Assert.Contains("productid", c7.FixHint!);
-            Assert.Contains("OFFLINE", c7.FixHint!);
+            Assert.Contains("%command%", c7.FixHint!);
+            Assert.Contains("OFFLINE", c7.FixHint!, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("sobreposi", c7.Detail, StringComparison.OrdinalIgnoreCase);
 
             var plan = InstallPlanBuilder.Build(perfil, PlanBuilderTests.KitCompleto(), new InstallOptions());
@@ -5815,7 +5843,7 @@ public class EasyAntiCheatTests
 
             var passo = ManualSteps.For(perfil, new InstallOptions()).First(s => s.Title.Contains("Easy Anti-Cheat"));
             Assert.True(passo.CriticalBeforeLaunch);
-            Assert.Contains("Settings.json", passo.Detail);
+            Assert.Contains("Opções de inicialização", passo.Detail);
 
             var diag = SymptomDiagnoser.Diagnose(perfil);
             Assert.Contains(diag, d => d.Source == "Easy Anti-Cheat");
@@ -5824,40 +5852,81 @@ public class EasyAntiCheatTests
     }
 
     [Fact]
-    public void Item23LeOProductIdEDizSeOEacAindaSobe()
+    public void LaunchOptionsDoLocalconfigSaoLidasComOsEscapesDesfeitos()
+    {
+        var dir = Pasta();
+        try
+        {
+            var steam = SteamCom(dir, "\\\"G:\\\\SteamLibrary\\\\steamapps\\\\common\\\\Gears of War Reloaded\\\\Binaries_x64\\\\GOWDE-Steam.exe\\\" %command%");
+            SteamGame.RaizDaSteamParaTeste = steam;
+            try
+            {
+                Assert.Equal("\"G:\\SteamLibrary\\steamapps\\common\\Gears of War Reloaded\\Binaries_x64\\GOWDE-Steam.exe\" %command%",
+                    SteamGame.LaunchOptions(AppId));
+                Assert.Null(SteamGame.LaunchOptions("999999"));      // sem bloco do jogo
+                Assert.Equal("", SteamGame.LaunchOptionsEm("\"apps\"\n{\n\t\"" + AppId + "\"\n\t{\n\t\t\"cloud\"\n\t\t{\n\t\t}\n\t}\n}\n", AppId));
+                Assert.Equal("-dx12", SteamGame.LaunchOptionsEm("\"" + AppId + "\"\n{\n\t\"LaunchOptions\"\t\t\"-dx12\"\n}", AppId));
+            }
+            finally { SteamGame.RaizDaSteamParaTeste = null; }
+            Assert.True(EasyAntiCheat.OpcaoContornaOBootstrapper("\"C:\\x\\GOWDE-Steam.exe\" %command%", @"G:\jogo\Binaries_x64\GOWDE-Steam.exe"));
+            Assert.False(EasyAntiCheat.OpcaoContornaOBootstrapper("-dx12", @"G:\jogo\Binaries_x64\GOWDE-Steam.exe"));
+            Assert.False(EasyAntiCheat.OpcaoContornaOBootstrapper("\"C:\\x\\GOWDE-Steam.exe\"", @"G:\jogo\Binaries_x64\GOWDE-Steam.exe"));
+            Assert.Equal("\"G:\\jogo\\Binaries_x64\\GOWDE-Steam.exe\" %command%", EasyAntiCheat.OpcaoDeInicializacao(@"G:\jogo\Binaries_x64\GOWDE-Steam.exe"));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void Item23LeAOpcaoDeInicializacaoDaSteamEOProductId()
     {
         var dir = Pasta();
         try
         {
             var (raiz, binaries) = GearsReloaded(dir);
-            var perfil = new GameProfile
-            {
-                GameFolder = raiz,
-                RealExePath = Path.Combine(binaries, "GOWDE-Steam.exe"),
-                Architecture = PeArchitecture.X64,
-                Api = GraphicsApi.D3D12,
-                HasNativeDlss = true,
-            };
+            var perfil = Perfil(raiz, binaries);
+            var exe = perfil.RealExePath!;
 
-            // Original (32 hex): o EAC sobe junto — falha, com o contorno como correção.
+            // Sem cliente da Steam legível: aviso, com a linha a colar.
+            SteamGame.RaizDaSteamParaTeste = null;
             var c23 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 23);
-            Assert.Equal(CheckStatus.Fail, c23.State);
-            Assert.Contains("7e3756e03bda4408a9197c6f93437f03", c23.Detail);
-            Assert.Contains("productid", c23.FixHint!);
+            Assert.Equal(CheckStatus.Warning, c23.State);
+            Assert.Contains("%command%", c23.FixHint!);
 
-            // Uma letra trocada: o EAC não sobe — passa.
-            var settings = EasyAntiCheat.SettingsDe(raiz, binaries)!;
-            File.WriteAllText(settings, File.ReadAllText(settings).Replace("437f03", "437g03"));
-            var lido = EasyAntiCheat.LerProductId(settings);
-            Assert.Equal(EstadoDoProductId.Invalido, lido.Estado);
-            Assert.Equal("7e3756e03bda4408a9197c6f93437g03", lido.Valor);
-            c23 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 23);
-            Assert.Equal(CheckStatus.Pass, c23.State);
+            // Steam sem opção de inicialização: falha, e a correção é a linha exata.
+            var steam = SteamCom(dir, null);
+            SteamGame.RaizDaSteamParaTeste = steam;
+            try
+            {
+                c23 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 23);
+                Assert.Equal(CheckStatus.Fail, c23.State);
+                Assert.Contains("start_protected_game.exe", c23.Detail);
+                Assert.Contains(EasyAntiCheat.OpcaoDeInicializacao(exe), c23.FixHint!);
 
-            // Sem a chave: não dá para dizer.
-            File.WriteAllText(settings, "{\"title_id\":\"1\"}");
-            Assert.Equal(EstadoDoProductId.Desconhecido, EasyAntiCheat.LerProductId(settings).Estado);
-            Assert.Equal(CheckStatus.Warning, CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 23).State);
+                // Opção que não é a nossa (-dx12): continua falhando.
+                Directory.Delete(steam, true);
+                SteamCom(dir, "-dx12");
+                c23 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 23);
+                Assert.Equal(CheckStatus.Fail, c23.State);
+                Assert.Contains("-dx12", c23.Detail);
+
+                // A opção certa: passa.
+                Directory.Delete(steam, true);
+                SteamCom(dir, "\\\"" + exe.Replace("\\", "\\\\") + "\\\" %command%");
+                c23 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 23);
+                Assert.Equal(CheckStatus.Pass, c23.State);
+                Assert.Contains("GOWDE-Steam.exe", c23.Detail);
+
+                // productid mexido (o contorno do Game Pass): falha antes de tudo, o jogo nem abre.
+                var settings = EasyAntiCheat.SettingsDe(raiz, binaries)!;
+                File.WriteAllText(settings, File.ReadAllText(settings).Replace("437f03", "437g03"));
+                Assert.Equal(EstadoDoProductId.Invalido, EasyAntiCheat.LerProductId(settings).Estado);
+                c23 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 23);
+                Assert.Equal(CheckStatus.Fail, c23.State);
+                Assert.Contains("No anti-cheat module has been found", c23.Detail);
+                Assert.Contains("devolva a letra", c23.FixHint!);
+            }
+            finally { SteamGame.RaizDaSteamParaTeste = null; }
+
             Assert.Equal(EstadoDoProductId.SemArquivo, EasyAntiCheat.LerProductId(Path.Combine(dir, "nada.json")).Estado);
             Assert.Equal(EstadoDoProductId.SemArquivo, EasyAntiCheat.LerProductId(null).Estado);
 
@@ -5889,14 +5958,7 @@ public class EasyAntiCheatTests
         {
             var (raiz, binaries) = GearsReloaded(dir);
             File.WriteAllText(Path.Combine(binaries, "ReShade.log"), "INFO | Initializing crosire's ReShade version '6.8.0'\n");
-            var perfil = new GameProfile
-            {
-                GameFolder = raiz,
-                RealExePath = Path.Combine(binaries, "GOWDE-Steam.exe"),
-                Architecture = PeArchitecture.X64,
-                Api = GraphicsApi.D3D12,
-                HasNativeDlss = true,
-            };
+            var perfil = Perfil(raiz, binaries);
             var c7 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 7);
             Assert.DoesNotContain("Easy Anti-Cheat", c7.Detail);
             Assert.DoesNotContain(SymptomDiagnoser.Diagnose(perfil), d => d.Source == "Easy Anti-Cheat");
