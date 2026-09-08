@@ -22,7 +22,30 @@ internal static class Textos
     // ---- Tela inicial
     public const string InicioTitulo = "Jogo e estado do DLSS 5";
     public const string InicioDica =
-        "Aponte a pasta do jogo. O programa verifica sozinho se o DLSS 5 já está instalado e mostra só as ações que fazem sentido para o estado atual.";
+        "Escolha um jogo na lista de jogos encontrados ou aponte a pasta do jogo. O programa verifica sozinho se o DLSS 5 já está instalado e mostra só as ações que fazem sentido para o estado atual.";
+
+    // ---- Jogos encontrados nas lojas (antes de pedir a pasta na mão)
+    public const string JogosEncontradosTitulo = "Jogos encontrados neste computador";
+    public const string JogosEncontradosDica =
+        "Lidos das bibliotecas das lojas (" + JogosInstalados.LojasCobertas + "). Só entra o que a loja registrou como jogo: " +
+        "launchers, redistribuíveis, ferramentas, DLC e trilhas sonoras ficam de fora. Não achou o seu? Aponte a pasta manualmente logo abaixo.";
+    public const string ProcurandoJogos = "Procurando jogos instalados nas lojas… (nada é alterado)";
+    public const string NenhumJogoEncontrado =
+        "Nenhum jogo registrado pelas lojas foi encontrado. Aponte a pasta do jogo manualmente logo abaixo.";
+    public const string BuscaDeJogosFalhou =
+        "Não consegui ler as bibliotecas das lojas (veja o log). Aponte a pasta do jogo manualmente logo abaixo.";
+    public static string JogosEncontrados(int quantidade, string lojas) =>
+        quantidade == 1
+            ? $"1 jogo encontrado ({lojas}). Clique duas vezes ou use \"{BotaoUsarJogo}\"."
+            : $"{quantidade} jogos encontrados ({lojas}). Clique duas vezes num jogo ou use \"{BotaoUsarJogo}\".";
+    public const string RotuloFiltrarJogos = "Filtrar";
+    public const string FiltroDeJogosDica = "Digite parte do nome, da loja ou da pasta";
+    public const string BotaoUsarJogo = "Usar este jogo";
+    public const string BotaoProcurarJogosDeNovo = "Procurar de novo";
+    public const string ColunaJogo = "Jogo";
+    public const string ColunaLoja = "Loja";
+    public const string ColunaPasta = "Pasta";
+    public static string ExecutavelIndicadoPelaLoja(string exe) => "Executável indicado pela loja: " + exe;
     public const string RotuloPastaDoJogo = "Pasta do jogo";
     public const string RotuloPastaDoKit = "Pasta do kit DLSS 5";
     public const string DicaPastaDoKit = "Necessária só para instalar, atualizar ou reparar. Para desinstalar, não precisa.";
@@ -86,7 +109,7 @@ internal static class Textos
 
     public const string ComoFunciona =
         "Como funciona\r\n" +
-        "1. Aponte a pasta do jogo. O programa verifica o estado e mostra as ações possíveis.\r\n" +
+        "1. Escolha o jogo na lista de jogos encontrados (Steam, Epic, GOG, EA, Ubisoft, Xbox…) ou aponte a pasta dele. O programa verifica o estado e mostra as ações possíveis.\r\n" +
         "2. Para instalar: confira a detecção (executável, arquitetura, API), veja o plano e confirme.\r\n" +
         "3. Acompanhe o progresso. Se algo falhar, tudo que foi alterado é desfeito automaticamente.\r\n" +
         "4. Para desinstalar: abra o programa, aponte o jogo e clique em Desinstalar. Não precisa do kit nem de reinstalar.\r\n" +

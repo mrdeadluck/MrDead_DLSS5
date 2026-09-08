@@ -105,6 +105,8 @@ public sealed partial class MainForm : Form
         base.OnLoad(e);
         EncaixarNoMonitor();
         _diario.Tecnico($"Janela: {Width}x{Height}, DPI {DeviceDpi}, escala {DeviceDpi / 96.0:P0}, tela {Screen.FromControl(this).Bounds.Width}x{Screen.FromControl(this).Bounds.Height}");
+        // Os jogos das lojas aparecem sozinhos, antes de qualquer pedido de pasta.
+        _ = ProcurarJogosInstaladosAsync();
         if (!string.IsNullOrWhiteSpace(_txtGame.Text)) _ = InspecionarAsync();
     }
 
@@ -555,6 +557,7 @@ public sealed partial class MainForm : Form
         UseWaitCursor = ocupado;
         AtualizarRodape();
         AtualizarAcoesDoInicio();
+        AtualizarBotoesDosJogos();
         AtualizarBotoesDaExecucao();
     }
 

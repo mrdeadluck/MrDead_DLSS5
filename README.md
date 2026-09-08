@@ -87,16 +87,20 @@ esse é automático.)
 ## Como usar, em resumo
 
 1. Baixe o `DLSS5-AutoInstaller.exe` acima e execute (um arquivo só, sem instalar nada).
-2. **Pasta do jogo** → onde o jogo está instalado. O programa mostra o estado (não
-   instalado, instalado, incompleto, vestígios de versão antiga…) e só as ações válidas.
+2. **Jogos encontrados** → o programa lista sozinho os jogos instalados pelas lojas (Steam,
+   Epic, GOG, EA, Ubisoft, Xbox, Battle.net, Rockstar, Amazon); clique duas vezes no seu.
+   Se ele não aparecer, aponte a **pasta do jogo** com o Procurar. O programa mostra o
+   estado (não instalado, instalado, incompleto, vestígios de versão antiga…) e só as
+   ações válidas.
 3. Para instalar: **Pasta do kit** → a pasta `DLSS 5 Files` → **Instalar DLSS 5** →
    confira a detecção e o plano → acompanhe a execução → verificação.
 4. Para desinstalar: abra o programa, aponte o jogo, **Desinstalar e restaurar arquivos
    originais**. Não precisa do kit nem de reinstalar.
 
-O programa descobre sozinho o executável real (incluindo o binário de verdade em
-jogos Unreal e o stub da engine Source), a arquitetura, a API gráfica e a rota de
-instalação; copia cada peça para o lugar certo; gera as configurações do ReShade
+O programa descobre sozinho os jogos instalados (só o que as lojas registram como
+jogo — nada de launcher, DLC ou ferramenta), o executável real (incluindo o binário de
+verdade em jogos Unreal e o stub da engine Source), a arquitetura, a API gráfica e a rota
+de instalação; copia cada peça para o lugar certo; gera as configurações do ReShade
 já com os efeitos marcados na ordem correta; e no fim verifica o que dá para
 verificar por arquivo, guiando você no que sobra de manual.
 

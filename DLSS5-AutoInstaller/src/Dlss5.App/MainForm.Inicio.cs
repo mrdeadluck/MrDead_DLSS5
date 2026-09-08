@@ -24,6 +24,16 @@ public sealed partial class MainForm
     private readonly TableLayoutPanel _cartaoEstado = Ui.Cartao();
     private readonly List<Button> _botoesDeAcao = new();
 
+    // Jogos que as lojas registraram, oferecidos ANTES de pedir a pasta na mão.
+    private readonly TableLayoutPanel _cartaoJogos = Ui.Cartao();
+    private readonly ListView _lstJogos = new();
+    private readonly TextBox _txtFiltroJogos = new();
+    private readonly Label _lblJogosStatus = new();
+    private readonly Button _btnUsarJogo = Ui.Primary(Textos.BotaoUsarJogo);
+    private readonly Button _btnProcurarJogos = Ui.Secondary(Textos.BotaoProcurarJogosDeNovo);
+    private IReadOnlyList<JogoInstalado> _jogosEncontrados = Array.Empty<JogoInstalado>();
+    private bool _procurandoJogos;
+
     private void BuildInicio()
     {
         _pInicio = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
@@ -38,6 +48,9 @@ public sealed partial class MainForm
             Padding = new Padding(0, 0, 4, 0),
         };
         coluna.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        // --- Jogos encontrados nas lojas: o caminho normal. "Procurar…" logo abaixo é o plano B.
+        coluna.Controls.Add(BuildCartaoDeJogos());
 
         // --- Pastas
         var form = Ui.Formulario(3);
@@ -141,6 +154,211 @@ public sealed partial class MainForm
         MostrarEstadoVazio();
     }
 
+    /// <summary>
+    /// Cartão "Jogos encontrados": o que as lojas (Steam, Epic, GOG, EA, Ubisoft, Xbox,
+    /// Battle.net, Rockstar, Amazon) registraram como jogo, com filtro. Vem antes dos campos
+    /// de pasta porque escolher aqui é o caminho normal; apontar a pasta é o plano B.
+    /// </summary>
+    private Control BuildCartaoDeJogos()
+    {
+        var corpo = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 1,
+            Margin = new Padding(0),
+        };
+        corpo.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        var titulo = new Label
+        {
+            Text = Textos.JogosEncontradosTitulo,
+            AutoSize = true,
+            Dock = DockStyle.Top,
+            Font = Ui.SubtitleFont,
+            ForeColor = Ui.Ink,
+            Margin = new Padding(0, 0, 0, 4),
+            AccessibleRole = AccessibleRole.StaticText,
+        };
+        var dica = Ui.Paragrafo(Textos.JogosEncontradosDica, Ui.Muted, Ui.SmallFont);
+        dica.Margin = new Padding(0, 0, 0, 8);
+
+        // Filtro e "Procurar de novo" na mesma linha.
+        var filtro = Ui.Formulario(1);
+        _txtFiltroJogos.Dock = DockStyle.Fill;
+        _txtFiltroJogos.Margin = new Padding(0, 4, 8, 4);
+        _txtFiltroJogos.PlaceholderText = Textos.FiltroDeJogosDica;
+        _txtFiltroJogos.AccessibleName = Textos.RotuloFiltrarJogos;
+        _txtFiltroJogos.TextChanged += (_, _) => PreencherListaDeJogos();
+        _txtFiltroJogos.KeyDown += (_, e) =>
+        {
+            // Enter no filtro com um único jogo sobrando: é ele.
+            if (e.KeyCode == Keys.Enter && _lstJogos.Items.Count == 1)
+            {
+                e.SuppressKeyPress = true;
+                _lstJogos.Items[0].Selected = true;
+                _ = UsarJogoSelecionadoAsync();
+            }
+        };
+        _btnProcurarJogos.Click += async (_, _) => await ProcurarJogosInstaladosAsync();
+        filtro.Controls.Add(Ui.Rotulo(Textos.RotuloFiltrarJogos), 0, 0);
+        filtro.Controls.Add(LinhaComBotoes(_txtFiltroJogos, _btnProcurarJogos), 1, 0);
+
+        _lstJogos.View = View.Details;
+        _lstJogos.FullRowSelect = true;
+        _lstJogos.MultiSelect = false;
+        _lstJogos.HideSelection = false;
+        _lstJogos.ShowItemToolTips = true;
+        _lstJogos.HeaderStyle = ColumnHeaderStyle.Nonclickable;
+        _lstJogos.BorderStyle = BorderStyle.FixedSingle;
+        _lstJogos.Font = Ui.BodyFont;
+        _lstJogos.Dock = DockStyle.Top;
+        _lstJogos.Height = 150;
+        _lstJogos.Margin = new Padding(0, 4, 0, 8);
+        _lstJogos.AccessibleName = Textos.JogosEncontradosTitulo;
+        _lstJogos.Columns.Add(Textos.ColunaJogo, 280);
+        _lstJogos.Columns.Add(Textos.ColunaLoja, 130);
+        _lstJogos.Columns.Add(Textos.ColunaPasta, 300);
+        _lstJogos.ClientSizeChanged += (_, _) => AjustarColunasDosJogos();
+        _lstJogos.SelectedIndexChanged += (_, _) => AtualizarBotoesDosJogos();
+        // Duplo clique ou Enter no item.
+        _lstJogos.ItemActivate += async (_, _) => await UsarJogoSelecionadoAsync();
+
+        _lblJogosStatus.AutoSize = true;
+        _lblJogosStatus.Dock = DockStyle.Top;
+        _lblJogosStatus.ForeColor = Ui.Muted;
+        _lblJogosStatus.Margin = new Padding(0, 0, 0, 6);
+        _lblJogosStatus.Text = Textos.ProcurandoJogos;
+
+        _btnUsarJogo.Enabled = false;
+        _btnUsarJogo.Margin = new Padding(0, 0, 8, 0);
+        _btnUsarJogo.Click += async (_, _) => await UsarJogoSelecionadoAsync();
+        var acoes = Ui.Fila();
+        acoes.Controls.Add(_btnUsarJogo);
+
+        corpo.Controls.Add(titulo);
+        corpo.Controls.Add(dica);
+        corpo.Controls.Add(filtro);
+        corpo.Controls.Add(_lstJogos);
+        corpo.Controls.Add(_lblJogosStatus);
+        corpo.Controls.Add(acoes);
+        _cartaoJogos.Controls.Add(corpo);
+        return _cartaoJogos;
+    }
+
+    /// <summary>Colunas em proporção da largura: vale em qualquer escala de tela.</summary>
+    private void AjustarColunasDosJogos()
+    {
+        if (_lstJogos.Columns.Count < 3) return;
+        int largura = Math.Max(300, _lstJogos.ClientSize.Width - 4);
+        _lstJogos.Columns[0].Width = (int)(largura * 0.40);
+        _lstJogos.Columns[1].Width = (int)(largura * 0.17);
+        _lstJogos.Columns[2].Width = largura - _lstJogos.Columns[0].Width - _lstJogos.Columns[1].Width;
+    }
+
+    /// <summary>
+    /// Lê as bibliotecas das lojas em segundo plano e preenche a lista. Roda ao abrir o
+    /// programa e no "Procurar de novo". Nunca derruba a tela: sem lista, sobra o Procurar….
+    /// </summary>
+    private async Task ProcurarJogosInstaladosAsync()
+    {
+        if (_procurandoJogos) return;
+        _procurandoJogos = true;
+        _lblJogosStatus.Text = Textos.ProcurandoJogos;
+        AtualizarBotoesDosJogos();
+        try
+        {
+            IReadOnlyList<JogoInstalado> jogos;
+            using (_diario.Etapa("Busca de jogos instalados nas lojas"))
+                jogos = await Task.Run(() => JogosInstalados.Procurar(_diario));
+            if (IsDisposed) return;
+
+            _jogosEncontrados = jogos;
+            PreencherListaDeJogos();
+            if (jogos.Count == 0)
+            {
+                _lblJogosStatus.Text = Textos.NenhumJogoEncontrado;
+            }
+            else
+            {
+                var lojas = string.Join(", ", jogos.GroupBy(j => j.Loja)
+                    .OrderByDescending(g => g.Count())
+                    .Select(g => $"{JogosInstalados.NomeDaLoja(g.Key)}: {g.Count()}"));
+                _lblJogosStatus.Text = Textos.JogosEncontrados(jogos.Count, lojas);
+            }
+        }
+        catch (Exception ex)
+        {
+            _diario.Aviso("Busca de jogos instalados falhou: " + ex.Message);
+            _lblJogosStatus.Text = Textos.BuscaDeJogosFalhou;
+        }
+        finally
+        {
+            _procurandoJogos = false;
+            AtualizarBotoesDosJogos();
+        }
+    }
+
+    /// <summary>Redesenha a lista a partir dos jogos encontrados e do filtro; marca o jogo já apontado.</summary>
+    private void PreencherListaDeJogos()
+    {
+        var filtro = _txtFiltroJogos.Text.Trim();
+        var atual = _txtGame.Text.Trim().TrimEnd('\\', '/');
+        ListViewItem? selecionado = null;
+
+        _lstJogos.BeginUpdate();
+        _lstJogos.Items.Clear();
+        foreach (var jogo in _jogosEncontrados)
+        {
+            if (filtro.Length > 0 &&
+                !jogo.Nome.Contains(filtro, StringComparison.CurrentCultureIgnoreCase) &&
+                !jogo.NomeDaLoja.Contains(filtro, StringComparison.CurrentCultureIgnoreCase) &&
+                !jogo.Pasta.Contains(filtro, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var item = new ListViewItem(new[] { jogo.Nome, jogo.NomeDaLoja, jogo.Pasta })
+            {
+                Tag = jogo,
+                ToolTipText = jogo.ExecutavelIndicado is { } exe
+                    ? jogo.Pasta + "\r\n" + Textos.ExecutavelIndicadoPelaLoja(exe)
+                    : jogo.Pasta,
+            };
+            _lstJogos.Items.Add(item);
+            if (atual.Length > 0 && string.Equals(jogo.Pasta.TrimEnd('\\', '/'), atual, StringComparison.OrdinalIgnoreCase))
+                selecionado = item;
+        }
+        _lstJogos.EndUpdate();
+
+        if (selecionado is not null)
+        {
+            selecionado.Selected = true;
+            selecionado.Focused = true;
+            selecionado.EnsureVisible();
+        }
+        AjustarColunasDosJogos();
+        AtualizarBotoesDosJogos();
+    }
+
+    private void AtualizarBotoesDosJogos()
+    {
+        _btnUsarJogo.Enabled = !_ocupado && _lstJogos.SelectedItems.Count > 0;
+        _btnProcurarJogos.Enabled = !_procurandoJogos;
+    }
+
+    /// <summary>O jogo escolhido na lista vira a pasta do jogo e é inspecionado na hora.</summary>
+    private async Task UsarJogoSelecionadoAsync()
+    {
+        if (_lstJogos.SelectedItems.Count == 0 || _lstJogos.SelectedItems[0].Tag is not JogoInstalado jogo) return;
+        if (_ocupado) { Status(Textos.OperacaoEmAndamento); return; }
+        _diario.Info($"Jogo escolhido na lista: {jogo.Nome} ({jogo.NomeDaLoja}) — {jogo.Pasta}" +
+                     (jogo.ExecutavelIndicado is null ? "" : $"; executável indicado pela loja: {jogo.ExecutavelIndicado}"));
+        _txtGame.Text = jogo.Pasta;
+        await InspecionarAsync();
+        // O cartão de estado fica abaixo da lista e dos campos: garante que ele apareça.
+        _pInicio.ScrollControlIntoView(_cartaoEstado);
+    }
+
     private static Button Botao(string texto, EventHandler onClick)
     {
         var b = Ui.Secondary(texto);
@@ -187,7 +405,7 @@ public sealed partial class MainForm
     {
         _lblEstadoTitulo.Text = Textos.TituloDoEstado(ModState.SemJogo);
         _lblEstadoTitulo.ForeColor = Ui.Muted;
-        _lblEstadoResumo.Text = "Aponte a pasta do jogo e clique em \"Verificar estado\" (ou pressione Enter).";
+        _lblEstadoResumo.Text = "Escolha um jogo na lista acima ou aponte a pasta do jogo e clique em \"Verificar estado\" (ou pressione Enter).";
         _fatos.Controls.Clear();
         _lblAvisos.Visible = false;
         _lblBloqueios.Visible = false;
@@ -247,6 +465,7 @@ public sealed partial class MainForm
             if (Directory.Exists(kitPasta)) { _settings.KitFolder = kitPasta; }
 
             RenderizarEstado(estado);
+            PreencherListaDeJogos();   // a lista acompanha: marca o jogo que acabou de ser apontado
             Status(Textos.TituloDoEstado(estado.Estado) + ".");
         }
         catch (Exception ex)

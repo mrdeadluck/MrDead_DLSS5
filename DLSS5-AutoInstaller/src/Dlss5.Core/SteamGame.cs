@@ -65,8 +65,8 @@ public static class SteamGame
         return null;
     }
 
-    /// <summary>Valor de uma chave no formato VDF: "chave"\t\t"valor".</summary>
-    private static string? Valor(string vdf, string chave)
+    /// <summary>Valor de uma chave no formato VDF: "chave"\t\t"valor". Também serve ao JogosInstalados.</summary>
+    internal static string? Valor(string vdf, string chave)
     {
         var m = Regex.Match(vdf, "\"" + Regex.Escape(chave) + "\"\\s+\"([^\"]*)\"",
             RegexOptions.IgnoreCase);

@@ -30,8 +30,16 @@ administrador** — necessário para gravar no registro (`HKLM`) e em pastas den
 
 ## Como usar
 
-Abra o programa e aponte **a pasta do jogo**. Ele verifica sozinho o estado e mostra só
-as ações que fazem sentido:
+Abra o programa. Ele lê as bibliotecas das lojas instaladas — Steam, Epic Games, GOG,
+EA app/Origin, Ubisoft Connect, Xbox/Game Pass, Battle.net, Rockstar e Amazon Games — e
+mostra a lista **Jogos encontrados neste computador**: clique duas vezes no jogo (ou use
+**Usar este jogo**) e pronto. Só entra o que a loja registrou como jogo: launchers,
+redistribuíveis, ferramentas, DLC e trilhas sonoras ficam de fora. O programa não varre o
+disco atrás de `.exe` — um executável solto pode ser qualquer coisa; um item da biblioteca
+da loja é um jogo. Se o seu não aparecer (loja não coberta, instalação manual), aponte
+**a pasta do jogo** com o **Procurar…**, logo abaixo da lista.
+
+Com o jogo apontado, ele verifica sozinho o estado e mostra só as ações que fazem sentido:
 
 | Estado detectado | Botão principal | O que faz |
 |---|---|---|
@@ -134,6 +142,7 @@ vez de recusar em silêncio.
 
 | Etapa | Como |
 |---|---|
+| Achar os jogos instalados | Lê o que as lojas registraram — Steam (`libraryfolders.vdf` + `appmanifest_*.acf`, com o tipo vindo do `appinfo.vdf`), Epic (`*.item`), GOG, EA/Origin, Ubisoft, Rockstar, Battle.net e Amazon (registro), Xbox (`XboxGames\*\Content\MicrosoftGame.config`). DLC, ferramentas, trilhas sonoras e pastas sem `.exe` são descartadas |
 | Achar o executável real | Varre os `.exe`, pontua por profundidade/tamanho/nome, descarta launchers e redistribuíveis, reconhece o stub da engine Source |
 | Arquitetura | Campo `Machine` do cabeçalho PE (nunca pelo nome da pasta) |
 | API gráfica | Imports do PE, **texto dentro do binário** (pega o Direct3D carregado com `LoadLibrary`, que não aparece nos imports), DLLs ao lado do exe, nome de jogos conhecidos e detecção da Source (`bin\shaderapi*.dll`). Cada pista tem peso; a tela informa se houve empate |
