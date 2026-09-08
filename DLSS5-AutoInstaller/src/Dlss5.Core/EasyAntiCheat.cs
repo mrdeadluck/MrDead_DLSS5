@@ -121,13 +121,38 @@ public static class EasyAntiCheat
         "estão certos; o jogo só os carrega com o EAC fora.";
 
     public const string ComoAbrir =
-        "O que a comunidade faz para jogar a CAMPANHA com mods: abra o Settings.json da pasta EasyAntiCheat " +
-        "(no Gears Reloaded fica na raiz do jogo: EasyAntiCheat\\Settings.json) no Bloco de Notas e troque UMA letra do " +
-        "valor de \"productid\" (por exemplo o último bloco ...f03 → ...g03); salve. Com o id inválido o EAC " +
-        "não sobe, o jogo abre normalmente pela Steam e o ReShade carrega. Só para jogar OFFLINE: o " +
-        "multiplayer recusa a entrada sem o EAC (\"rejected by the anti cheat server\"), e entrar online " +
-        "com mods pode marcar a conta. Para voltar ao normal, desfaça a edição ou use Steam → Verificar " +
-        "integridade dos arquivos. Este programa não mexe nesse arquivo.";
+        "Na Steam o jogo é aberto pelo start_protected_game.exe da raiz (o bootstrapper do EAC), e ele " +
+        "não deixa o jogo subir sem o módulo do anticheat — trocar o productid do Settings.json (o " +
+        "contorno do Game Pass) só rende \"No anti-cheat module has been found for this game and " +
+        "platform\". O que funciona na Steam é não passar pelo bootstrapper: Steam → clique direito no " +
+        "jogo → Propriedades → Geral → Opções de inicialização → cole o caminho do exe real entre aspas " +
+        "seguido de %command% (o botão \"Copiar opção de inicialização\" monta a linha certa). A Steam " +
+        "então abre o GOWDE-Steam.exe direto, sem EAC, e o ReShade carrega. Só para a CAMPANHA offline: " +
+        "o multiplayer recusa a entrada sem o EAC, e entrar online com mods pode marcar a conta. Para " +
+        "voltar ao normal, apague a opção de inicialização. Este programa não mexe na Steam nem em " +
+        "arquivo de anticheat.";
+
+    public const string ProductIdAlterado =
+        "O productid do Settings.json foi alterado — na Steam isso não pula o EAC: o start_protected_game.exe " +
+        "responde \"No anti-cheat module has been found for this game and platform\" e o jogo não abre nem " +
+        "sem mods. Volte a letra original (ou Steam → Verificar integridade dos arquivos).";
+
+    /// <summary>A linha a colar em Opções de inicialização: o exe real entre aspas + %command%.</summary>
+    public static string OpcaoDeInicializacao(string exePath) => $"\"{exePath}\" %command%";
+
+    /// <summary>
+    /// A opção de inicialização já aponta para o exe real com %command%? A Steam substitui
+    /// %command% pela linha original (o bootstrapper) e executa o que veio antes — o exe do
+    /// jogo — com a linha original como argumento. Compara pelo nome do exe, porque a letra
+    /// do disco e o caminho podem ter sido digitados de outro jeito.
+    /// </summary>
+    public static bool OpcaoContornaOBootstrapper(string? launchOptions, string? exePath)
+    {
+        if (string.IsNullOrWhiteSpace(launchOptions) || string.IsNullOrWhiteSpace(exePath)) return false;
+        var nome = exePath.Split('\\', '/').Last();
+        return launchOptions.Contains("%command%", StringComparison.OrdinalIgnoreCase)
+               && launchOptions.Contains(nome, StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// O "productid" do Settings.json: 32 hexadecimais quando é o original — aí o EAC sobe
