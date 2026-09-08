@@ -146,6 +146,8 @@ public sealed partial class MainForm : Form
         // Arrastada para outro monitor: se ele é menor, a janela encolhe para caber nele.
         ResizeEnd += (_, _) =>
         {
+            // Fim de um arraste/redimensionamento: qualquer troca de DPI já terminou.
+            if (_trocandoDpi) { _trocandoDpi = false; AdaptarMoldura(); }
             var monitor = Screen.FromControl(this).DeviceName;
             if (monitor == _ultimoMonitor) return;
             _ultimoMonitor = monitor;
