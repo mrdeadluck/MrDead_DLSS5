@@ -43,14 +43,28 @@ public sealed partial class MainForm
     private readonly Label _lblResultadoTitulo = new();
     private readonly TextBox _txtResultado = new();
 
+    // A tabela da verificação: a linha 1 (grade + roteiro) recebe a altura que sobrar, mas
+    // nunca menos que um mínimo legível; abaixo disso a tela inteira rola.
+    private TableLayoutPanel _tabelaVerificacao = new();
+    private const int LinhaDoSplit = 1;
+
     private void BuildVerificacao()
     {
-        _pVerificacao = new Panel { Dock = DockStyle.Fill };
+        _pVerificacao = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
 
-        var t = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Margin = new Padding(0) };
+        var t = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 1,
+            RowCount = 4,
+            Margin = new Padding(0),
+        };
+        _tabelaVerificacao = t;
         t.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        t.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        t.RowStyles.Add(new RowStyle(SizeType.Absolute, 300));
         t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
@@ -63,13 +77,21 @@ public sealed partial class MainForm
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Horizontal,
-            Panel1MinSize = 100,
-            Panel2MinSize = 100,
+            Panel1MinSize = 60,
+            Panel2MinSize = 60,
             Margin = new Padding(0, 0, 0, 8),
         };
-        split.HandleCreated += (_, _) =>
+        // A proporção inicial (grade 55 %, roteiro 45 %) só pode ser aplicada quando o
+        // split já tem altura de verdade; depois ele mantém a proporção sozinho.
+        bool proporcaoAplicada = false;
+        split.SizeChanged += (_, _) =>
         {
-            try { split.SplitterDistance = Math.Max(split.Panel1MinSize, split.Height * 55 / 100); }
+            if (proporcaoAplicada || split.Height < Ui.Px(this, 160)) return;
+            try
+            {
+                split.SplitterDistance = Math.Max(split.Panel1MinSize, split.Height * 55 / 100);
+                proporcaoAplicada = true;
+            }
             catch (InvalidOperationException) { }
             catch (ArgumentOutOfRangeException) { }
         };
@@ -92,24 +114,37 @@ public sealed partial class MainForm
         _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
         _grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(243, 245, 249);
         _grid.ColumnHeadersDefaultCellStyle.ForeColor = Ui.Muted;
+        // Sem estilos visuais, o cabeçalho da coluna da célula atual é pintado com a cor de
+        // seleção (o azul que aparecia em "Estado"). Seleção e normal ficam iguais.
+        _grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(243, 245, 249);
+        _grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = Ui.Muted;
         _grid.ColumnHeadersDefaultCellStyle.Font = Ui.BoldFont;
         _grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(6, 4, 0, 4);
-        _grid.DefaultCellStyle.Font = Ui.BodyFont;
+        // Sem fonte própria nas células: herdam a da grade (a do formulário), que o WinForms
+        // reescala quando a janela muda de monitor.
         _grid.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
-        _grid.DefaultCellStyle.Padding = new Padding(6, 6, 6, 6);
+        _grid.DefaultCellStyle.Padding = new Padding(6, 4, 6, 4);
         _grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(233, 241, 251);
         _grid.DefaultCellStyle.SelectionForeColor = Ui.Ink;
         _grid.AccessibleName = "Resultado da verificação";
 
         _grid.ColumnCount = 4;
+        // "Estado" tem largura fixa (cabe "⚠ ATENÇÃO"); as outras dividem o resto. Em
+        // janela estreita "Como corrigir" some — o texto completo continua no duplo clique.
         _grid.Columns[0].HeaderText = "Estado";
-        _grid.Columns[0].FillWeight = 12;
+        _grid.Columns[0].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+        _grid.Columns[0].Width = 96;
+        _grid.Columns[0].MinimumWidth = 70;
         _grid.Columns[1].HeaderText = "Verificação";
-        _grid.Columns[1].FillWeight = 25;
+        _grid.Columns[1].FillWeight = 30;
+        _grid.Columns[1].MinimumWidth = 120;
         _grid.Columns[2].HeaderText = "Detalhe";
-        _grid.Columns[2].FillWeight = 35;
+        _grid.Columns[2].FillWeight = 40;
+        _grid.Columns[2].MinimumWidth = 160;
         _grid.Columns[3].HeaderText = "Como corrigir";
-        _grid.Columns[3].FillWeight = 28;
+        _grid.Columns[3].FillWeight = 30;
+        _grid.Columns[3].MinimumWidth = 120;
+        _grid.ClientSizeChanged += (_, _) => AdaptarColunasDaGrade();
         // Duplo clique abre a linha inteira num diálogo legível (texto longo).
         _grid.CellDoubleClick += (_, e) =>
         {
@@ -168,6 +203,7 @@ public sealed partial class MainForm
         _cboPlaca.DropDownStyle = ComboBoxStyle.DropDownList;
         _cboPlaca.Width = 260;
         _cboPlaca.Margin = new Padding(0, 4, 8, 4);
+        Ui.Adaptavel(_cboPlaca, 160);
         foreach (var (rotulo, _) in DgVoodooConfigurator.Placas) _cboPlaca.Items.Add(rotulo);
         _cboPlaca.SelectedIndex = 0;
         _chkTnL.Text = "T&&L por hardware";
@@ -187,6 +223,7 @@ public sealed partial class MainForm
         _cboHooks.DropDownStyle = ComboBoxStyle.DropDownList;
         _cboHooks.Width = 380;
         _cboHooks.Margin = new Padding(0, 4, 8, 4);
+        Ui.Adaptavel(_cboHooks, 200);
         foreach (var v in RenodxIni.Valores) _cboHooks.Items.Add(RenodxIni.Descricao(v));
         _cboHooks.SelectedIndex = 0;
         _barraHooks.Controls.Add(_cboHooks);
@@ -197,6 +234,7 @@ public sealed partial class MainForm
         _cboFeedRes.DropDownStyle = ComboBoxStyle.DropDownList;
         _cboFeedRes.Width = 380;
         _cboFeedRes.Margin = new Padding(0, 4, 8, 4);
+        Ui.Adaptavel(_cboFeedRes, 200);
         foreach (var v in FeedCfg.ResolucoesDeTrabalho) _cboFeedRes.Items.Add(FeedCfg.Descricao(v));
         _cboFeedRes.SelectedIndex = 0;
         _barraFeed.Controls.Add(_cboFeedRes);
@@ -213,6 +251,51 @@ public sealed partial class MainForm
         t.Controls.Add(_barraHooks, 0, 4);
         t.Controls.Add(_barraFeed, 0, 5);
         _pVerificacao.Controls.Add(t);
+        // ClientSizeChanged também dispara quando a barra de rolagem aparece; SizeChanged da
+        // tabela, quando a fila de botões quebra em mais linhas ou uma barra de ferramentas
+        // aparece — nos dois casos a altura disponível para grade + roteiro muda.
+        _pVerificacao.ClientSizeChanged += (_, _) => AjustarAlturaDaVerificacao();
+        t.SizeChanged += (_, _) => AjustarAlturaDaVerificacao();
+    }
+
+    /// <summary>
+    /// Grade + roteiro ocupam o que sobrar da altura da tela; abaixo de um mínimo legível a
+    /// tela inteira rola, em vez de espremer a grade até mostrar uma linha só.
+    /// </summary>
+    private void AjustarAlturaDaVerificacao()
+    {
+        var t = _tabelaVerificacao;
+        if (t.RowStyles.Count <= LinhaDoSplit) return;
+        int atual = (int)t.RowStyles[LinhaDoSplit].Height;
+        var alturas = t.GetRowHeights();
+        int outras = 0;
+        for (int i = 0; i < alturas.Length; i++) if (i != LinhaDoSplit) outras += alturas[i];
+        if (alturas.Length == 0) outras = Math.Max(0, t.Height - atual);
+        outras += t.Padding.Vertical;
+
+        int livre = _pVerificacao.ClientSize.Height - outras;
+        int novo = Math.Max(Ui.Px(this, 240), livre);
+        if (novo != atual) t.RowStyles[LinhaDoSplit].Height = novo;
+    }
+
+    /// <summary>
+    /// Em grade estreita "Como corrigir" some (o duplo clique mostra tudo). Histerese de 60
+    /// px para a barra de rolagem vertical (17 px) não ligar e desligar a coluna em série.
+    /// </summary>
+    private void AdaptarColunasDaGrade()
+    {
+        if (_grid.Columns.Count < 4) return;
+        // "Estado" cabe o maior rótulo ("⚠ ATENÇÃO") numa linha, na escala atual.
+        using (var negrito = new Font(_grid.Font, FontStyle.Bold))
+        {
+            int estado = TextRenderer.MeasureText($"{Ui.SimboloDoEstado(CheckStatusKind.Warn)} {StateText(CheckStatus.Warning)}", negrito).Width
+                         + _grid.DefaultCellStyle.Padding.Horizontal + Ui.Px(this, 10);
+            if (_grid.Columns[0].Width != estado) _grid.Columns[0].Width = estado;
+        }
+        int largura = _grid.ClientSize.Width;
+        var coluna = _grid.Columns[3];
+        if (coluna.Visible && largura < Ui.Px(this, 700)) coluna.Visible = false;
+        else if (!coluna.Visible && largura >= Ui.Px(this, 760)) coluna.Visible = true;
     }
 
     private void BuildResultado()
@@ -275,6 +358,7 @@ public sealed partial class MainForm
 
         using var etapa = _diario.Etapa("Verificação");
         _grid.Rows.Clear();
+        var negrito = new Font(_grid.Font, FontStyle.Bold);
         var resultados = CheckpointVerifier.Verify(_profile, _manifest, NvngxDoKit(), _overrideNoBoot).ToList();
         int ok = 0, falhas = 0, avisos = 0;
         foreach (var c in resultados)
@@ -296,7 +380,7 @@ public sealed partial class MainForm
             var color = Ui.ForState(kind);
             row.Cells[0].Style.ForeColor = color;
             row.Cells[0].Style.SelectionForeColor = color;
-            row.Cells[0].Style.Font = Ui.BoldFont;
+            row.Cells[0].Style.Font = negrito;
             if (c.State is CheckStatus.Fail or CheckStatus.Warning)
             {
                 row.Cells[1].Style.ForeColor = color;
@@ -335,6 +419,7 @@ public sealed partial class MainForm
 
         sb.AppendLine(ManualSteps.Limitations);
         _txtGuide.Text = sb.ToString();
+        AjustarAlturaDaVerificacao();
         Status("Verificação atualizada.");
     }
 

@@ -67,10 +67,27 @@ public sealed partial class MainForm : Form
     private readonly Label _status = new();
     private readonly TableLayoutPanel _sidebarSteps = new();
     private readonly List<Label> _stepLabels = new();
+    private TableLayoutPanel _root = new();
+    private TableLayoutPanel _main = new();
+
+    /// <summary>
+    /// Verdadeiro depois do OnLoad: a janela já passou pelo autoscale do WinForms e tem o
+    /// tamanho real. Antes disso, controles novos entram em 96 DPI e o autoscale cuida
+    /// deles; depois, quem cria um controle chama Adotar().
+    /// </summary>
+    private bool _pronto;
+    private bool _trocandoDpi;
+    private string _ultimoMonitor = "";
 
     public MainForm(Diario diario)
     {
         _diario = diario;
+        Ui.DpiInicial = DeviceDpi;
+
+        // Layout suspenso durante a construção: o autoscale do WinForms roda uma vez só, no
+        // ResumeLayout do fim, já com TODAS as telas na árvore. Sem isto ele rodava no
+        // primeiro Controls.Add e as telas construídas depois ficavam em 96 DPI.
+        SuspendLayout();
 
         Text = Textos.TituloDoPrograma;
         StartPosition = FormStartPosition.CenterScreen;
@@ -79,7 +96,9 @@ public sealed partial class MainForm : Form
         // texto, maior, era cortado.
         AutoScaleMode = AutoScaleMode.Dpi;
         AutoScaleDimensions = new SizeF(96F, 96F);
-        MinimumSize = new Size(900, 600);
+        // Mínimo que cabe num notebook 1366x768 a 125 % e num 1920x1080 a 150 %; abaixo
+        // disso as telas rolam em vez de cortar. EncaixarNoMonitor ainda reduz se preciso.
+        MinimumSize = new Size(800, 520);
         Size = new Size(1240, 820);
         Font = Ui.BodyFont;
         BackColor = Ui.Page;
@@ -94,19 +113,66 @@ public sealed partial class MainForm : Form
         BuildVerificacao();
         BuildResultado();
 
+        // Todas as telas moram no painel de conteúdo desde o início; MostrarTela só troca
+        // qual está visível. Assim o autoscale e as trocas de DPI alcançam todas.
+        _content.SuspendLayout();
+        foreach (var tela in Telas())
+        {
+            tela.Dock = DockStyle.Fill;
+            tela.Visible = false;
+            _content.Controls.Add(tela);
+        }
+        _content.ResumeLayout(false);
+
         CarregarPreferencias();
         _diario.LinhaVisivel += OnLinhaDoDiario;
 
         MostrarTela(Tela.Inicio);
+        ResumeLayout(true);
     }
+
+    private IEnumerable<Panel> Telas() => new[] { _pInicio, _pDeteccao, _pPlano, _pExecucao, _pVerificacao, _pResultado };
 
     protected override void OnLoad(EventArgs e)
     {
         base.OnLoad(e);
-        EncaixarNoMonitor();
+        _pronto = true;
+        EncaixarNoMonitor(centralizar: true);
+        AdaptarMoldura();
         _diario.Tecnico($"Janela: {Width}x{Height}, DPI {DeviceDpi}, escala {DeviceDpi / 96.0:P0}, tela {Screen.FromControl(this).Bounds.Width}x{Screen.FromControl(this).Bounds.Height}");
+
+        // A moldura acompanha a largura (barra lateral e margens menores em janela estreita).
+        Resize += (_, _) => { if (!_trocandoDpi) AdaptarMoldura(); };
+        // Arrastada para outro monitor: se ele é menor, a janela encolhe para caber nele.
+        ResizeEnd += (_, _) =>
+        {
+            var monitor = Screen.FromControl(this).DeviceName;
+            if (monitor == _ultimoMonitor) return;
+            _ultimoMonitor = monitor;
+            EncaixarNoMonitor(centralizar: false);
+        };
+        // Troca de escala (monitor de DPI diferente): o WinForms reescala fontes, margens e
+        // mínimos primeiro; o BeginInvoke espera isso terminar para reencaixar e readaptar.
+        DpiChanged += (_, _) =>
+        {
+            _trocandoDpi = true;
+            BeginInvoke(new Action(() =>
+            {
+                _trocandoDpi = false;
+                _diario.Tecnico($"Escala da tela mudou: DPI {DeviceDpi} ({DeviceDpi / 96.0:P0}).");
+                EncaixarNoMonitor(centralizar: false);
+                AdaptarMoldura();
+            }));
+        };
+
         if (!string.IsNullOrWhiteSpace(_txtGame.Text)) _ = InspecionarAsync();
     }
+
+    /// <summary>
+    /// Escala um controle criado agora para a janela já escalada. Antes do OnLoad não faz
+    /// nada: o autoscale do construtor cuida de tudo que já está na árvore.
+    /// </summary>
+    private T Adotar<T>(T controle) where T : Control => _pronto ? Ui.EscalarPara(controle, this) : controle;
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
@@ -131,25 +197,58 @@ public sealed partial class MainForm : Form
     }
 
     /// <summary>
-    /// Encolhe a janela até caber na área útil da tela. Roda no OnLoad porque só aí o
-    /// Windows já aplicou a escala do monitor.
+    /// Encolhe a janela (e o mínimo dela) até caber na área útil do monitor em que está.
+    /// Roda no OnLoad, quando o Windows já aplicou a escala, e de novo sempre que a janela
+    /// muda de monitor ou de escala. Só encolhe: uma janela que já cabe não é mexida.
     /// </summary>
-    private void EncaixarNoMonitor()
+    private void EncaixarNoMonitor(bool centralizar)
     {
         var area = Screen.FromControl(this).WorkingArea;
-        const int margem = 24;
+        _ultimoMonitor = Screen.FromControl(this).DeviceName;
+        int margem = Ui.Px(this, 16);
 
-        var minLargura = Math.Min(MinimumSize.Width, Math.Max(640, area.Width - margem));
-        var minAltura = Math.Min(MinimumSize.Height, Math.Max(460, area.Height - margem));
+        var minLargura = Math.Min(MinimumSize.Width, Math.Max(Ui.Px(this, 560), area.Width - margem));
+        var minAltura = Math.Min(MinimumSize.Height, Math.Max(Ui.Px(this, 400), area.Height - margem));
         MinimumSize = new Size(minLargura, minAltura);
 
-        Size = new Size(
+        if (WindowState != FormWindowState.Normal) return;
+
+        var tamanho = new Size(
             Math.Max(minLargura, Math.Min(Width, area.Width - margem)),
             Math.Max(minAltura, Math.Min(Height, area.Height - margem)));
+        if (tamanho != Size) Size = tamanho;
 
-        Location = new Point(
-            area.X + Math.Max(0, (area.Width - Width) / 2),
-            area.Y + Math.Max(0, (area.Height - Height) / 2));
+        int x = centralizar ? area.X + Math.Max(0, (area.Width - Width) / 2) : Left;
+        int y = centralizar ? area.Y + Math.Max(0, (area.Height - Height) / 2) : Top;
+        x = Math.Clamp(x, area.X, Math.Max(area.X, area.Right - Width));
+        y = Math.Clamp(y, area.Y, Math.Max(area.Y, area.Bottom - Height));
+        if (x != Left || y != Top) Location = new Point(x, y);
+    }
+
+    /// <summary>
+    /// Barra lateral e margens proporcionais à largura da janela: em janela estreita (ou
+    /// monitor pequeno em escala alta) a barra encolhe e as margens diminuem, e o conteúdo
+    /// ganha o espaço. Tudo em pixels do monitor atual, recalculado a cada redimensionamento.
+    /// </summary>
+    private void AdaptarMoldura()
+    {
+        if (!_pronto || IsDisposed) return;
+        int largura = ClientSize.Width;
+        bool estreita = largura < Ui.Px(this, 980);
+        bool muitoEstreita = largura < Ui.Px(this, 840);
+
+        int barra = Ui.Px(this, muitoEstreita ? 160 : estreita ? 180 : 210);
+        if ((int)_root.ColumnStyles[0].Width != barra) _root.ColumnStyles[0].Width = barra;
+
+        var margem = estreita
+            ? new Padding(Ui.Px(this, 12), Ui.Px(this, 10), Ui.Px(this, 12), Ui.Px(this, 8))
+            : new Padding(Ui.Px(this, 24), Ui.Px(this, 18), Ui.Px(this, 24), Ui.Px(this, 14));
+        if (_main.Padding != margem) _main.Padding = margem;
+
+        var interna = new Padding(Ui.Px(this, estreita ? 10 : 16));
+        if (_content.Padding != interna) _content.Padding = interna;
+
+        AjustarQuebra(_main);
     }
 
     // ---------------------------------------------------------------- chrome
@@ -166,6 +265,8 @@ public sealed partial class MainForm : Form
             Padding = new Padding(24, 18, 24, 14),
             BackColor = Ui.Page,
         };
+        _main = main;
+        main.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         main.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         main.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         main.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -237,6 +338,7 @@ public sealed partial class MainForm : Form
             BackColor = Ui.Page,
             Margin = new Padding(0),
         };
+        _root = root;
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 210));
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         root.Controls.Add(sidebar, 0, 0);
@@ -246,9 +348,10 @@ public sealed partial class MainForm : Form
 
     private void AjustarQuebra(Control pai)
     {
-        var largura = Math.Max(320, pai.ClientSize.Width - pai.Padding.Horizontal);
-        _stepHint.MaximumSize = new Size(largura, 0);
-        _stepTitle.MaximumSize = new Size(largura, 0);
+        var largura = Math.Max(Ui.Px(this, 240), pai.ClientSize.Width - pai.Padding.Horizontal);
+        var max = new Size(largura, 0);
+        if (_stepHint.MaximumSize != max) _stepHint.MaximumSize = max;
+        if (_stepTitle.MaximumSize != max) _stepTitle.MaximumSize = max;
     }
 
     private Control BuildSidebar()
@@ -272,9 +375,10 @@ public sealed partial class MainForm : Form
             AutoSize = true,
             ColumnCount = 1,
             RowCount = 2,
-            Padding = new Padding(22, 22, 12, 18),
+            Padding = new Padding(18, 22, 10, 18),
             Margin = new Padding(0),
         };
+        marca.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         marca.Controls.Add(new Label
         {
             Text = "DLSS 5",
@@ -283,18 +387,22 @@ public sealed partial class MainForm : Form
             AutoSize = true,
             Margin = new Padding(0),
         }, 0, 0);
+        // "AutoInstaller 1.1.0 (build abc1234)" não cabe na barra: quebra em duas linhas
+        // em vez de sumir pela direita.
         marca.Controls.Add(new Label
         {
             Text = "AutoInstaller " + AppInfo.VersaoComBuild,
             Font = Ui.SmallFont,
             ForeColor = Ui.SidebarIdle,
             AutoSize = true,
+            Dock = DockStyle.Top,
             Margin = new Padding(1, 0, 0, 0),
         }, 0, 1);
 
         _sidebarSteps.Dock = DockStyle.Top;
         _sidebarSteps.AutoSize = true;
         _sidebarSteps.ColumnCount = 1;
+        _sidebarSteps.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         _sidebarSteps.Margin = new Padding(0);
         _sidebarSteps.Padding = new Padding(0);
 
@@ -317,7 +425,7 @@ public sealed partial class MainForm : Form
             ColumnCount = 2,
             RowCount = 2,
             BackColor = Ui.Sidebar,
-            Padding = new Padding(18, 12, 12, 16),
+            Padding = new Padding(14, 12, 8, 16),
             Margin = new Padding(0),
         };
         rodape.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -353,12 +461,14 @@ public sealed partial class MainForm : Form
         }
         rodape.Controls.Add(foto, 0, 0);
         rodape.SetRowSpan(foto, 2);
+        // Dock=Top: na barra lateral estreita o texto quebra linha em vez de ser cortado.
         rodape.Controls.Add(new Label
         {
             Text = "Desenvolvido por",
             Font = Ui.SmallFont,
             ForeColor = Ui.SidebarIdle,
             AutoSize = true,
+            Dock = DockStyle.Top,
             Margin = new Padding(0, 8, 0, 0),
         }, 1, 0);
         rodape.Controls.Add(new Label
@@ -367,6 +477,7 @@ public sealed partial class MainForm : Form
             Font = new Font("Segoe UI", 11F, FontStyle.Bold),
             ForeColor = Color.White,
             AutoSize = true,
+            Dock = DockStyle.Top,
             Margin = new Padding(0),
         }, 1, 1);
         return rodape;
@@ -405,7 +516,7 @@ public sealed partial class MainForm : Form
         for (int i = 0; i < passos.Count; i++)
         {
             bool corrente = i == atual;
-            var lbl = new Label
+            var lbl = Adotar(new Label
             {
                 Text = $"{i + 1}.   {passos[i].Nome}",
                 AutoSize = true,
@@ -416,7 +527,7 @@ public sealed partial class MainForm : Form
                 BackColor = corrente ? Ui.Accent : Ui.Sidebar,
                 Padding = new Padding(14, 9, 8, 9),
                 Margin = new Padding(0),
-            };
+            });
             _sidebarSteps.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             _sidebarSteps.Controls.Add(lbl, 0, i);
             _stepLabels.Add(lbl);
@@ -429,8 +540,6 @@ public sealed partial class MainForm : Form
     private void MostrarTela(Tela tela)
     {
         _tela = tela;
-        _content.SuspendLayout();
-        _content.Controls.Clear();
         (Panel panel, string title, string hint) = tela switch
         {
             Tela.Inicio => (_pInicio, Textos.InicioTitulo, Textos.InicioDica),
@@ -445,9 +554,14 @@ public sealed partial class MainForm : Form
         _stepTitle.Text = title;
         _stepHint.Text = hint;
         _stepHint.Visible = hint.Length > 0;
-        panel.Dock = DockStyle.Fill;
-        _content.Controls.Add(panel);
-        _content.ResumeLayout();
+
+        // As telas já estão todas no painel; só uma fica visível. Esconde as outras antes
+        // de mostrar a nova para não haver duas preenchendo o painel ao mesmo tempo.
+        _content.SuspendLayout();
+        foreach (var outra in Telas())
+            if (outra != panel && outra.Visible) outra.Visible = false;
+        if (!panel.Visible) panel.Visible = true;
+        _content.ResumeLayout(true);
         AtualizarSidebar();
         AtualizarRodape();
 

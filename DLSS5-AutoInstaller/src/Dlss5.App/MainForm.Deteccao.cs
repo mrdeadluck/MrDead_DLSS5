@@ -96,7 +96,7 @@ public sealed partial class MainForm
         form.Controls.Add(_lblNativeWhy, 1, linha++);
 
         _chkDireto.Text = "Usar o Feeder em vez do caminho direto — experimental: em jogo com DLSS nativo o Feeder colide com o NGX do jogo";
-        _chkDireto.AutoSize = true;
+        Ui.ComQuebra(_chkDireto);
         _chkDireto.Visible = false;
         _chkDireto.Margin = new Padding(0, 0, 0, 6);
         _chkDireto.CheckedChanged += (_, _) => SyncProfileFromUi();
@@ -107,7 +107,7 @@ public sealed partial class MainForm
         // REFramework ele passa — foi assim que o RE9 abriu com o painel funcionando.
         _chkReFramework.Text = "Instalar o REFramework junto — só para jogo que recusa o ReShade na abertura (RE Requiem, Dragon's Dogma 2). " +
                                "Em RE4, RE Village e MH Wilds deixe DESMARCADO: ali ele derruba o jogo.";
-        _chkReFramework.AutoSize = true;
+        Ui.ComQuebra(_chkReFramework);
         _chkReFramework.Visible = false;
         _chkReFramework.Margin = new Padding(0, 0, 0, 6);
         _chkReFramework.CheckedChanged += (_, _) => SyncProfileFromUi();
@@ -123,6 +123,7 @@ public sealed partial class MainForm
         _cboReShadeNome.Width = 200;
         _cboReShadeNome.Margin = new Padding(0, 4, 0, 6);
         _cboReShadeNome.SelectedIndexChanged += (_, _) => SyncProfileFromUi();
+        Ui.Adaptavel(_cboReShadeNome, 160);
         var filaNome = Ui.Fila();
         filaNome.Controls.Add(_cboReShadeNome);
         filaNome.Controls.Add(_lblDicaReShadeNome);
@@ -131,6 +132,7 @@ public sealed partial class MainForm
         _lblDicaReShadeNome.ForeColor = Ui.Muted;
         _lblDicaReShadeNome.Font = Ui.SmallFont;
         _lblDicaReShadeNome.Margin = new Padding(8, 8, 0, 0);
+        Ui.QuebrarNoPai(_lblDicaReShadeNome);
         form.Controls.Add(_lblReShadeNome, 0, linha);
         form.Controls.Add(filaNome, 1, linha++);
 
@@ -161,6 +163,7 @@ public sealed partial class MainForm
         _cboEngine.Width = 420;
         _cboEngine.Margin = new Padding(0, 4, 8, 4);
         _cboEngine.SelectedIndexChanged += (_, _) => SyncProfileFromUi();
+        Ui.Adaptavel(_cboEngine, 200);   // largura do item mais longo, mas nunca maior que a coluna
         _numPasses.Minimum = ShortFuseDlss.PassesMin;
         _numPasses.Maximum = ShortFuseDlss.PassesMax;
         _numPasses.Value = ShortFuseDlss.PassesPadrao;
@@ -170,6 +173,7 @@ public sealed partial class MainForm
         _lblEngineNote.AutoSize = true;
         _lblEngineNote.ForeColor = Ui.Muted;
         _lblEngineNote.Margin = new Padding(0, 8, 0, 0);
+        Ui.QuebrarNoPai(_lblEngineNote);
         var filaEngine = Ui.Fila();
         filaEngine.Controls.Add(_cboEngine);
         filaEngine.Controls.Add(new Label { Text = "Passadas", AutoSize = true, Margin = new Padding(8, 8, 6, 0) });
@@ -185,6 +189,7 @@ public sealed partial class MainForm
         _cboMv.SelectedIndex = MvProviders.Indice(MvProviders.Padrao);
         _cboMv.Width = 300;
         _cboMv.Margin = new Padding(0, 4, 8, 4);
+        Ui.Adaptavel(_cboMv, 180);
         _cboMv.SelectedIndexChanged += (_, _) =>
         {
             if (_cboMv.SelectedIndex >= 0) _options.MvProvider = MvProviders.Ordem[_cboMv.SelectedIndex];
@@ -193,6 +198,7 @@ public sealed partial class MainForm
         _lblMvNote.AutoSize = true;
         _lblMvNote.ForeColor = Ui.Muted;
         _lblMvNote.Margin = new Padding(0, 8, 0, 0);
+        Ui.QuebrarNoPai(_lblMvNote);
         var filaMv = Ui.Fila();
         filaMv.Controls.Add(_cboMv);
         filaMv.Controls.Add(_lblMvNote);
@@ -205,6 +211,7 @@ public sealed partial class MainForm
         _cboKey.MaxDropDownItems = 18;
         _cboKey.Width = 220;
         _cboKey.Margin = new Padding(0, 4, 8, 4);
+        Ui.Adaptavel(_cboKey, 160);
         foreach (var k in ReShadeConfigWriter.OverlayKeys) _cboKey.Items.Add(k.Label);
         _cboKey.SelectedIndex = 0;
         _cboKey.SelectedIndexChanged += (_, _) => SyncOverlayKeyFromUi();
@@ -218,6 +225,7 @@ public sealed partial class MainForm
         _lblKeyNote.AutoSize = true;
         _lblKeyNote.ForeColor = Ui.Muted;
         _lblKeyNote.Margin = new Padding(0, 8, 0, 0);
+        Ui.QuebrarNoPai(_lblKeyNote);
         var filaKey = Ui.Fila();
         filaKey.Controls.Add(_cboKey);
         filaKey.Controls.Add(_chkCtrl);
@@ -230,21 +238,23 @@ public sealed partial class MainForm
 
         // Opções
         _chkRegistry.Text = "Aplicar o override de assinatura NGX no registro do Windows (recomendado)";
-        _chkRegistry.AutoSize = true;
+        Ui.ComQuebra(_chkRegistry);
         _chkRegistry.Checked = true;
         _chkRegistry.Margin = new Padding(0, 6, 0, 0);
         _chkRegistry.CheckedChanged += (_, _) => _options.ApplyRegistryOverride = _chkRegistry.Checked;
         _chkClean.Text = "Mover para backup um instalador do ReShade esquecido na pasta do jogo";
-        _chkClean.AutoSize = true;
+        Ui.ComQuebra(_chkClean);
         _chkClean.Checked = true;
         _chkClean.Margin = new Padding(0, 4, 0, 0);
         _chkClean.CheckedChanged += (_, _) => _options.CleanForbidden = _chkClean.Checked;
         _chkWatermark.Text = "Marca d'água do dgVoodoo (só rota C) — selo no canto para confirmar que ele está ativo";
-        _chkWatermark.AutoSize = true;
+        Ui.ComQuebra(_chkWatermark);
         _chkWatermark.Checked = true;
         _chkWatermark.Margin = new Padding(0, 4, 0, 0);
         _chkWatermark.CheckedChanged += (_, _) => _options.DgVoodooWatermark = _chkWatermark.Checked;
         var opcoes = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1, Margin = new Padding(0) };
+        // Percent 100: as caixas e as dicas são medidas na largura da coluna e quebram linha.
+        opcoes.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         opcoes.Controls.Add(_chkRegistry);
         opcoes.Controls.Add(Dica("Sem isso o driver NVIDIA recusa o nvngx_dlssnr.dll (erro 0xBAD00007). Vale para o sistema inteiro; anti-cheat pode tratar como violação — não use em jogos online com anti-cheat. Faz efeito após reiniciar o Windows uma vez."));
         opcoes.Controls.Add(_chkClean);
@@ -263,15 +273,18 @@ public sealed partial class MainForm
         form.Controls.Add(_txtNotes, 1, linha++);
 
         _pDeteccao.Controls.Add(form);
-        _pDeteccao.Resize += (_, _) => AjustarAlturaDasNotas();
+        // ClientSizeChanged, não Resize: também dispara quando a barra de rolagem aparece.
+        _pDeteccao.ClientSizeChanged += (_, _) => AjustarAlturaDasNotas();
+        form.SizeChanged += (_, _) => AjustarAlturaDasNotas();
     }
 
     /// <summary>As notas ocupam o que sobrar da altura; abaixo de um mínimo, a tela rola.</summary>
     private void AjustarAlturaDasNotas()
     {
         int usado = _formDeteccao.Height - _txtNotes.Height;
-        int livre = _pDeteccao.ClientSize.Height - usado - 8;
-        _txtNotes.Height = Math.Max(90, livre);
+        int livre = _pDeteccao.ClientSize.Height - usado - Ui.Px(this, 8);
+        int altura = Math.Max(Ui.Px(this, 90), livre);
+        if (_txtNotes.Height != altura) _txtNotes.Height = altura;
     }
 
     private static Label Dica(string texto)
@@ -575,6 +588,7 @@ public sealed partial class MainForm
         {
             _cboReShadeNome.Items.Clear();
             foreach (var n in nomes) _cboReShadeNome.Items.Add(n);
+            Ui.AjustarLargura(_cboReShadeNome, 160);
         }
         int i = nomes.ToList().IndexOf(atual);
         _cboReShadeNome.SelectedIndex = i < 0 ? 0 : i;

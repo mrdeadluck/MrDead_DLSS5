@@ -6,9 +6,16 @@ namespace Dlss5.App;
 ///
 /// Regras de layout que valem para o programa inteiro:
 /// • nada de posição absoluta — TableLayoutPanel/FlowLayoutPanel com Dock/AutoSize;
+/// • todo TableLayoutPanel de uma coluna declara a coluna como Percent 100. Sem isso a
+///   coluna é AutoSize, mede cada filho sem limite de largura e o conteúdo fica mais largo
+///   que a janela (foi o que cortava o diálogo de desinstalar pela direita);
 /// • botão sempre AutoSize com largura mínima, para o texto nunca ser cortado;
-/// • rótulos longos com AutoSize + MaximumSize para quebrar linha;
-/// • medidas em pixels de 96 DPI: o formulário usa AutoScaleMode.Dpi e escala tudo.
+/// • rótulos longos quebram linha na largura do pai (Paragrafo); caixas de seleção com
+///   texto longo usam Caixa(), porque o CheckBox do WinForms não quebra sozinho;
+/// • ComboBox com lista longa usa Adaptavel(): largura natural, mas nunca maior que o pai;
+/// • medidas em pixels de 96 DPI: o formulário usa AutoScaleMode.Dpi e escala o que existe
+///   na hora em que a janela é criada. O que é criado depois (botões de ação, fatos do
+///   estado, passos da barra lateral) passa por EscalarPara() antes de entrar na janela.
 /// </summary>
 internal static class Ui
 {
@@ -51,6 +58,44 @@ internal static class Ui
     /// <summary>Altura mínima confortável para clique (96 DPI).</summary>
     public const int AlturaDoBotao = 34;
     public const int LarguraMinimaDoBotao = 110;
+
+    /// <summary>
+    /// DPI do sistema quando o programa abriu. As fontes em pontos são desenhadas pelo GDI
+    /// nessa escala; quando a janela vai para um monitor de escala diferente, o WinForms
+    /// troca as fontes dos controles existentes e este valor diz quanto uma fonte nova
+    /// precisa crescer para acompanhar.
+    /// </summary>
+    public static int DpiInicial { get; set; } = 96;
+
+    /// <summary>Pixels lógicos (96 DPI) → pixels do monitor em que o controle está.</summary>
+    public static int Px(Control c, int logico) => c.LogicalToDeviceUnits(logico);
+
+    /// <summary>
+    /// Escala um controle criado em 96 DPI para uma janela que JÁ passou pelo autoscale do
+    /// WinForms. O autoscale roda uma vez, na criação da janela; o que é adicionado depois
+    /// chega em pixels de 96 DPI e, em 125/150 %, ficaria com margens, mínimos e fontes
+    /// menores que o resto. Idempotente por controle: chame uma vez, antes de adicionar.
+    /// </summary>
+    public static T EscalarPara<T>(T controle, Control janela) where T : Control
+    {
+        float fator = janela.DeviceDpi / 96f;
+        if (Math.Abs(fator - 1f) > 0.01f) controle.Scale(new SizeF(fator, fator));
+
+        float fonte = janela.DeviceDpi / (float)DpiInicial;
+        if (Math.Abs(fonte - 1f) > 0.01f) EscalarFontes(controle, fonte);
+        return controle;
+    }
+
+    private static void EscalarFontes(Control c, float fator)
+    {
+        // Só fontes definidas explicitamente (TitleFont, StepFont…). Um controle sem fonte
+        // própria ainda responde a fonte padrão do sistema e, ao entrar na janela, herda a
+        // fonte do formulário — que o WinForms já reescalou; escalar aqui dobraria.
+        var f = c.Font;
+        if (!f.Equals(Control.DefaultFont))
+            c.Font = new Font(f.FontFamily, f.Size * fator, f.Style, f.Unit, f.GdiCharSet, f.GdiVerticalFont);
+        foreach (Control filho in c.Controls) EscalarFontes(filho, fator);
+    }
 
     /// <summary>Botão da ação principal do passo.</summary>
     public static Button Primary(string text) => MakePrimary(new Button(), text);
@@ -115,17 +160,19 @@ internal static class Ui
         b.EnabledChanged += (_, _) => b.Cursor = b.Enabled ? Cursors.Hand : Cursors.Default;
     }
 
-    /// <summary>Rótulo de campo (coluna esquerda).</summary>
+    /// <summary>Rótulo de campo (coluna esquerda). Quebra linha acima de 150 px para a coluna
+    /// da direita sobrar em janela estreita.</summary>
     public static Label Rotulo(string text) => new()
     {
         Text = text,
         AutoSize = true,
+        MaximumSize = new Size(150, 0),
         Margin = new Padding(0, 8, 12, 4),
         ForeColor = Ink,
     };
 
     /// <summary>Texto corrido que quebra linha conforme a largura disponível.</summary>
-    public static Label Paragrafo(string text, Color? cor = null, Font? fonte = null) => new()
+    public static Label Paragrafo(string text, Color? cor = null, Font? fonte = null) => QuebrarNoPai(new Label
     {
         Text = text,
         AutoSize = true,
@@ -134,7 +181,118 @@ internal static class Ui
         ForeColor = cor ?? Muted,
         Font = fonte ?? BodyFont,
         Margin = new Padding(0, 2, 0, 6),
-    };
+    });
+
+    /// <summary>
+    /// Faz um rótulo AutoSize quebrar linha na largura do pai, onde quer que ele esteja.
+    /// Numa coluna Percent o TableLayoutPanel já limita a largura; numa coluna AutoSize, num
+    /// Panel ou num FlowLayoutPanel ele mediria o texto inteiro numa linha só e sairia da
+    /// janela. O MaximumSize acompanha o pai a cada layout (inclusive quando a barra de
+    /// rolagem aparece e a área útil encolhe).
+    /// </summary>
+    public static Label QuebrarNoPai(Label rotulo)
+    {
+        Control? pai = null;
+        void Ajustar(object? s, EventArgs e)
+        {
+            if (rotulo.Parent is not { } p) return;
+            int largura = p.ClientSize.Width - p.Padding.Horizontal - rotulo.Margin.Horizontal;
+            if (largura < 40) return;   // ainda sem tamanho útil
+            var max = new Size(largura, 0);
+            if (rotulo.MaximumSize != max) rotulo.MaximumSize = max;
+        }
+        rotulo.ParentChanged += (_, _) =>
+        {
+            if (pai is not null) pai.Layout -= Ajustar;
+            pai = rotulo.Parent;
+            if (pai is null) return;
+            pai.Layout += Ajustar;
+            Ajustar(null, EventArgs.Empty);
+        };
+        return rotulo;
+    }
+
+    /// <summary>
+    /// Caixa de seleção cujo texto quebra linha na largura do pai. O CheckBox com AutoSize
+    /// não quebra: em janela estreita ou escala alta o fim do texto simplesmente some pela
+    /// direita. Aqui a largura vem do Dock e a altura é recalculada a cada mudança de
+    /// largura, texto ou fonte. Use dentro de TableLayoutPanel (não em FlowLayoutPanel).
+    /// </summary>
+    public static CheckBox Caixa(string texto, bool marcada = false) =>
+        ComQuebra(new CheckBox { Text = texto, Checked = marcada });
+
+    /// <summary>Aplica a quebra de linha de <see cref="Caixa"/> a uma caixa já existente.</summary>
+    public static CheckBox ComQuebra(CheckBox c)
+    {
+        c.AutoSize = false;
+        c.Dock = DockStyle.Top;
+        c.Margin = new Padding(0, 4, 0, 4);
+        c.Padding = new Padding(0, 1, 0, 1);
+        void Ajustar(object? s, EventArgs e) => AjustarAlturaDaCaixa(c);
+        c.Resize += Ajustar;
+        c.TextChanged += Ajustar;
+        c.FontChanged += Ajustar;
+        c.ParentChanged += Ajustar;
+        AjustarAlturaDaCaixa(c);
+        return c;
+    }
+
+    private static void AjustarAlturaDaCaixa(CheckBox c)
+    {
+        if (c.Width <= 0 || c.Text.Length == 0) return;
+        // O CheckBox mede o texto com quebra de palavra quando recebe uma largura proposta.
+        var ideal = c.GetPreferredSize(new Size(c.Width, 0));
+        int umaLinha = c.Font.Height + c.Padding.Vertical + 6;
+        int altura = Math.Max(ideal.Height, umaLinha);
+        bool varias = altura > umaLinha * 3 / 2;
+        // Uma linha: caixa e texto centrados como de costume. Várias: caixa alinhada à
+        // primeira linha, como nos diálogos do Windows.
+        var alinhamento = varias ? ContentAlignment.TopLeft : ContentAlignment.MiddleLeft;
+        if (c.CheckAlign != alinhamento) c.CheckAlign = alinhamento;
+        if (c.TextAlign != alinhamento) c.TextAlign = alinhamento;
+        if (c.Height != altura) c.Height = altura;
+    }
+
+    /// <summary>
+    /// ComboBox com largura natural (o item mais longo cabe inteiro), mas nunca maior que o
+    /// pai. Substitui larguras fixas em pixels, que em janela estreita saíam da tela e em
+    /// escala alta cortavam o texto do item.
+    /// </summary>
+    public static ComboBox Adaptavel(ComboBox cbo, int larguraMinima = 120)
+    {
+        Control? pai = null;
+        void Ajustar(object? s, EventArgs e) => AjustarLargura(cbo, larguraMinima);
+        cbo.ParentChanged += (_, _) =>
+        {
+            if (pai is not null) pai.Layout -= Ajustar;
+            pai = cbo.Parent;
+            if (pai is null) return;
+            pai.Layout += Ajustar;
+            Ajustar(null, EventArgs.Empty);
+        };
+        cbo.FontChanged += Ajustar;
+        return cbo;
+    }
+
+    /// <summary>Recalcula a largura de um ComboBox adaptável (chame depois de trocar os itens).</summary>
+    public static void AjustarLargura(ComboBox cbo, int larguraMinima = 120)
+    {
+        if (cbo.Parent is not { } p) return;
+        int disponivel = p.ClientSize.Width - p.Padding.Horizontal - cbo.Margin.Horizontal;
+        if (disponivel < 40) return;   // ainda sem tamanho útil
+        int natural = LarguraNatural(cbo);
+        int minimo = Math.Min(Px(cbo, larguraMinima), disponivel);
+        int largura = Math.Clamp(natural, minimo, disponivel);
+        if (cbo.Width != largura) cbo.Width = largura;
+    }
+
+    private static int LarguraNatural(ComboBox cbo)
+    {
+        int texto = 0;
+        foreach (var item in cbo.Items)
+            texto = Math.Max(texto, TextRenderer.MeasureText(item?.ToString() ?? string.Empty, cbo.Font).Width);
+        return texto + SystemInformation.VerticalScrollBarWidth + Px(cbo, 12);
+    }
 
     /// <summary>Linha de campo: rótulo + controle que ocupa o resto da largura.</summary>
     public static TableLayoutPanel Formulario(int linhas)
