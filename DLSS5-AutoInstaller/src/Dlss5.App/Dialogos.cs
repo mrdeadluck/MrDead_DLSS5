@@ -5,6 +5,9 @@ namespace Dlss5.App;
 /// <summary>
 /// Diálogos do programa. Um MessageBox corta texto longo e não rola; aqui a caixa é
 /// redimensionável, tem rolagem, o texto pode ser copiado e os botões nunca são cortados.
+/// A janela nunca nasce maior que a área útil do monitor em que o dono está e o conteúdo
+/// quebra linha na largura que houver — em monitor pequeno ou escala alta ela encolhe e
+/// rola, em vez de sair da tela.
 /// </summary>
 [SupportedOSPlatform("windows")]
 internal static class Dialogos
@@ -25,7 +28,8 @@ internal static class Dialogos
         using var f = new Form
         {
             Text = titulo,
-            StartPosition = FormStartPosition.CenterParent,
+            // A posição é calculada em Encaixar(): centrada no dono e dentro do monitor dele.
+            StartPosition = FormStartPosition.Manual,
             FormBorderStyle = FormBorderStyle.Sizable,
             MinimizeBox = false,
             MaximizeBox = true,
@@ -34,7 +38,7 @@ internal static class Dialogos
             AutoScaleDimensions = new SizeF(96F, 96F),
             Font = Ui.BodyFont,
             BackColor = Ui.Page,
-            MinimumSize = new Size(420, 260),
+            MinimumSize = new Size(360, 240),
             Size = new Size(720, 520),
             KeyPreview = true,
         };
@@ -46,6 +50,10 @@ internal static class Dialogos
             RowCount = 4,
             Padding = new Padding(16),
         };
+        // Percent 100: os filhos são medidos na largura da janela e quebram linha. Sem este
+        // estilo a coluna é AutoSize, a explicação do checkbox era medida numa linha só e
+        // empurrava a caixa de texto e os botões para fora da janela.
+        raiz.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         raiz.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         raiz.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         raiz.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -119,7 +127,40 @@ internal static class Dialogos
         };
 
         f.Shown += (_, _) => (principal ?? (Control)copiar).Focus();
+        // No Load a escala do monitor já foi aplicada e o tamanho em pixels é o real. Numa
+        // troca de DPI (arrastada para outro monitor) o WinForms reescala tudo primeiro; o
+        // BeginInvoke espera isso terminar antes de reencaixar.
+        f.Load += (_, _) => Encaixar(f, dono);
+        f.DpiChanged += (_, _) => f.BeginInvoke(new Action(() => Encaixar(f, dono)));
         return f.ShowDialog(dono);
+    }
+
+    /// <summary>
+    /// Limita o diálogo à área útil do monitor do dono (com folga) e o centra no dono. Só
+    /// encolhe: se já cabe, o tamanho pedido fica.
+    /// </summary>
+    private static void Encaixar(Form f, IWin32Window? dono)
+    {
+        if (f.IsDisposed) return;
+        var donoForm = dono as Form ?? (dono as Control)?.FindForm();
+        var tela = donoForm is { IsDisposed: false } ? Screen.FromControl(donoForm) : Screen.FromPoint(Cursor.Position);
+        var area = tela.WorkingArea;
+        int folga = Ui.Px(f, 16);
+
+        int maxLargura = Math.Max(Ui.Px(f, 320), area.Width - 2 * folga);
+        int maxAltura = Math.Max(Ui.Px(f, 220), area.Height - 2 * folga);
+        f.MinimumSize = new Size(Math.Min(f.MinimumSize.Width, maxLargura), Math.Min(f.MinimumSize.Height, maxAltura));
+
+        if (f.WindowState != FormWindowState.Normal) return;
+        var tamanho = new Size(Math.Min(f.Width, maxLargura), Math.Min(f.Height, maxAltura));
+        if (tamanho != f.Size) f.Size = tamanho;
+
+        var referencia = donoForm is { IsDisposed: false, WindowState: not FormWindowState.Minimized } ? donoForm.Bounds : area;
+        int x = referencia.X + (referencia.Width - f.Width) / 2;
+        int y = referencia.Y + (referencia.Height - f.Height) / 2;
+        x = Math.Clamp(x, area.X, Math.Max(area.X, area.Right - f.Width));
+        y = Math.Clamp(y, area.Y, Math.Max(area.Y, area.Bottom - f.Height));
+        f.Location = new Point(x, y);
     }
 
     public static void Informar(IWin32Window? dono, string titulo, string cabecalho, string texto) =>

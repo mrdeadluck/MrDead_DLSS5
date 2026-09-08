@@ -93,6 +93,16 @@ e a tela inicial volta ao estado **"DLSS 5 não instalado"**.
 - **Modo conservador** para instalações antigas sem manifesto: só sai o que não tem como
   ser do jogo (nomes exclusivos do kit, ReShade identificado pelo conteúdo).
 
+### Janela em qualquer monitor
+
+A interface se adapta ao tamanho e à escala da tela: a janela nunca nasce maior que a
+área útil do monitor (e encolhe se for arrastada para um monitor menor ou de escala
+diferente), a barra lateral e as margens diminuem em janela estreita, textos longos e
+caixas de seleção quebram linha, e os diálogos cabem sempre dentro do monitor. Quando
+falta altura, as telas de Detecção e Verificação rolam em vez de cortar. Na tabela da
+verificação, em janela estreita a coluna **Como corrigir** fica oculta — dê dois cliques
+na linha para ler o texto completo.
+
 ### Logs e diagnóstico
 
 Tudo vai para `%LOCALAPPDATA%\DLSS5-AutoInstaller\logs\` (10 arquivos, 2 MB cada, os

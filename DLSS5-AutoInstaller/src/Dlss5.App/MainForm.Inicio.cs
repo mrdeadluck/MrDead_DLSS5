@@ -193,7 +193,7 @@ public sealed partial class MainForm
         _lblBloqueios.Visible = false;
         _acoes.Controls.Clear();
         _botoesDeAcao.Clear();
-        var b = Ui.Primary(Textos.BotaoDaAcao(AcaoDoMod.SelecionarOutroJogo));
+        var b = Adotar(Ui.Primary(Textos.BotaoDaAcao(AcaoDoMod.SelecionarOutroJogo)));
         b.Click += async (_, _) => { if (Pick(_txtGame, "Selecione a pasta do jogo")) await InspecionarAsync(); };
         _acoes.Controls.Add(b);
         _botoesDeAcao.Add(b);
@@ -274,8 +274,10 @@ public sealed partial class MainForm
         {
             int linha = _fatos.RowCount = _fatos.Controls.Count / 2 + 1;
             _fatos.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            var l = new Label { Text = rotulo, AutoSize = true, ForeColor = Ui.Muted, Margin = new Padding(0, 2, 14, 2) };
-            var v = new Label { Text = valor, AutoSize = true, Dock = DockStyle.Fill, ForeColor = cor ?? Ui.Ink, Margin = new Padding(0, 2, 0, 2) };
+            // Rótulo com largura máxima: em janela estreita ele quebra em vez de empurrar
+            // o valor (caminhos longos) para fora do cartão.
+            var l = Adotar(new Label { Text = rotulo, AutoSize = true, MaximumSize = new Size(150, 0), ForeColor = Ui.Muted, Margin = new Padding(0, 2, 14, 2) });
+            var v = Adotar(new Label { Text = valor, AutoSize = true, Dock = DockStyle.Fill, ForeColor = cor ?? Ui.Ink, Margin = new Padding(0, 2, 0, 2) });
             _fatos.Controls.Add(l, 0, linha - 1);
             _fatos.Controls.Add(v, 1, linha - 1);
         }
@@ -359,12 +361,12 @@ public sealed partial class MainForm
         foreach (var acao in _estado.Acoes)
         {
             var a = acao;
-            Button b = acao switch
+            Button b = Adotar(acao switch
             {
                 AcaoDoMod.Desinstalar or AcaoDoMod.RemoverVestigios when primeiro => Ui.Danger_(Textos.BotaoDaAcao(acao)),
                 _ when primeiro => Ui.Primary(Textos.BotaoDaAcao(acao)),
                 _ => Ui.Secondary(Textos.BotaoDaAcao(acao)),
-            };
+            });
             primeiro = false;
             var dica = Textos.DicaDaAcao(acao);
             if (dica.Length > 0)
@@ -551,16 +553,13 @@ public sealed partial class MainForm
         if (manifest.RegistryOverrideApplied && OperatingSystem.IsWindows())
             sb.AppendLine("\r\nRegistro do Windows: o override de assinatura NGX foi aplicado por este programa. Marque abaixo para removê-lo também.");
 
+        // Os controles do diálogo entram em 96 DPI, sem Adotar(): o diálogo é uma janela nova
+        // e faz o próprio autoscale ao abrir.
         CheckBox? chk = null;
         if (manifest.RegistryOverrideApplied && OperatingSystem.IsWindows())
         {
-            chk = new CheckBox
-            {
-                Text = Textos.RemoverOverride,
-                Checked = true,
-                AutoSize = true,
-                Margin = new Padding(0, 0, 0, 6),
-            };
+            chk = Ui.Caixa(Textos.RemoverOverride, marcada: true);
+            chk.Margin = new Padding(0, 0, 0, 6);
             _tooltip.SetToolTip(chk, Textos.RemoverOverrideDica);
         }
         TableLayoutPanel? extra = null;

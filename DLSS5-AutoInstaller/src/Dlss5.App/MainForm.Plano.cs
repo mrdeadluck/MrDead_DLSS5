@@ -46,7 +46,7 @@ public sealed partial class MainForm
         _btnRuntimePlano.Click += (_, _) => _ = BaixarRuntimeDoRhiAsync();
 
         _chkConflitos.Text = Textos.ConfirmarConflitos;
-        _chkConflitos.AutoSize = true;
+        Ui.ComQuebra(_chkConflitos);   // texto longo: quebra linha em vez de sumir pela direita
         _chkConflitos.Visible = false;
         _chkConflitos.Margin = new Padding(0, 0, 0, 8);
         _chkConflitos.CheckedChanged += (_, _) => AtualizarRodape();
