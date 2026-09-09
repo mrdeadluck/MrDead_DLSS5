@@ -370,7 +370,9 @@ public static class InstallPlanBuilder
                     RemoverDoHost(proxy, porque, OptiScalerNr.Marca);
                 RemoverDoHost(OptiScalerNr.Ini, porque);
                 RemoverDoHost(OptiScalerNr.Shim, porque);
+                RemoverDoHost(OptiScalerNr.ReShade64, porque, "ReShade");
             }
+            void RemoverShortFuseDoHost(string porque) => RemoverDoHost(ShortFuseDlss.Addon, porque);
             void RemoverChickenDoHost(string porque)
             {
                 foreach (var f in new[] { DeepFriedChicken.Addon, DeepFriedChicken.Nvngx, DeepFriedChicken.Cfg })
@@ -405,13 +407,17 @@ public static class InstallPlanBuilder
                 }
                 Copy(kit.OptiScalerNrDll, host64, OptiScalerNr.Proxy);
                 Copy(kit.OptiScalerNrShim, host64, OptiScalerNr.Shim);
+                // O OptiScaler toma o dxgi.dll do System32 antes do host carregar o seu; o ReShade
+                // do host entra por ele (LoadReshade=true no ini gerado) com este nome.
+                Copy(kit.DxgiX64, host64, OptiScalerNr.ReShade64);
                 if (kit.OptiScalerNrAgility is not null)
                     Copy(kit.OptiScalerNrAgility, Path.Combine(host64, OptiScalerNr.AgilityRel), OptiScalerNr.AgilityDll);
                 plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
-                    $"Gerar host64\\{OptiScalerNr.Ini} ([DlssNr] Enabled=true, Passes={profile.PassCount}, Dx12Upscaler=dlss, spoof desligado)",
+                    $"Gerar host64\\{OptiScalerNr.Ini} ([DlssNr] Enabled=true, Passes={profile.PassCount}, Dx12Upscaler=dlss, spoof desligado, LoadReshade=true)",
                     kit.OptiScalerNrIni, Path.Combine(host64, OptiScalerNr.Ini)));
                 RemoverKrishDoHost("o consumidor escolhido é o OptiScaler DLSS-NR");
                 RemoverChickenDoHost("o consumidor escolhido é o OptiScaler DLSS-NR");
+                RemoverShortFuseDoHost("o consumidor escolhido é o OptiScaler DLSS-NR");
                 plan.Warnings.Add(
                     $"Motor OptiScaler DLSS-NR no host64 ({profile.PassCount} passada(s)): o OptiScaler toma a chamada de DLSS que o " +
                     "Feeder faz, faz o upscaling (DLSS) e roda o Neural Rendering N vezes. É o suporte novo do Feeder 0.15 — " +
@@ -428,14 +434,33 @@ public static class InstallPlanBuilder
                     kit.DfcCfg, Path.Combine(host64, DeepFriedChicken.Cfg)));
                 RemoverKrishDoHost("o consumidor escolhido é o Deep Fried Chicken (ele fica inerte se acha o RenoDX)");
                 RemoverOptiScalerDoHost("o consumidor escolhido é o Deep Fried Chicken");
+                RemoverShortFuseDoHost("o consumidor escolhido é o Deep Fried Chicken");
                 plan.Warnings.Add(
                     $"Motor Deep Fried Chicken no host64 ({profile.PassCount} passada(s)): " + DeepFriedChicken.PassoManual(profile.PassCount));
+            }
+            else if (profile.UsesShortFuseNoHost64)
+            {
+                // EXPERIMENTAL: o addon do ShortFuse dentro do host64. Ver ShortFuseNoHost64.
+                Copy(kit.RenodxDlssShortFuse, host64, ShortFuseDlss.Addon);
+                var iniHost = Path.Combine(host64, ShortFuseNoHost64.Ini);
+                plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
+                    $"Gerar host64\\ReShade.ini ([ADDON] LoadFromDllMain={ShortFuseDlss.Addon}, [{ShortFuseDlss.Secao}] {ShortFuseDlss.ChavePassadas}={profile.PassCount}; o resto do ini fica)",
+                    null, iniHost));
+                RemoverKrishDoHost("o consumidor escolhido é o RenoDX DLSS do ShortFuse (dois addons de NR no host dobrariam a passada)");
+                RemoverOptiScalerDoHost("o consumidor escolhido é o RenoDX DLSS do ShortFuse");
+                RemoverChickenDoHost("o consumidor escolhido é o RenoDX DLSS do ShortFuse");
+                plan.Warnings.Add(
+                    $"Motor RenoDX DLSS (ShortFuse) DENTRO do host64 ({profile.PassCount} passada(s)) — EXPERIMENTAL: ninguém mediu " +
+                    "este arranjo. O addon intercepta a chamada de DLSS que o host faz; o Feeder não o reconhece como consumidor " +
+                    "(o host loga \"renodx-dlss5*.addon64 not found\" e segue servindo DLAA). A prova de que rodou é o " +
+                    "host64\\ReShade.log (item 25 da verificação). Se a imagem não mudar ou o host cair, volte ao OptiScaler DLSS-NR.");
             }
             else
             {
                 Copy(kit.RenodxAddon64, host64, "renodx-dlss5.addon64");
                 RemoverOptiScalerDoHost("o consumidor escolhido é o addon do Krish");
                 RemoverChickenDoHost("o consumidor escolhido é o addon do Krish");
+                RemoverShortFuseDoHost("o consumidor escolhido é o addon do Krish");
             }
         }
 

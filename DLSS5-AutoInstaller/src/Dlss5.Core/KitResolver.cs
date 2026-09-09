@@ -107,6 +107,10 @@ public sealed class KitInventory
             Need(OptiScalerNrIni, OptiScalerNr.Ini + " (OptiScaler DLSS-NR)");
             Need(OptiScalerNrShim, OptiScalerNr.Shim + " (o encaminhador neural do OptiScaler DLSS-NR)");
         }
+        else if (x86 && consumidor == NeuralEngine.RenodxDlssShortFuse)
+        {
+            Need(RenodxDlssShortFuse, ShortFuseDlss.Addon + " (RenoDX DLSS do ShortFuse, para dentro do host64 — experimental)");
+        }
         else if (x86 && consumidor == NeuralEngine.DeepFriedChicken)
         {
             Need(DfcAddon64, DeepFriedChicken.Addon + " (Deep Fried Chicken — baixe no Discord " + DeepFriedChicken.Discord + " e copie os três arquivos para qualquer subpasta do kit)");

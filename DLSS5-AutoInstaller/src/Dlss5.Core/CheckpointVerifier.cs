@@ -509,16 +509,17 @@ public static class CheckpointVerifier
             var techLine = text.Split('\n')
                 .FirstOrDefault(l => l.StartsWith("Techniques=", StringComparison.OrdinalIgnoreCase))?.Trim();
             bool hasFeed = techLine?.Contains("DLSS5_Feed@", StringComparison.OrdinalIgnoreCase) == true;
-            bool hasMv = techLine is not null &&
-                         (techLine.Contains("DRME@", StringComparison.OrdinalIgnoreCase) ||
-                          techLine.Contains("MartysMods_Launchpad@", StringComparison.OrdinalIgnoreCase));
+            // Qualquer provedor que o kit conhece (o VORT é o padrão desde o 0.13; a checagem
+            // antiga só via DRME e Launchpad e reprovava um preset certo com o VORT).
+            var provedores = new[] { "DRME@", "MartysMods_Launchpad@", "vort_MotionEffects@", "lumenite_Kernel@", "lumenite_QuantMotion@" };
+            int mvIdx = techLine is null ? -1
+                : provedores.Select(p => techLine.IndexOf(p, StringComparison.OrdinalIgnoreCase)).Where(i => i >= 0).DefaultIfEmpty(-1).Min();
+            bool hasMv = mvIdx >= 0;
             bool mvFirst = false;
             if (techLine is not null && hasFeed && hasMv)
             {
-                int mvIdx = Math.Max(techLine.IndexOf("DRME@", StringComparison.OrdinalIgnoreCase),
-                                     techLine.IndexOf("MartysMods_Launchpad@", StringComparison.OrdinalIgnoreCase));
                 int feedIdx = techLine.IndexOf("DLSS5_Feed@", StringComparison.OrdinalIgnoreCase);
-                mvFirst = mvIdx >= 0 && mvIdx < feedIdx;
+                mvFirst = mvIdx < feedIdx;
             }
             // O DLSS5_Feed.fx (0.12.0) só lê o provedor certo pela definição por efeito
             // na seção [DLSS5_Feed.fx]. Um preset da versão anterior do programa não a tem:
@@ -1090,8 +1091,12 @@ public static class CheckpointVerifier
         }
         else
         {
+            // 0.15 em 32-bit: o addon32 loga "shared set ready ... (host ngx ..., DLSS)" e "the host
+            // answered the build"; o "feature ready" fica no log do host.
             bool ready = feed?.FeaturePronta == true
-                         || text.Contains("DLAA", StringComparison.OrdinalIgnoreCase);
+                         || text.Contains("DLAA", StringComparison.OrdinalIgnoreCase)
+                         || text.Contains("shared set ready", StringComparison.OrdinalIgnoreCase)
+                         || text.Contains("the host answered the build", StringComparison.OrdinalIgnoreCase);
             bool delivered = (feed?.FramesEntregues ?? 0) > 0;
             yield return new CheckResult(15, "Feeder entregando frames",
                 ready && delivered ? CheckStatus.Pass : CheckStatus.Warning,
@@ -1189,6 +1194,34 @@ public static class CheckpointVerifier
                         acao = null;
                     }
                     yield return new CheckResult(25, "Passadas do OptiScaler (o que rodou, pelo log)", st, detalhe, acao);
+                }
+            }
+            else if (consumidor == NeuralEngine.RenodxDlssShortFuse && route is InstallRoute.B or InstallRoute.C)
+            {
+                // EXPERIMENTAL: o ShortFuse dentro do host64. Arquivo + ini + o ReShade.log do host.
+                var host = Path.Combine(exeFolder, "host64");
+                var addon = Path.Combine(host, ShortFuseDlss.Addon);
+                string iniTexto = "", logTexto = "";
+                try { var ip = Path.Combine(host, ShortFuseNoHost64.Ini); if (File.Exists(ip)) iniTexto = ReadShared(ip); } catch { }
+                try { var lp = Path.Combine(host, "ReShade.log"); if (File.Exists(lp)) logTexto = ReadShared(lp); } catch { }
+                bool cedo = ShortFuseNoHost64.CarregaCedo(iniTexto);
+                var pedidas = ShortFuseNoHost64.LerPassadas(iniTexto);
+                bool arquivos = File.Exists(addon) && cedo && pedidas == passes;
+                yield return new CheckResult(25, "RenoDX DLSS (ShortFuse) no host64 (experimental): arquivos e ini",
+                    arquivos ? CheckStatus.Pass : CheckStatus.Fail,
+                    !File.Exists(addon) ? $"host64\\{ShortFuseDlss.Addon} não existe."
+                    : !cedo ? "host64\\ReShade.ini sem [ADDON] LoadFromDllMain=renodx-dlss.addon64: o addon pede carga cedo."
+                    : pedidas != passes ? $"host64\\ReShade.ini pede {pedidas?.ToString() ?? "(sem chave)"} passada(s); a detecção pede {passes}."
+                    : $"Addon no host64, LoadFromDllMain gravado, {passes} passada(s) no ini.",
+                    arquivos ? null : "Instale de novo (Atualizar) com o motor ShortFuse escolhido.");
+                if (logTexto.Length == 0)
+                    yield return new CheckResult(25, "RenoDX DLSS (ShortFuse) no host64: o que rodou, pelo host64\\ReShade.log", CheckStatus.Warning,
+                        "host64\\ReShade.log ainda não existe: ou o host não rodou, ou o ReShade x64 não carregou nele (o host64\\dlss5-feed-host.log diz).",
+                        "Abra o jogo, jogue alguns segundos e verifique de novo.");
+                else
+                {
+                    var c14 = ShortFuseLog.Ler(logTexto).Checkpoint14(passes, false);
+                    yield return new CheckResult(25, "RenoDX DLSS (ShortFuse) no host64: " + c14.Title, c14.State, c14.Detail, c14.FixHint);
                 }
             }
             else if (consumidor == NeuralEngine.DeepFriedChicken)

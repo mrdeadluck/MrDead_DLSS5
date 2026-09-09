@@ -363,6 +363,10 @@ public sealed partial class InstallerEngine
             return OptiScalerNr.GerarIni(LerSePuder(realDllPath), plan.Profile.PassCount);
         if (nomeAlvo.Equals(DeepFriedChicken.Cfg, StringComparison.OrdinalIgnoreCase))
             return DeepFriedChicken.GerarCfg(LerSePuder(realDllPath), plan.Profile.PassCount);
+        // host64\ReShade.ini do ShortFuse-no-host: mescla no ini que o host já gravou (ou cria).
+        if (nomeAlvo.Equals(ShortFuseNoHost64.Ini, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(Path.GetFileName(Path.GetDirectoryName(target) ?? ""), "host64", StringComparison.OrdinalIgnoreCase))
+            return ShortFuseNoHost64.GerarIni(LerSePuder(target), plan.Profile.PassCount);
         if (realDllPath is not null)
         {
             string? existente = null;
@@ -651,7 +655,7 @@ public sealed partial class InstallerEngine
         "dxgi.dll", "opengl32.dll", "ReShade.ini", "ReShade.log", "ReShadePreset.ini",
         "ReShade64.json", "ReShade32.json", "ReShade64_XR.json", "ReShade32_XR.json",
         "renodx-dlss5.addon64", ShortFuseDlss.Addon, "nvngx_dlssnr.dll",
-        OptiScalerNr.Ini, OptiScalerNr.Shim, OptiScalerNr.Log,
+        OptiScalerNr.Ini, OptiScalerNr.Shim, OptiScalerNr.Log, OptiScalerNr.ReShade64,
         DeepFriedChicken.Addon, DeepFriedChicken.Nvngx, DeepFriedChicken.Cfg,
         "dlss5-feed.addon64", "dlss5-feed.addon32", "dlss5-feed.cfg", "dlss5-feed.log", "dlss5-feed-crash.dmp",
         "D3D9.dll", "D3D8.dll", "dgVoodoo.conf", "dgVoodooCpl.exe",

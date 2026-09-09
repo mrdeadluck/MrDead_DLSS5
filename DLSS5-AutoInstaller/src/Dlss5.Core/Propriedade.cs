@@ -75,6 +75,8 @@ public static class Propriedade
         ("D3D8.dll", "dgVoodoo"),
         // O OptiScaler entra no host64 com o nome de uma DLL do sistema; só é nosso se for ele.
         (OptiScalerNr.Proxy, OptiScalerNr.Marca),
+        // O ReShade que o OptiScaler carrega no host64: só é nosso se for o ReShade.
+        (OptiScalerNr.ReShade64, "ReShade"),
     };
 
     /// <summary>Arquivos que provam que ESTE programa instalou nesta pasta.</summary>

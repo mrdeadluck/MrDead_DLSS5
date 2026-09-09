@@ -885,7 +885,7 @@ public class ConsumidoresNoHost64Tests
         x64.Engine = NeuralEngine.OptiScalerNr;
         Assert.False(x64.UsesOptiScalerNr);
         Assert.Equal(NeuralEngine.RenodxDlss5Feeder, x64.MotorEfetivo);
-        Assert.Equal(new[] { NeuralEngine.RenodxDlss5Feeder, NeuralEngine.OptiScalerNr, NeuralEngine.DeepFriedChicken }, Motores.Disponiveis(PeArchitecture.X86));
+        Assert.Equal(new[] { NeuralEngine.RenodxDlss5Feeder, NeuralEngine.OptiScalerNr, NeuralEngine.DeepFriedChicken, NeuralEngine.RenodxDlssShortFuse }, Motores.Disponiveis(PeArchitecture.X86));
         Assert.Equal(5, Motores.PassesMax(NeuralEngine.OptiScalerNr));
         Assert.Equal(30, Motores.PassesMax(NeuralEngine.DeepFriedChicken));
         Assert.Equal(5, Motores.Limitar(NeuralEngine.OptiScalerNr, 9));
@@ -912,11 +912,73 @@ public class ConsumidoresNoHost64Tests
                   "12:01 DlssNr_Dx12::Dispatch DLSS-NR composition: paper white 1.00x, detail 1.00, colour 1.00, guard 2.0x, colour transform 0, transfer 1, model 2560x1440 x2 pass(es), debug view 0, compare 0\r\n";
         Assert.Equal(2, OptiScalerNr.PassadasNoLog(log));
         Assert.Null(OptiScalerNr.MotivoDePassadaPerdida(log));
+        // O caso real do SH2: a composition sai uma vez ("x1") e as passadas 2, 3 e 4 são
+        // construídas depois — o que rodou é 4.
+        var sh2 = "a DLSS-NR composition: paper white 1.00x, detail 1.00, model 1920x1080 x1 pass(es), debug view 0\r\n" +
+                  "b DlssNr_Dx12::Dispatch DLSS-NR: pass 2 built at 1920x1080\r\n" +
+                  "c DlssNr_Dx12::Dispatch DLSS-NR: pass 3 built at 1920x1080\r\n" +
+                  "d DlssNr_Dx12::Dispatch DLSS-NR: pass 4 built at 1920x1080\r\n";
+        Assert.Equal(4, OptiScalerNr.PassadasNoLog(sh2));
         var falho = log + "12:02 DlssNr_Dx12::Dispatch DLSS-NR: pass 3 is waiting on video memory (300 MB free, a feature costs 512 MB)\r\n";
         Assert.Contains("waiting on video memory", OptiScalerNr.MotivoDePassadaPerdida(falho)!);
         Assert.Contains("running one pass", OptiScalerNr.MotivoDePassadaPerdida("x DLSS-NR: the extra passes need a second work surface and it would not allocate; running one pass\n")!);
         Assert.Null(OptiScalerNr.PassadasNoLog(""));
         Assert.Null(OptiScalerNr.PassadasNoLog(null));
+    }
+
+    [Fact]
+    public void PlanoOptiScaler_LevaOReShadeParaOHostPeloLoadReshade()
+    {
+        using var c = new Cenario();
+        KitComOptiScaler(c);
+        var plano = InstallPlanBuilder.Build(PerfilX86(c, NeuralEngine.OptiScalerNr, 2), c.Inventario, OpcoesX86(c));
+        Assert.Empty(plano.Blockers);
+        var copias = plano.Actions.Where(a => a.Kind == PlanActionKind.CopyFile)
+            .Select(a => Path.GetRelativePath(c.Jogo, a.TargetPath!).Replace('\\', '/')).ToList();
+        Assert.Contains("host64/ReShade64.dll", copias);
+        var ini = OptiScalerNr.GerarIni(File.ReadAllText(c.Inventario.OptiScalerNrIni!), 2);
+        Assert.Equal("true", IniTexto.Ler(ini, "Plugins", "LoadReshade"));
+    }
+
+    [Fact]
+    public void ShortFuseNoHost64_Experimental_EntraNoHostComIniMesclado()
+    {
+        using var c = new Cenario();
+        c.Inventario.RenodxDlssShortFuse = Path.Combine(c.Kit, ShortFuseDlss.Addon);
+        File.WriteAllText(c.Inventario.RenodxDlssShortFuse, "sf");
+        var host64 = Path.Combine(c.Jogo, "host64");
+        Directory.CreateDirectory(host64);
+        File.WriteAllText(Path.Combine(host64, "renodx-dlss5.addon64"), "krish");
+        File.WriteAllText(Path.Combine(host64, "ReShade.ini"), "[INPUT]\r\nKeyOverlay=36,0,0,0\r\n[RenoDX.DLSS5]\r\nEnableHooks=2\r\n");
+
+        var perfil = PerfilX86(c, NeuralEngine.RenodxDlssShortFuse, 6);
+        Assert.True(perfil.UsesShortFuseNoHost64);
+        Assert.False(perfil.UsesShortFuse);
+        Assert.True(perfil.NeedsFeeder);
+        Assert.Equal(NeuralEngine.RenodxDlssShortFuse, perfil.MotorEfetivo);
+        Assert.Equal(10, Motores.PassesMax(perfil.MotorEfetivo));
+
+        var plano = InstallPlanBuilder.Build(perfil, c.Inventario, OpcoesX86(c));
+        Assert.Empty(plano.Blockers);
+        var copias = plano.Actions.Where(a => a.Kind == PlanActionKind.CopyFile)
+            .Select(a => Path.GetRelativePath(c.Jogo, a.TargetPath!).Replace('\\', '/')).ToList();
+        Assert.Contains("host64/" + ShortFuseDlss.Addon, copias);
+        Assert.DoesNotContain("host64/renodx-dlss5.addon64", copias);
+        Assert.Contains(plano.Actions, a => a.Kind == PlanActionKind.DeleteForbiddenFile && Path.GetFileName(a.TargetPath!) == "renodx-dlss5.addon64");
+        Assert.Contains(plano.Actions, a => a.Kind == PlanActionKind.WriteGeneratedFile && a.TargetPath!.EndsWith(Path.Combine("host64", "ReShade.ini"), StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(plano.Warnings, w => w.Contains("EXPERIMENTAL", StringComparison.Ordinal));
+
+        // O ini gerado mescla: mantém o que o host gravou e acrescenta as chaves do addon.
+        var gerado = ShortFuseNoHost64.GerarIni(File.ReadAllText(Path.Combine(host64, "ReShade.ini")), 6);
+        Assert.Contains("KeyOverlay=36,0,0,0", gerado);
+        Assert.Contains("EnableHooks=2", gerado);
+        Assert.True(ShortFuseNoHost64.CarregaCedo(gerado));
+        Assert.Equal(6, ShortFuseNoHost64.LerPassadas(gerado));
+
+        // Sem o addon no kit, bloqueia.
+        c.Inventario.RenodxDlssShortFuse = null;
+        var sem = InstallPlanBuilder.Build(PerfilX86(c, NeuralEngine.RenodxDlssShortFuse, 2), c.Inventario, OpcoesX86(c));
+        Assert.Contains(sem.Blockers, b => b.Contains(ShortFuseDlss.Addon, StringComparison.Ordinal));
     }
 
     [Fact]

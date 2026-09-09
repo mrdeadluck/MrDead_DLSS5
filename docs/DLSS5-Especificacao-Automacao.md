@@ -346,6 +346,7 @@ x86 e OptiScaler/DFC em x64 (cai no Krish).
 | `RenodxDlss5Feeder` (Krish) | `renodx-dlss5.addon64` | 1 | — |
 | `OptiScalerNr` (OptiScaler v10.0.0-pre1 de 04/09/2026, do 7z do Discord: o build com `Passes`; o fork Dagherbou v0.2.0-patch1 não tem a chave e faz uma passada — `OptiScalerNr.SuportaPassadas` lê o ini do kit e o plano bloqueia 2+ passadas com ele) | `winmm.dll` (cópia de `OptiScaler.dll`: proxy que o host já importa), `nvngx.dll_dlssnr.dll` (shim que o OptiScaler carrega para a passada neural), `OptiScaler\D3D12_OptiScaler\D3D12Core.dll` (Agility SDK próprio), `OptiScaler.ini` | 1–5 | a partir do ini do kit: `[Upscalers] Dx12Upscaler=dlss` (o host é D3D12), `[DlssNr] Enabled=true`, `ScanExposure=false`, `Passes=N`, `[Log] LogToFile=true`. Menu do OptiScaler na tecla Insert (janela do host) |
 | `DeepFriedChicken` 1.4.8 | `deep-fried-chicken.addon64`, `deep-fried-chicken-nvngx.dll`, `deep-fried-chicken.cfg` | 1–30 | a partir do cfg do kit: `enabled=1`, `arm=1`, `layers=N` |
+| `RenodxDlssShortFuse` em x86 (`UsesShortFuseNoHost64`) — **experimental** | `renodx-dlss.addon64` + `ReShade.ini` do host mesclado (`ShortFuseNoHost64.GerarIni`: `[ADDON] LoadFromDllMain`, `[RENODX-DLSS] DirectNeuralRenderingPassCount=N`) | 1–10 | o addon intercepta o `NVSDK_NGX_D3D12_EvaluateFeature` do host; o Feeder não o reconhece (host: "renodx-dlss5*.addon64 not found", segue servindo DLAA); verificação item 25 lê `host64\ReShade.log` com `ShortFuseLog` |
 
 Plano (32-bit): o bloco `host64\` copia o consumidor escolhido e agenda `DeleteForbiddenFile`
 (com backup) para os arquivos dos outros dois — inclusive `renodx-dlss5-*.addon64` de qualquer
@@ -359,7 +360,12 @@ Verificação: item 25 lê `host64\OptiScaler.log` (`min GPU architecture 0x0` =
 respondeu à sondagem do DLSS, `nvngx.dll_dlssnr.dll` carregado após o primeiro evaluate =
 passada neural rodou) ou o log do DFC; item 26 lê `host64\dlss5-feed-host.log` à procura de
 `evaluate raised 0xC0000005 in D3D12Core.dll` — o defeito **driver 616.64+ × renodx-dlss5
-4.6/4.7** medido pelo autor do Feeder (0/300; 4.55, DFC e OptiScaler 300/300). O botão
+4.6/4.7** medido pelo autor do Feeder (0/300; 4.55, DFC e OptiScaler 300/300). Item 25b: as
+passadas que rodaram = maior entre `composition ... xN pass(es)` (sai uma vez, no 1º quadro) e
+`pass N built at` (as extras chegam depois; SH2 EE: x4 com DLSS do host a 6,77 ms/quadro). O
+OptiScaler como `winmm.dll` carrega o `dxgi.dll` do System32 antes do host e o ReShade de
+`host64\dxgi.dll` fica de fora; o ini gerado leva `[Plugins] LoadReshade=true` e o plano copia o
+ReShade x64 como `host64\ReShade64.dll`. O botão
 "Testar o host64…" roda `dlss5-feed-host64.exe --test` (DLAA sintético + NR, 300 avaliações,
 ~15 s, sem jogo) e interpreta `--test finished: N/300 evaluates succeeded`.
 

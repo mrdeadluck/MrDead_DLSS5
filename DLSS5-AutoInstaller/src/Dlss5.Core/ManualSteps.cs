@@ -55,6 +55,10 @@ public static class ManualSteps
             steps.Add(new ManualStep(n++, $"OptiScaler DLSS-NR no host64: conferir Neural Rendering ligado e {profile.PassCount} passada(s)",
                 OptiScalerNr.PassoManual(profile.PassCount), false));
 
+        if (profile.UsesShortFuseNoHost64)
+            steps.Add(new ManualStep(n++, $"EXPERIMENTAL — RenoDX DLSS (ShortFuse) dentro do host64: conferir que anexou e as {profile.PassCount} passada(s)",
+                ShortFuseNoHost64.PassoManual(profile.PassCount), false));
+
         if (profile.UsesDeepFriedChicken)
             steps.Add(new ManualStep(n++, $"Deep Fried Chicken no host64: Defender, ARMED e {profile.PassCount} passada(s)",
                 DeepFriedChicken.PassoManual(profile.PassCount), true));

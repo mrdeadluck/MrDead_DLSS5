@@ -94,6 +94,7 @@ public sealed class Isolamento
                 Path.Combine(exeFolder, "renodx-dlss5.addon64"),
                 Path.Combine(exeFolder, "host64", "renodx-dlss5.addon64"),
                 Path.Combine(exeFolder, ShortFuseDlss.Addon),
+                Path.Combine(exeFolder, "host64", ShortFuseDlss.Addon),
                 Path.Combine(exeFolder, "host64", OptiScalerNr.Proxy),
                 Path.Combine(exeFolder, "host64", DeepFriedChicken.Addon),
             },
@@ -114,6 +115,7 @@ public sealed class Isolamento
                 Path.Combine(exeFolder, "renodx-dlss5.addon64"),
                 Path.Combine(exeFolder, "host64", "renodx-dlss5.addon64"),
                 Path.Combine(exeFolder, ShortFuseDlss.Addon),
+                Path.Combine(exeFolder, "host64", ShortFuseDlss.Addon),
             },
             _ => Array.Empty<string>(),
         };

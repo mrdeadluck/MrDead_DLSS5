@@ -173,12 +173,17 @@ public sealed class GameProfile
     /// <summary>Deep Fried Chicken dentro do host64\ (jogo 32-bit). Até 30 passadas; arquivos do Discord.</summary>
     public bool UsesDeepFriedChicken => Engine == NeuralEngine.DeepFriedChicken && Architecture == PeArchitecture.X86;
 
+    /// <summary>
+    /// O renodx-dlss do ShortFuse DENTRO do host64 (jogo 32-bit): experimental. Ver <see cref="ShortFuseNoHost64"/>.
+    /// </summary>
+    public bool UsesShortFuseNoHost64 => Engine == NeuralEngine.RenodxDlssShortFuse && Architecture == PeArchitecture.X86;
+
     /// <summary>O consumidor neural do host64\ não é o addon do Krish.</summary>
-    public bool ConsumidorAlternativoNoHost64 => UsesOptiScalerNr || UsesDeepFriedChicken;
+    public bool ConsumidorAlternativoNoHost64 => UsesOptiScalerNr || UsesDeepFriedChicken || UsesShortFuseNoHost64;
 
     /// <summary>O motor depois das regras de arquitetura (o pedido pode não valer para esta).</summary>
     public NeuralEngine MotorEfetivo =>
-        UsesShortFuse ? NeuralEngine.RenodxDlssShortFuse
+        UsesShortFuse || UsesShortFuseNoHost64 ? NeuralEngine.RenodxDlssShortFuse
         : UsesOptiScalerNr ? NeuralEngine.OptiScalerNr
         : UsesDeepFriedChicken ? NeuralEngine.DeepFriedChicken
         : NeuralEngine.RenodxDlss5Feeder;

@@ -9,7 +9,7 @@ public static class Motores
 
     public static string Rotulo(NeuralEngine e) => e switch
     {
-        NeuralEngine.RenodxDlssShortFuse => "RenoDX DLSS (ShortFuse) — 64-bit, 1 a 10 passadas",
+        NeuralEngine.RenodxDlssShortFuse => "RenoDX DLSS (ShortFuse) — 1 a 10 passadas (64-bit direto; em 32-bit dentro do host64, EXPERIMENTAL)",
         NeuralEngine.OptiScalerNr => "OptiScaler DLSS-NR no host64 — 32-bit, 1 a 5 passadas",
         NeuralEngine.DeepFriedChicken => "Deep Fried Chicken no host64 — 32-bit, 1 a 30 passadas (arquivos do Discord)",
         _ => "RenoDX DLSS5 (Krish) + Feeder — uma passada (padrão até aqui)",
@@ -27,7 +27,7 @@ public static class Motores
 
     /// <summary>Os motores que fazem sentido para a arquitetura, na ordem da tela.</summary>
     public static IReadOnlyList<NeuralEngine> Disponiveis(PeArchitecture arch) => arch == PeArchitecture.X86
-        ? new[] { NeuralEngine.RenodxDlss5Feeder, NeuralEngine.OptiScalerNr, NeuralEngine.DeepFriedChicken }
+        ? new[] { NeuralEngine.RenodxDlss5Feeder, NeuralEngine.OptiScalerNr, NeuralEngine.DeepFriedChicken, NeuralEngine.RenodxDlssShortFuse }
         : new[] { NeuralEngine.RenodxDlss5Feeder, NeuralEngine.RenodxDlssShortFuse };
 
     public static bool Aplicavel(NeuralEngine e, PeArchitecture arch) => Disponiveis(arch).Contains(e);
@@ -132,7 +132,15 @@ public static class OptiScalerNr
         ("Inputs", "EnableXeSSInputs", "false"), ("Inputs", "EnableFsr2Inputs", "false"),
         ("Inputs", "EnableFsr3Inputs", "false"), ("Inputs", "EnableFfxInputs", "false"),
         ("Hotfix", "CheckForUpdate", "false"),
+        // O OptiScaler (winmm.dll) carrega o dxgi.dll do System32 antes do host pedir o seu, e o
+        // ReShade x64 que está em host64\dxgi.dll nunca entra ("dxgi.dll here is Windows' own ...
+        // there is no overlay" no dlss5-feed-host.log): a tecla Home na janela do host não abre nada.
+        // O próprio OptiScaler resolve: com LoadReshade=true ele carrega um ReShade64.dll da pasta.
+        ("Plugins", "LoadReshade", "true"),
     };
+
+    /// <summary>ReShade x64 com o nome que o OptiScaler carrega por LoadReshade=true (ao lado dele, em host64\).</summary>
+    public const string ReShade64 = "ReShade64.dll";
 
     /// <summary>O OptiScaler.ini do kit com o que o feed precisa e as passadas pedidas.</summary>
     public static string GerarIni(string? original, int passes)
@@ -178,10 +186,18 @@ public static class OptiScalerNr
     public static int? PassadasNoLog(string? log)
     {
         if (string.IsNullOrEmpty(log)) return null;
+        // A linha "composition" sai UMA vez, no primeiro quadro, quando só a passada 1 existe;
+        // as extras chegam depois ("pass 2 built at ...", "pass 3 built ...") e o custo de GPU
+        // do host sobe junto. Então: o maior número entre a composition e as passadas construídas.
         int? ultimo = null;
         foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(
                      log, @"model \d+x\d+ x(\d+) pass\(es\)"))
             if (int.TryParse(m.Groups[1].Value, out var n)) ultimo = n;
+        int maiorConstruida = 0;
+        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(
+                     log, @"DLSS-NR: pass (\d+) built at"))
+            if (int.TryParse(m.Groups[1].Value, out var n) && n > maiorConstruida) maiorConstruida = n;
+        if (maiorConstruida > 0 && (ultimo is null || maiorConstruida > ultimo.Value)) ultimo = maiorConstruida;
         return ultimo;
     }
 
@@ -202,6 +218,45 @@ public static class OptiScalerNr
         }
         return ultima;
     }
+}
+
+/// <summary>
+/// O renodx-dlss do ShortFuse DENTRO do host64 (jogo 32-bit) — EXPERIMENTAL. O addon é 64-bit e
+/// se pendura no NVSDK_NGX_D3D12_EvaluateFeature do processo em que vive; o host64 faz exatamente
+/// essa chamada (DLAA sintético) para cada quadro do jogo. A ideia: o ReShade x64 do host64 carrega
+/// o addon (LoadFromDllMain), ele intercepta o evaluate do host e roda as N passadas no lugar do
+/// Krish. O Feeder não o reconhece como consumidor ("renodx-dlss5*.addon64 not found next to the
+/// host" e o host segue servindo DLAA), e o autor do Feeder diz que em 64-bit o addon SUBSTITUI o
+/// projeto em vez de trabalhar com ele; dentro do host ninguém mediu. Fica como opção para quem
+/// quer x6–x10 em 32-bit e aceita testar. Se a imagem não mudar ou o host cair, volte ao OptiScaler.
+/// </summary>
+public static class ShortFuseNoHost64
+{
+    public const string Ini = "ReShade.ini";
+
+    /// <summary>host64\ReShade.ini com o addon carregado cedo e as passadas pedidas; o resto do ini (o host grava chaves nele) fica.</summary>
+    public static string GerarIni(string? existente, int passes)
+    {
+        var texto = string.IsNullOrWhiteSpace(existente) ? "" : existente!;
+        texto = IniTexto.Definir(texto, "ADDON", "LoadFromDllMain", ShortFuseDlss.Addon);
+        texto = IniTexto.Definir(texto, ShortFuseDlss.Secao, ShortFuseDlss.ChavePassadas, ShortFuseDlss.Limitar(passes).ToString());
+        return texto;
+    }
+
+    public static int? LerPassadas(string? ini) =>
+        int.TryParse(IniTexto.Ler(ini, ShortFuseDlss.Secao, ShortFuseDlss.ChavePassadas), out var v) ? v : null;
+
+    public static bool CarregaCedo(string? ini) =>
+        (IniTexto.Ler(ini, "ADDON", "LoadFromDllMain") ?? "").Contains(ShortFuseDlss.Addon, StringComparison.OrdinalIgnoreCase);
+
+    public static string PassoManual(int passes) =>
+        $"EXPERIMENTAL. O renodx-dlss.addon64 do ShortFuse mora dentro do host64 e intercepta a chamada de DLSS que o " +
+        $"host faz para cada quadro; o host64\\ReShade.ini pede {passes} passada(s) ([RENODX-DLSS] DirectNeuralRenderingPassCount). " +
+        "Prova: host64\\ReShade.log com \"Registered add-on \"RenoDX DLSS\"\", \"RenoDX DLSS attached\" e \"DLSS-NR source " +
+        "evaluation completed\" (a verificação, item 25, lê). O painel dele abre com Home NA JANELA DO HOST (marque \"Show the " +
+        "DLSS 5 host window\" no painel do Feeder): aba RenoDX DLSS → Advanced → Pass Count. O Feeder não o conhece como " +
+        "consumidor (o host diz \"renodx-dlss5*.addon64 not found\" e segue servindo DLAA) — se a imagem não mudar ou o host " +
+        "cair, volte ao OptiScaler DLSS-NR (1 a 5) ou ao Krish.";
 }
 
 /// <summary>
