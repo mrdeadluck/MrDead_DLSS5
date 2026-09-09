@@ -1148,6 +1148,48 @@ public static class CheckpointVerifier
                     : $"Arquivos e ini certos (Passes={passes}); o host64\\OptiScaler.log ainda não existe — o host ainda não rodou com ele.",
                     tudo ? (logou ? null : "Abra o jogo, jogue alguns segundos e verifique de novo.")
                          : "Instale de novo (Atualizar) com o motor OptiScaler DLSS-NR escolhido, ou ajuste no menu do OptiScaler (Insert, na janela do host).");
+
+                // 25b — as passadas ACONTECERAM? O painel do Feeder ecoa o ini; quem diz o que rodou é
+                // o OptiScaler.log ("model WxH xN pass(es)"). E o build importa: o fork v0.2.0-patch1
+                // não tem código de passadas — o SH2 abriu em x1 com o painel dizendo Passes=2.
+                if (proxyOk)
+                {
+                    bool buildComPassadas = Propriedade.ContemTexto(proxy, OptiScalerNr.MarcaPassadas);
+                    string logTexto = "";
+                    try { var lp = Path.Combine(host, OptiScalerNr.Log); if (File.Exists(lp)) logTexto = ReadShared(lp); } catch { }
+                    var rodou = OptiScalerNr.PassadasNoLog(logTexto);
+                    var motivo = OptiScalerNr.MotivoDePassadaPerdida(logTexto);
+                    CheckStatus st; string detalhe; string? acao;
+                    if (!buildComPassadas && passes > 1)
+                    {
+                        st = CheckStatus.Fail;
+                        detalhe = $"host64\\{OptiScalerNr.Proxy} é um build de UMA passada (o fork v0.2.0-patch1: não tem a chave Passes nem o código); Passes={passes} no ini não muda nada.";
+                        acao = "Aponte o kit novo (pasta \"OptiScaler-DLSSNR-v10.0.0-pre1 ...\") e clique em Instalar de novo: o winmm.dll do host64 é trocado pelo build com passadas.";
+                    }
+                    else if (rodou is null)
+                    {
+                        st = CheckStatus.Warning;
+                        detalhe = logTexto.Length == 0
+                            ? "host64\\OptiScaler.log ainda não existe: o host não avaliou nenhum quadro com o OptiScaler."
+                            : "O OptiScaler.log ainda não tem a linha \"DLSS-NR composition: ... xN pass(es)\": a passada neural não chegou a rodar.";
+                        acao = motivo is not null ? "O log explica: " + motivo : "Abra o jogo, jogue alguns segundos e verifique de novo.";
+                    }
+                    else if (rodou.Value != passes)
+                    {
+                        st = CheckStatus.Fail;
+                        detalhe = $"O OptiScaler.log diz que rodou x{rodou.Value} pass(es); o pedido era {passes}." + (motivo is not null ? " Motivo no log: " + motivo : "");
+                        acao = motivo is not null && motivo.Contains("memory", StringComparison.OrdinalIgnoreCase)
+                            ? "Cada passada é um modelo próprio na VRAM: baixe a resolução ou o \"Work resolution\" do painel do Feeder, ou peça menos passadas."
+                            : "Abra o menu do OptiScaler (Insert na janela do host) e confira Passes; se estiver certo lá, feche o jogo e Instale de novo.";
+                    }
+                    else
+                    {
+                        st = CheckStatus.Pass;
+                        detalhe = $"O OptiScaler.log confirma: model x{rodou.Value} pass(es) — as {passes} passada(s) rodaram.";
+                        acao = null;
+                    }
+                    yield return new CheckResult(25, "Passadas do OptiScaler (o que rodou, pelo log)", st, detalhe, acao);
+                }
             }
             else if (consumidor == NeuralEngine.DeepFriedChicken)
             {

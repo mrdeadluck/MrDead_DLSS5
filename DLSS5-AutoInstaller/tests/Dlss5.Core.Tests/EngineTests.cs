@@ -905,6 +905,21 @@ public class ConsumidoresNoHost64Tests
     }
 
     [Fact]
+    public void LogDoOptiScaler_DizQuantasPassadasRodaram()
+    {
+        var log = "12:00 DlssNr_Dx12::Dispatch DLSS-NR composition: paper white 1.00x, detail 1.00, colour 1.00, guard 2.0x, colour transform 0, transfer 1, model 2560x1440 x1 pass(es), debug view 0, compare 0\r\n" +
+                  "12:01 DlssNr_Dx12::Dispatch DLSS-NR: pass 2 built at 2560x1440, 512 MB\r\n" +
+                  "12:01 DlssNr_Dx12::Dispatch DLSS-NR composition: paper white 1.00x, detail 1.00, colour 1.00, guard 2.0x, colour transform 0, transfer 1, model 2560x1440 x2 pass(es), debug view 0, compare 0\r\n";
+        Assert.Equal(2, OptiScalerNr.PassadasNoLog(log));
+        Assert.Null(OptiScalerNr.MotivoDePassadaPerdida(log));
+        var falho = log + "12:02 DlssNr_Dx12::Dispatch DLSS-NR: pass 3 is waiting on video memory (300 MB free, a feature costs 512 MB)\r\n";
+        Assert.Contains("waiting on video memory", OptiScalerNr.MotivoDePassadaPerdida(falho)!);
+        Assert.Contains("running one pass", OptiScalerNr.MotivoDePassadaPerdida("x DLSS-NR: the extra passes need a second work surface and it would not allocate; running one pass\n")!);
+        Assert.Null(OptiScalerNr.PassadasNoLog(""));
+        Assert.Null(OptiScalerNr.PassadasNoLog(null));
+    }
+
+    [Fact]
     public void OptiScalerSemChavePasses_BloqueiaSoComMaisDeUmaPassada()
     {
         // O fork v0.2.0-patch1 não tem Passes: com 2 passadas o plano recusa (senão o jogo abriria

@@ -159,11 +159,49 @@ public static class OptiScalerNr
         string.Equals(IniTexto.Ler(ini, "DlssNr", "Enabled"), "true", StringComparison.OrdinalIgnoreCase);
 
     public static string PassoManual(int passes) =>
-        $"O OptiScaler mora dentro do host64 (é 64-bit) e o menu dele abre com a tecla Insert NA JANELA DO HOST: no jogo, " +
-        "Home → Complementos → DLSS 5 Feed → \"Show the DLSS 5 panel in-game\" (ou host_window=1 no dlss5-feed.cfg para o " +
-        $"auxiliar ter janela própria). Em \"DLSS Neural Rendering\", \"Enable Neural Rendering\" tem que estar marcado e Passes em {passes} " +
-        "— o instalador gravou os dois no host64\\OptiScaler.ini. O host64\\OptiScaler.log diz qual upscaler rodou; a linha do " +
-        "Feeder \"min GPU architecture 0x0\" prova que a chamada passou pelo OptiScaler. Cada passada custa o mesmo que a primeira.";
+        $"O OptiScaler mora dentro do host64 (é 64-bit). O painel do Feeder (Home → Complementos → DLSS 5 Feed) só MOSTRA " +
+        "as chaves dele, em leitura: as passadas não se mudam ali. Mudam em três lugares: (1) neste programa, campo " +
+        $"\"Passadas\" + Instalar de novo (regrava o host64\\OptiScaler.ini); (2) no menu do próprio OptiScaler — marque " +
+        "\"Show the DLSS 5 host window\" no painel do Feeder e aperte Insert NA JANELA DO HOST, seção DLSS Neural " +
+        $"Rendering, controle Passes; (3) editando [DlssNr] Passes={passes} no host64\\OptiScaler.ini e clicando " +
+        "\"Restart the DLSS 5 host\" no painel. A prova de que rodou é o host64\\OptiScaler.log: a linha \"DLSS-NR " +
+        $"composition: ... model WxH x{passes} pass(es)\" (a verificação, item 25, lê isso); \"running one pass\" ali " +
+        "quer dizer que a passada extra não coube (VRAM) ou não construiu. Cada passada custa o mesmo que a primeira.";
+
+    /// <summary>Marcador que só o build com passadas múltiplas (v10.0.0-pre1) carrega; o fork v0.2.0-patch1 não.</summary>
+    public const string MarcaPassadas = "pass(es)";
+
+    /// <summary>
+    /// Quantas passadas o OptiScaler DE FATO rodou, pelo host64\OptiScaler.log: a linha
+    /// "DLSS-NR composition: ... model 2560x1440 x2 pass(es)". Última ocorrência; null se nunca avaliou.
+    /// </summary>
+    public static int? PassadasNoLog(string? log)
+    {
+        if (string.IsNullOrEmpty(log)) return null;
+        int? ultimo = null;
+        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(
+                     log, @"model \d+x\d+ x(\d+) pass\(es\)"))
+            if (int.TryParse(m.Groups[1].Value, out var n)) ultimo = n;
+        return ultimo;
+    }
+
+    /// <summary>A linha do log que explica por que uma passada pedida não rodou (ou null).</summary>
+    public static string? MotivoDePassadaPerdida(string? log)
+    {
+        if (string.IsNullOrEmpty(log)) return null;
+        string? ultima = null;
+        foreach (var raw in log.Split('\n'))
+        {
+            var l = raw.TrimEnd('\r');
+            if (l.Contains("running one pass", StringComparison.OrdinalIgnoreCase)
+                || l.Contains("would not build", StringComparison.OrdinalIgnoreCase)
+                || l.Contains("waiting on video memory", StringComparison.OrdinalIgnoreCase)
+                || (l.Contains("DLSS-NR: pass", StringComparison.OrdinalIgnoreCase) && l.Contains("returned 0x", StringComparison.OrdinalIgnoreCase))
+                || l.Contains("no longer findable", StringComparison.OrdinalIgnoreCase))
+                ultima = l.Trim();
+        }
+        return ultima;
+    }
 }
 
 /// <summary>
