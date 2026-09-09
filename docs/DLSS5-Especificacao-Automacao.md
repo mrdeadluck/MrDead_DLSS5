@@ -344,7 +344,7 @@ x86 e OptiScaler/DFC em x64 (cai no Krish).
 | Motor (`NeuralEngine`) | Arquivos em `host64\` | Passadas | Config gerada |
 |---|---|---|---|
 | `RenodxDlss5Feeder` (Krish) | `renodx-dlss5.addon64` | 1 | — |
-| `OptiScalerNr` (fork Dagherbou v0.2.0-patch1) | `winmm.dll` (cópia de `OptiScaler.dll`: proxy que o host já importa), `nvngx.dll_dlssnr.dll` (shim que o fork carrega para a passada neural), `OptiScaler\D3D12_OptiScaler\D3D12Core.dll` (Agility SDK próprio), `OptiScaler.ini` | 1–5 | a partir do ini do kit: `[Upscalers] Dx12Upscaler=dlss`, `Dx11Upscaler=dlss_12`, `[DlssNr] Enabled=true`, `Passes=N`, `[Log] LogToFile=true`. Menu do OptiScaler na tecla Insert (janela do host) |
+| `OptiScalerNr` (fork Dagherbou v0.2.0-patch1) | `winmm.dll` (cópia de `OptiScaler.dll`: proxy que o host já importa), `nvngx.dll_dlssnr.dll` (shim que o fork carrega para a passada neural), `OptiScaler\D3D12_OptiScaler\D3D12Core.dll` (Agility SDK próprio), `OptiScaler.ini` | 1–5 | a partir do ini do kit: `[Upscalers] Dx12Upscaler=dlss` (o host é D3D12), `[DlssNr] Enabled=true`, `ScanExposure=false`, `Passes=N`, `[Log] LogToFile=true`. Menu do OptiScaler na tecla Insert (janela do host) |
 | `DeepFriedChicken` 1.4.8 | `deep-fried-chicken.addon64`, `deep-fried-chicken-nvngx.dll`, `deep-fried-chicken.cfg` | 1–30 | a partir do cfg do kit: `enabled=1`, `arm=1`, `layers=N` |
 
 Plano (32-bit): o bloco `host64\` copia o consumidor escolhido e agenda `DeleteForbiddenFile`
