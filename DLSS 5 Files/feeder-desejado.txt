@@ -24,5 +24,6 @@
 # Nota: o trocar-extras.yml não refaz o pacote (por desenho). Quando os extras mudam e o
 # pacote da Release precisa acompanhar, basta alterar este arquivo (um comentário serve): o
 # job "trocar" vê que o Feeder já é o pedido e o job "pacote" refaz o zip com o kit atual.
-# 09/09/2026: pacote refeito com o OptiScaler DLSS-NR, o SF 0.54 e o 4.55 em versoes-anteriores.
+# 09/09/2026: pacote refeito com o OptiScaler DLSS-NR, o SF 0.54 e o 4.55 em versoes-anteriores;
+# depois, de novo, com o instalador que aceita o SH2 Enhanced Edition (dgVoodoo como D3D9.dll).
 versao=v0.15.1
