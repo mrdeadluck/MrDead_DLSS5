@@ -862,7 +862,7 @@ public class ConsumidoresNoHost64Tests
         Directory.CreateDirectory(Path.Combine(pasta, "OptiScaler", "D3D12_OptiScaler"));
         File.WriteAllText(Path.Combine(pasta, OptiScalerNr.Dll), "MZ OptiScaler.ini");
         File.WriteAllText(Path.Combine(pasta, OptiScalerNr.Shim), "MZ shim");
-        File.WriteAllText(Path.Combine(pasta, OptiScalerNr.Ini), "[Upscalers]\r\nDx12Upscaler=auto\r\n\r\n[DlssNr]\r\nToggleKey=auto\r\n; comentário\r\nEnabled=auto\r\n\r\n[Log]\r\nLogToFile=true\r\nLogLevel=2\r\n");
+        File.WriteAllText(Path.Combine(pasta, OptiScalerNr.Ini), "[Upscalers]\r\nDx12Upscaler=auto\r\n\r\n[DlssNr]\r\nToggleKey=auto\r\n; comentário\r\nEnabled=auto\r\n; 1 to 5\r\nPasses=auto\r\n\r\n[Log]\r\nLogToFile=true\r\nLogLevel=2\r\n");
         File.WriteAllText(Path.Combine(pasta, "OptiScaler", "D3D12_OptiScaler", OptiScalerNr.AgilityDll), "MZ agility");
         var inv = KitResolver.Resolve(c.Kit);
         c.Inventario.OptiScalerNrDll = inv.OptiScalerNrDll;
@@ -902,6 +902,23 @@ public class ConsumidoresNoHost64Tests
         // Deep Fried Chicken sem os três arquivos: bloqueio que diz onde buscar.
         var dfc = InstallPlanBuilder.Build(PerfilX86(c, NeuralEngine.DeepFriedChicken, 2), c.Inventario, OpcoesX86(c));
         Assert.Contains(dfc.Blockers, b => b.Contains("Discord", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void OptiScalerSemChavePasses_BloqueiaSoComMaisDeUmaPassada()
+    {
+        // O fork v0.2.0-patch1 não tem Passes: com 2 passadas o plano recusa (senão o jogo abriria
+        // em x1 com o painel dizendo x2); com 1 passada instala normalmente.
+        using var c = new Cenario();
+        KitComOptiScaler(c);
+        File.WriteAllText(c.Inventario.OptiScalerNrIni!, "[Upscalers]\r\nDx12Upscaler=auto\r\n\r\n[DlssNr]\r\nEnabled=auto\r\n\r\n[Log]\r\nLogToFile=true\r\n");
+        Assert.False(OptiScalerNr.SuportaPassadas(File.ReadAllText(c.Inventario.OptiScalerNrIni!)));
+        var duas = InstallPlanBuilder.Build(PerfilX86(c, NeuralEngine.OptiScalerNr, 2), c.Inventario, OpcoesX86(c));
+        Assert.Contains(duas.Blockers, b => b.Contains("Passes", StringComparison.Ordinal));
+        var uma = InstallPlanBuilder.Build(PerfilX86(c, NeuralEngine.OptiScalerNr, 1), c.Inventario, OpcoesX86(c));
+        Assert.Empty(uma.Blockers);
+        // E o ini do v10 (com a chave) passa.
+        Assert.True(OptiScalerNr.SuportaPassadas("[DlssNr]\r\n; 1 to 5\r\nPasses=auto\r\n"));
     }
 
     [Fact]

@@ -12,7 +12,7 @@ public sealed class KitInventory
     /// <summary>renodx-dlss.addon64 do ShortFuse (motor alternativo, passadas múltiplas).</summary>
     public string? RenodxDlssShortFuse { get; set; }
 
-    // OptiScaler DLSS-NR (fork): consumidor neural do Feeder em jogo 32-bit (dentro do host64\).
+    // OptiScaler DLSS-NR (v10.0.0-pre1, com Passes): consumidor neural do Feeder em jogo 32-bit (dentro do host64\).
     public string? OptiScalerNrDll { get; set; }
     public string? OptiScalerNrIni { get; set; }
     public string? OptiScalerNrShim { get; set; }
@@ -103,7 +103,7 @@ public sealed class KitInventory
         bool x86 = route is InstallRoute.B or InstallRoute.C;
         if (x86 && consumidor == NeuralEngine.OptiScalerNr)
         {
-            Need(OptiScalerNrDll, OptiScalerNr.Dll + " (OptiScaler DLSS-NR, fork Dagherbou) — no kit fica em \"OptiScaler-DLSSNR-...\"");
+            Need(OptiScalerNrDll, OptiScalerNr.Dll + " (OptiScaler DLSS-NR v10.0.0-pre1) — no kit fica em \"OptiScaler-DLSSNR-v10.0.0-pre1 ...\"");
             Need(OptiScalerNrIni, OptiScalerNr.Ini + " (OptiScaler DLSS-NR)");
             Need(OptiScalerNrShim, OptiScalerNr.Shim + " (o encaminhador neural do OptiScaler DLSS-NR)");
         }
@@ -217,7 +217,7 @@ public static class KitResolver
         inv.RenodxAddon64 = First("renodx-dlss5.addon64");
         inv.RenodxDlssShortFuse = First(ShortFuseDlss.Addon);
 
-        // OptiScaler DLSS-NR: a pasta que tem o encaminhador nvngx.dll_dlssnr.dll é a do fork.
+        // OptiScaler DLSS-NR: a pasta que tem o encaminhador nvngx.dll_dlssnr.dll é a do OptiScaler.
         inv.OptiScalerNrShim = First(OptiScalerNr.Shim);
         if (inv.OptiScalerNrShim is not null)
         {

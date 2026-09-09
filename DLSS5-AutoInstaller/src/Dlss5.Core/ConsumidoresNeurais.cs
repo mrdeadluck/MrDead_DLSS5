@@ -99,8 +99,9 @@ public static class IniTexto
 }
 
 /// <summary>
-/// OptiScaler DLSS-NR (fork Dagherbou/OptiScaler_DLSSNR): o Feeder 0.15 o aceita como terceiro
-/// consumidor neural. Entra como winmm.dll (o host64 importa winmm.dll e version.dll no início),
+/// OptiScaler DLSS-NR (a linha Dagherbou/OptiScaler_DLSSNR; o kit traz o OptiScaler v10.0.0-pre1 de
+/// 04/09/2026, do 7z do Discord, porque é o build que tem a chave Passes — o fork v0.2.0-patch1 do
+/// GitHub faz UMA passada só): o Feeder 0.15 o aceita como terceiro consumidor neural. Entra como winmm.dll (o host64 importa winmm.dll e version.dll no início),
 /// com o nvngx.dll_dlssnr.dll (o modelo recusa chamador cujo caminho não contenha "nvngx.dll")
 /// e o OptiScaler.ini com a seção [DlssNr] ligada. "Passes" é quantas vezes o modelo roda sobre o
 /// quadro, cada passada vendo a anterior — o "x2" em jogo 32-bit. O menu dele abre com Insert,
@@ -145,6 +146,13 @@ public static class OptiScalerNr
 
     public static int? LerPassadas(string? ini) =>
         int.TryParse(IniTexto.Ler(ini, "DlssNr", "Passes"), out var v) ? v : null;
+
+    /// <summary>
+    /// O build do OptiScaler entende passadas múltiplas? Só se o OptiScaler.ini dele traz a chave
+    /// Passes em [DlssNr]. O fork v0.2.0-patch1 não traz (e ignora a chave gravada: o Feeder mostra
+    /// "Passes=2" lendo o nosso ini, mas o modelo roda uma vez); o v10.0.0-pre1 traz ("1 to 5").
+    /// </summary>
+    public static bool SuportaPassadas(string? iniDoKit) => IniTexto.Ler(iniDoKit, "DlssNr", "Passes") is not null;
 
     /// <summary>Enabled=true na [DlssNr]. "auto" é falso: o fork nunca sai ligado.</summary>
     public static bool Ligado(string? ini) =>

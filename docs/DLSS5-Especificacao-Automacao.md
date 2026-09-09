@@ -73,7 +73,7 @@ Regra derivada: **32 bits obriga D3D11.** Se o jogo x86 oferece Vulkan e D3D9, e
 | `dlss5-feed-host64.exe` | 146.944 B (0.15.1) | x64 | `host64\` — protocolo v9; **precisa ser do mesmo build do addon32**. `--test` = 300 avaliações sem jogo (botão "Testar o host64…") |
 | `dxgi.dll` (ReShade x86) | 4.398.080 B | x86 | pasta do exe |
 | `dxgi.dll` (ReShade x64) | 5.592.064 B | x64 | `host64\` |
-| `renodx-dlss5.addon64` | | x64 | `host64\` (**não** na raiz) — consumidor neural padrão, 1 passada. **Ou, no lugar dele** (nunca dois): `winmm.dll` (= `OptiScaler.dll` do fork DLSS-NR) + `nvngx.dll_dlssnr.dll` + `OptiScaler\D3D12_OptiScaler\D3D12Core.dll` + `OptiScaler.ini` gerado (1–5 passadas), ou `deep-fried-chicken.addon64` + `-nvngx.dll` + `.cfg` gerado (1–30). Ver 6.5. |
+| `renodx-dlss5.addon64` | | x64 | `host64\` (**não** na raiz) — consumidor neural padrão, 1 passada. **Ou, no lugar dele** (nunca dois): `winmm.dll` (= `OptiScaler.dll` v10.0.0-pre1 com DLSS-NR) + `nvngx.dll_dlssnr.dll` + `OptiScaler\D3D12_OptiScaler\D3D12Core.dll` + `OptiScaler.ini` gerado (1–5 passadas), ou `deep-fried-chicken.addon64` + `-nvngx.dll` + `.cfg` gerado (1–30). Ver 6.5. |
 | `nvngx_dlssnr.dll` | | x64 | `host64\` (**não** na raiz) |
 | `nvngx_dlss.dll` | | x64 | `host64\` (**não** na raiz) |
 
@@ -344,7 +344,7 @@ x86 e OptiScaler/DFC em x64 (cai no Krish).
 | Motor (`NeuralEngine`) | Arquivos em `host64\` | Passadas | Config gerada |
 |---|---|---|---|
 | `RenodxDlss5Feeder` (Krish) | `renodx-dlss5.addon64` | 1 | — |
-| `OptiScalerNr` (fork Dagherbou v0.2.0-patch1) | `winmm.dll` (cópia de `OptiScaler.dll`: proxy que o host já importa), `nvngx.dll_dlssnr.dll` (shim que o fork carrega para a passada neural), `OptiScaler\D3D12_OptiScaler\D3D12Core.dll` (Agility SDK próprio), `OptiScaler.ini` | 1–5 | a partir do ini do kit: `[Upscalers] Dx12Upscaler=dlss` (o host é D3D12), `[DlssNr] Enabled=true`, `ScanExposure=false`, `Passes=N`, `[Log] LogToFile=true`. Menu do OptiScaler na tecla Insert (janela do host) |
+| `OptiScalerNr` (OptiScaler v10.0.0-pre1 de 04/09/2026, do 7z do Discord: o build com `Passes`; o fork Dagherbou v0.2.0-patch1 não tem a chave e faz uma passada — `OptiScalerNr.SuportaPassadas` lê o ini do kit e o plano bloqueia 2+ passadas com ele) | `winmm.dll` (cópia de `OptiScaler.dll`: proxy que o host já importa), `nvngx.dll_dlssnr.dll` (shim que o OptiScaler carrega para a passada neural), `OptiScaler\D3D12_OptiScaler\D3D12Core.dll` (Agility SDK próprio), `OptiScaler.ini` | 1–5 | a partir do ini do kit: `[Upscalers] Dx12Upscaler=dlss` (o host é D3D12), `[DlssNr] Enabled=true`, `ScanExposure=false`, `Passes=N`, `[Log] LogToFile=true`. Menu do OptiScaler na tecla Insert (janela do host) |
 | `DeepFriedChicken` 1.4.8 | `deep-fried-chicken.addon64`, `deep-fried-chicken-nvngx.dll`, `deep-fried-chicken.cfg` | 1–30 | a partir do cfg do kit: `enabled=1`, `arm=1`, `layers=N` |
 
 Plano (32-bit): o bloco `host64\` copia o consumidor escolhido e agenda `DeleteForbiddenFile`
@@ -352,7 +352,7 @@ Plano (32-bit): o bloco `host64\` copia o consumidor escolhido e agenda `DeleteF
 nome, que o Feeder também carregaria. O `KitResolver` acha `OptiScaler.dll` pelo marcador
 `OptiScaler.ini` na mesma pasta (o `winmm.dll` de um jogo pode ser outra coisa; a remoção só
 apaga o `winmm.dll` que contém o texto `OptiScaler.ini`) e os três do DFC pelo nome exato. Kit
-sem o fork → bloqueio "Falta no kit: OptiScaler.dll…"; sem o DFC → bloqueio apontando o
+sem o OptiScaler → bloqueio "Falta no kit: OptiScaler.dll…"; sem o DFC → bloqueio apontando o
 Discord. Em 64-bit nenhum dos dois é oferecido (lá o x2+ é o ShortFuse).
 
 Verificação: item 25 lê `host64\OptiScaler.log` (`min GPU architecture 0x0` = o OptiScaler

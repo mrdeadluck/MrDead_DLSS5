@@ -19,21 +19,16 @@ versoes-anteriores/renodx-dlss-SF-0.52.addon64 | https://github.com/RankFTW/rhi-
 #     (o 4.6/4.7 cai em D3D12Core.dll dentro do NGX: "evaluate raised 0xC0000005"). Caminho de volta:
 #     copie por cima de renodx-dlss5.addon64 no kit e Instalar de novo. ---
 versoes-anteriores/renodx-dlss5-4.55.addon64 | https://github.com/RankFTW/rhi-repo/releases/download/renodx-dlss5-4.55/renodx-dlss5_4.55.zip | 9150097cdee2953cdc9894d2e5606ea5100e6c8f95fc7bb1b407328b4391a07a | renodx-dlss5.addon64
-# --- OptiScaler DLSS-NR (fork Dagherbou v0.2.0-patch1): consumidor neural para jogos 32-BIT. O instalador o
-#     põe em host64\ como winmm.dll (no lugar do renodx-dlss5) e grava [DlssNr] Passes=1..5 no OptiScaler.ini
-#     — é o "x2+" em jogo 32-bit; o Feeder 0.15.0+ o reconhece. O zip inteiro tem 130 MB (FSR/XeSS que não
-#     usamos): só entram as quatro peças que o instalador cobra, mais o READ ME. ---
-OptiScaler-DLSSNR-v0.2.0-patch1 (consumidor neural 32-bit, 1 a 5 passadas)/OptiScaler.dll | https://github.com/Dagherbou/OptiScaler_DLSSNR/releases/download/v0.2.0-patch1/OptiScaler-DLSSNR-v0.2.0-onimusha-fix.zip | 114a1d18e79d90a011406b9467b4b6dc4d4948487c4b30289311def311174bce | OptiScaler.dll
-OptiScaler-DLSSNR-v0.2.0-patch1 (consumidor neural 32-bit, 1 a 5 passadas)/OptiScaler.ini | https://github.com/Dagherbou/OptiScaler_DLSSNR/releases/download/v0.2.0-patch1/OptiScaler-DLSSNR-v0.2.0-onimusha-fix.zip | 27af5289887b90403eef25b15d8295b35c72e1a26d13e83acd0daa28129bfff6 | OptiScaler.ini
-OptiScaler-DLSSNR-v0.2.0-patch1 (consumidor neural 32-bit, 1 a 5 passadas)/nvngx.dll_dlssnr.dll | https://github.com/Dagherbou/OptiScaler_DLSSNR/releases/download/v0.2.0-patch1/OptiScaler-DLSSNR-v0.2.0-onimusha-fix.zip | 17cf51d25d142d0be15fcac945cc928c37849a1cb61011cb9c742d72df86647c | nvngx.dll_dlssnr.dll
-OptiScaler-DLSSNR-v0.2.0-patch1 (consumidor neural 32-bit, 1 a 5 passadas)/OptiScaler/D3D12_OptiScaler/D3D12Core.dll | https://github.com/Dagherbou/OptiScaler_DLSSNR/releases/download/v0.2.0-patch1/OptiScaler-DLSSNR-v0.2.0-onimusha-fix.zip | 07d286c306f8117321422affd9e6388c12d0fb4be1c7fc689d9e899324feeb24 | OptiScaler/D3D12_OptiScaler/D3D12Core.dll
-OptiScaler-DLSSNR-v0.2.0-patch1 (consumidor neural 32-bit, 1 a 5 passadas)/READ ME - DLSS Neural Rendering.txt | https://github.com/Dagherbou/OptiScaler_DLSSNR/releases/download/v0.2.0-patch1/OptiScaler-DLSSNR-v0.2.0-onimusha-fix.zip | f535e30eea5bc251c1a61e1eab2191a578512b7f2174158014da964195ace451 | READ ME - DLSS Neural Rendering.txt
-# --- dgVoodoo2 2.87.4 (corrige o crash em Windows 11 26H1+) ---
-dgVoodoo2/MS/x86/D3D9.dll | https://github.com/dege-diosg/dgVoodoo2/releases/download/v2.87.4/dgVoodoo2_87_4.zip | db1c445f7bcf699df1e175e974c779bdc7e19a468680a44884b1ab7078888d04 | MS/x86/D3D9.dll
-dgVoodoo2/MS/x86/D3D8.dll | https://github.com/dege-diosg/dgVoodoo2/releases/download/v2.87.4/dgVoodoo2_87_4.zip | d6e8931e785e267f926c049d4d1257b00771e2de8c57c8f39e434ddf6185df06 | MS/x86/D3D8.dll
-dgVoodoo2/MS/x64/D3D9.dll | https://github.com/dege-diosg/dgVoodoo2/releases/download/v2.87.4/dgVoodoo2_87_4.zip | ca777d0e1be467091d851d5dd41293f90c254beb35247e365fccc053abfc5678 | MS/x64/D3D9.dll
-dgVoodoo2/dgVoodooCpl.exe | https://github.com/dege-diosg/dgVoodoo2/releases/download/v2.87.4/dgVoodoo2_87_4.zip | f916497c2dc4378353108c6588082f042795b62854cd3e54051c7bcba4b53d1f | dgVoodooCpl.exe
-dgVoodoo2/dgVoodoo.conf | https://github.com/dege-diosg/dgVoodoo2/releases/download/v2.87.4/dgVoodoo2_87_4.zip | 3c7da2fac3eaad369df468e80c9ba9c4db632c419799b32bbc31279d10985801 | dgVoodoo.conf
+# --- OptiScaler DLSS-NR v10.0.0-pre1 (nightly de 04/09/2026, do 7z baixado do Discord — raiz do repositório,
+#     no LFS): consumidor neural para jogos 32-BIT. O instalador o põe em host64\ como winmm.dll (no lugar do
+#     renodx-dlss5) e grava [DlssNr] Passes=1..5 no OptiScaler.ini — é o "x2+" em jogo 32-bit; o Feeder 0.15.0+
+#     o reconhece. É ESTE build que tem a chave Passes ("How many times the model runs over the frame ... 1 to 5"):
+#     o fork Dagherbou v0.2.0-patch1 do GitHub não tem a chave e faz UMA passada só (ficou em versoes-anteriores/,
+#     com os nomes trocados). O 7z inteiro tem 210 MB de FSR/XeSS que não usamos: só entram as quatro peças. ---
+OptiScaler-DLSSNR-v10.0.0-pre1 (consumidor neural 32-bit, 1 a 5 passadas)/OptiScaler.dll | repo:OptiScaler_v10.0.0-pre1_20260904 (2).7z | 3a4b2a8c2aff5aa621b9bdadae98d3cd1b339c7a3688209e7860236701dbbb72 | OptiScaler.dll
+OptiScaler-DLSSNR-v10.0.0-pre1 (consumidor neural 32-bit, 1 a 5 passadas)/OptiScaler.ini | repo:OptiScaler_v10.0.0-pre1_20260904 (2).7z | 6467fc5e599b69c13c02a26746ff469378bb78a72453281fdbfe3bd7ca76148a | OptiScaler.ini
+OptiScaler-DLSSNR-v10.0.0-pre1 (consumidor neural 32-bit, 1 a 5 passadas)/nvngx.dll_dlssnr.dll | repo:OptiScaler_v10.0.0-pre1_20260904 (2).7z | 18a683fb13e091ea5334360961d25624de3716eb56d7d5a5fd56bb672e2aeb3f | nvngx.dll_dlssnr.dll
+OptiScaler-DLSSNR-v10.0.0-pre1 (consumidor neural 32-bit, 1 a 5 passadas)/OptiScaler/D3D12_OptiScaler/D3D12Core.dll | repo:OptiScaler_v10.0.0-pre1_20260904 (2).7z | 07d286c306f8117321422affd9e6388c12d0fb4be1c7fc689d9e899324feeb24 | OptiScaler/D3D12_OptiScaler/D3D12Core.dll
 # --- Camada Vulkan de reserva do Feeder 0.15.1 (jogos Vulkan; o instalador não usa). A do
 #     0.13.1-beta.1 fica em versoes-anteriores/DLSS5-Feeder-0.13.1-beta.1/. ---
 DLSS5-Feeder-0.15.1/layer-x64/VkLayer_feed_vk.dll | https://github.com/jlrouzies-fr/DLSS5-Feeder/releases/download/v0.15.1/DLSS5-Feeder-0.15.1.zip | a789badd4bb43eb26d694d347d8b17cc57c36006154fbb677c08e5e9c713984e | layer-x64/VkLayer_feed_vk.dll

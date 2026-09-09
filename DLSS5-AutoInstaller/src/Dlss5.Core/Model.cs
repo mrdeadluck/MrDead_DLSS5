@@ -60,7 +60,7 @@ public enum NeuralEngine
     RenodxDlss5Feeder,
     /// <summary>renodx-dlss (ShortFuse): fabrica a chamada de DLSS sozinho, 64-bit D3D9/11/12, 1 a 10 passadas.</summary>
     RenodxDlssShortFuse,
-    /// <summary>OptiScaler DLSS-NR (fork Dagherbou) como consumidor do Feeder, dentro do host64\ em jogo 32-bit: 1 a 5 passadas.</summary>
+    /// <summary>OptiScaler DLSS-NR (v10.0.0-pre1, o build com a chave Passes) como consumidor do Feeder, dentro do host64\ em jogo 32-bit: 1 a 5 passadas.</summary>
     OptiScalerNr,
     /// <summary>Deep Fried Chicken como consumidor do Feeder, dentro do host64\ em jogo 32-bit: 1 a 30 passadas. Arquivos só no Discord.</summary>
     DeepFriedChicken,
@@ -164,8 +164,9 @@ public sealed class GameProfile
 
     /// <summary>
     /// OptiScaler DLSS-NR como consumidor neural do Feeder, dentro do host64\ (jogo 32-bit).
-    /// É o caminho das passadas múltiplas em x86: o Feeder 0.15 aceita o fork como terceiro
-    /// consumidor, e o OptiScaler é 64-bit, então mora no processo auxiliar.
+    /// É o caminho das passadas múltiplas em x86: o Feeder 0.15 aceita o OptiScaler DLSS-NR como
+    /// terceiro consumidor, e o OptiScaler é 64-bit, então mora no processo auxiliar. Só o build
+    /// v10.0.0-pre1 tem a chave Passes; o fork v0.2.0-patch1 faz uma passada (o plano bloqueia).
     /// </summary>
     public bool UsesOptiScalerNr => Engine == NeuralEngine.OptiScalerNr && Architecture == PeArchitecture.X86;
 

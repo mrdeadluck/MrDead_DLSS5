@@ -394,6 +394,15 @@ public static class InstallPlanBuilder
                 // acontece). O ini vem do kit com [DlssNr] ligada e as passadas; o encaminhador
                 // nvngx.dll_dlssnr.dll é o que o modelo exige do chamador; o Agility SDK vai junto
                 // porque o host é D3D12.
+                if (profile.PassCount > 1 && !OptiScalerNr.SuportaPassadas(LerTexto(kit.OptiScalerNrIni)))
+                {
+                    plan.Blockers.Add(
+                        $"O OptiScaler do kit ({kit.OptiScalerNrIni}) não tem a chave Passes em [DlssNr]: é um build de UMA " +
+                        "passada (o fork v0.2.0-patch1 do GitHub), e a passada extra pedida não aconteceria — o painel do " +
+                        "Feeder até mostraria \"Passes=2\", lendo o ini, mas o modelo rodaria uma vez. Use o kit com o " +
+                        "OptiScaler v10.0.0-pre1 (pasta \"OptiScaler-DLSSNR-v10.0.0-pre1 ...\", do 7z do Discord) ou peça 1 passada.");
+                    return plan;
+                }
                 Copy(kit.OptiScalerNrDll, host64, OptiScalerNr.Proxy);
                 Copy(kit.OptiScalerNrShim, host64, OptiScalerNr.Shim);
                 if (kit.OptiScalerNrAgility is not null)
@@ -407,7 +416,7 @@ public static class InstallPlanBuilder
                     $"Motor OptiScaler DLSS-NR no host64 ({profile.PassCount} passada(s)): o OptiScaler toma a chamada de DLSS que o " +
                     "Feeder faz, faz o upscaling (DLSS) e roda o Neural Rendering N vezes. É o suporte novo do Feeder 0.15 — " +
                     "checado pelo projeto dele, não por este. O menu do OptiScaler abre com Insert na janela do host. " +
-                    "O README do fork pede RTX 50 para o modelo original; com o nvngx_dlssnr.dll SF-v2 do kit roda em RTX 20/30/40. " +
+                    "O kit traz o OptiScaler v10.0.0-pre1 (04/09/2026), o build que tem a chave Passes; o modelo original pede RTX 50 e com o nvngx_dlssnr.dll SF-v2 do kit roda em RTX 20/30/40. " +
                     "Se travar, volte a 1 passada antes de trocar de motor.");
             }
             else if (profile.UsesDeepFriedChicken)
@@ -665,6 +674,12 @@ public static class InstallPlanBuilder
 
     /// <summary>Quem está com o nome que o dgVoodoo precisa.</summary>
     private enum Ocupante { Ninguem, DxWrapper, Outro }
+
+    private static string? LerTexto(string? caminho)
+    {
+        try { return caminho is not null && File.Exists(caminho) ? File.ReadAllText(caminho) : null; }
+        catch { return null; }
+    }
 
     /// <summary>
     /// Um dgVoodoo já instalado (nosso ou não) conta como ninguém: é o mesmo programa,
