@@ -927,6 +927,32 @@ public class ConsumidoresNoHost64Tests
     }
 
     [Fact]
+    public void LogDoShortFuseNoHost64_DoSH2_ProvaAsAvaliacoes()
+    {
+        // Trecho real do host64\ReShade.log do Silent Hill 2 EE (09/09/2026), ShortFuse dentro do host.
+        var log = "12:45:37:674 | INFO | Registered add-on \"RenoDX DLSS\" v0.0.0.0 using ReShade API version 18.\r\n" +
+                  "12:45:37:746 | INFO | [RenoDX DLSS] RenoDX DLSS attached; ReShade logical unload will be ignored.\r\n" +
+                  "12:45:55:694 | INFO | [RenoDX DLSS] [RenoDX] DLSS-NR direct: attached snippet G:\\SH2\\host64\\nvngx_dlssnr.dll\r\n" +
+                  "12:45:56:238 | INFO | [RenoDX DLSS] [RenoDX] DLSS-NR direct: CreateFeature(Reserved18) succeeded: handle=0x27dabd33040 size=900x1064 performance=6 preset=1\r\n" +
+                  "12:45:56:239 | INFO | [RenoDX DLSS] [RenoDX] DLSS-NR direct: EvaluateFeature succeeded: evaluation=1 options_revision=3 result=0x00000001\r\n" +
+                  "12:45:56:240 | INFO | [RenoDX DLSS] RenoDX DLSS-NR source evaluation completed: source=3 application_frame=996 size=900x1064 replace_source=true return_output=false.\r\n" +
+                  "12:45:59:813 | INFO | [RenoDX DLSS] [RenoDX] DLSS-NR direct: CreateFeature(Reserved18) succeeded: handle=0x27dc0e63eb0 size=1920x1080 performance=6 preset=1\r\n" +
+                  "12:46:29:074 | INFO | [RenoDX DLSS] [RenoDX] DLSS-NR direct: EvaluateFeature succeeded: evaluation=2714 options_revision=19 result=0x00000001\r\n";
+        var s = ShortFuseLog.Ler(log);
+        Assert.True(s.Registrado); Assert.True(s.Anexou); Assert.True(s.Avaliou); Assert.False(s.Falhou);
+        Assert.Equal(2714, s.Avaliacoes);
+        Assert.Equal(2, s.FeaturesCriadas);
+        Assert.Equal("1920x1080", s.UltimoTamanho);
+        Assert.True(s.SnippetAnexado);
+        var c = s.Checkpoint14(3, false);
+        Assert.Equal(CheckStatus.Pass, c.State);
+        Assert.Contains("2714", c.Detail);
+        // Sem a linha de resumo, as avaliações da feature 18 bastam para contar como "avaliou".
+        var so = ShortFuseLog.Ler("Registered add-on \"RenoDX DLSS\"\nRenoDX DLSS attached\nEvaluateFeature succeeded: evaluation=7 options_revision=1 result=0x1\n");
+        Assert.True(so.Avaliou);
+    }
+
+    [Fact]
     public void PlanoOptiScaler_LevaOReShadeParaOHostPeloLoadReshade()
     {
         using var c = new Cenario();

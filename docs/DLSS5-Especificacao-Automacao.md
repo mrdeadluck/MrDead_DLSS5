@@ -373,7 +373,22 @@ ReShade x64 como `host64\ReShade64.dll`. O botão
 "Testar o host64…" roda `dlss5-feed-host64.exe --test` (DLAA sintético + NR, 300 avaliações,
 ~15 s, sem jogo) e interpreta `--test finished: N/300 evaluates succeeded`.
 
-Não validado em jogo por este projeto (sem GPU no ambiente): se cair, `Passes=1`, depois Krish.
+**Validado em 09/09/2026 (RTX 4070 Ti, driver 616.64) — ShortFuse dentro do host64:**
+
+- **Silent Hill 2 Enhanced Edition** (D3D8 → mod d3d8to9 → dgVoodoo D3D9 → host64): `host64\ReShade.log`
+  mostra `Registered add-on "RenoDX DLSS"`, `RenoDX DLSS attached`, `DLSS-NR direct: attached snippet
+  host64\nvngx_dlssnr.dll`, `CreateFeature(Reserved18) succeeded ... size=1920x1080` (uma feature por
+  passada; recriadas ao mudar Pass Count ou escala — 45 creates numa sessão de 7 min) e `EvaluateFeature
+  succeeded: evaluation=N` até N=2859+ (1717 linhas). A primeira avaliação foi no swapchain do próprio
+  host (`source=3`, 900x1064 = a janela do painel), as seguintes na saída do DLSS do host. **É o único
+  motor em que o x2+ apareceu na tela**; o OptiScaler construía as passadas sem diferença visível.
+- **Enslaved: Odyssey to the West** (32-bit, D3D9 via dgVoodoo → host64): `source=1` a 2560x1440
+  (`replace_source=true`), 4 features Reserved18 (4 passadas), 101 avaliações registradas.
+
+O host segue dizendo `renodx-dlss5*.addon64 not found next to the host` e "serving plain DLAA" — ele não
+sabe que o ShortFuse está lá, e mesmo assim as passadas saem, porque o addon intercepta o
+`NVSDK_NGX_D3D12_EvaluateFeature` do host (hooks `loaded-module hooks active 3/4` em `_nvngx.dll` e em
+`host64\nvngx_dlss.dll`). `ShortFuseLog.Ler` conta avaliações, features e o snippet para o item 25.
 
 ## 7. O que fizemos em cada jogo
 
@@ -415,6 +430,9 @@ Estado final HL2: dgVoodoo em `bin\`, ReShade `dxgi.dll` na raiz, overlays desli
 - O `d3d8.dll` da pasta é o módulo **Silent Hill 2 Enhancements** — a própria mod (60 fps, widescreen, texturas), não um wrapper sobrando. Com `d3d8to9 = 1` (padrão, exigido pelos shaders dela) ele converte o jogo para DirectX 9 e, ao criar o Direct3D 9, tenta nesta ordem: 9On12 (se ligado no ini), o **`d3d9.dll` da própria pasta** (`GetLocalDirect3DCreate9`) e só então o do System32.
 - Logo o dgVoodoo **não** entra como `D3D8.dll` (sobrescrever tira a mod; foi o que a instalação antiga fazia, e a checagem de ocupante passou a recusar): entra como **`D3D9.dll`** ao lado (`GameProfile.D3d8ViaD3D9`, decidido pelo marcador `Silent Hill 2 Enhancements` ou `d3d8to9` no `D3D8.dll`; ver `D3d8to9Wrapper`). O `dgVoodoo.conf` sai no perfil padrão, não no "Legado": a mod quer a resolução do monitor. O resto é a rota C normal: dgVoodoo → D3D11 → `dxgi.dll` (ReShade x86) → Feeder addon32 + `host64\`.
 - O manifesto guarda a decisão; verificação (item 5), isolamento (só desliga o `D3D8.dll`/`D3D9.dll` que tenha o marcador `dgVoodoo`) e desinstalação olham o `D3D9.dll`.
+
+### Enslaved: Odyssey to the West — x86, D3D9 (Unreal Engine 3)
+- Caminho C (dgVoodoo D3D9 em `Binaries\Win32\`), ShortFuse dentro do host64 com 4 passadas a 2560x1440: `source=1`, 4 features Reserved18, avaliando. Validado em 09/09/2026, segundo jogo do arranjo depois do SH2 EE.
 
 ### Castlevania: Lords of Shadow Ultimate Edition — x86, D3D9
 - Caminho C, **variante simples**: exe, dgVoodoo e ReShade na mesma pasta. Funcionou de primeira seguindo a sequência padrão — primeira validação limpa do Caminho C do início ao fim.

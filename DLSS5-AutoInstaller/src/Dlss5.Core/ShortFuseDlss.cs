@@ -72,8 +72,15 @@ public static class ShortFuseDlss
 
 /// <summary>O que o RenoDX DLSS do ShortFuse registrou no ReShade.log.</summary>
 public sealed record ShortFuseStatus(
-    bool Registrado, bool Anexou, bool Avaliou, bool Falhou, bool PedeReinicio, string Falha)
+    bool Registrado, bool Anexou, bool Avaliou, bool Falhou, bool PedeReinicio, string Falha,
+    int Avaliacoes = 0, int FeaturesCriadas = 0, bool SnippetAnexado = false, string? UltimoTamanho = null)
 {
+    /// <summary>Resumo do que o log prova, para o detalhe do checkpoint.</summary>
+    public string Evidencia =>
+        (Avaliacoes > 0 ? $" {Avaliacoes} avaliação(ões) do modelo" : "") +
+        (FeaturesCriadas > 0 ? $", {FeaturesCriadas} feature(s) Reserved18 criada(s)" + (UltimoTamanho is null ? "" : $" (última a {UltimoTamanho})") : "") +
+        (SnippetAnexado ? ", nvngx_dlssnr.dll anexado" : "");
+
     public CheckResult Checkpoint14(int passesPedidas, bool reinicioPendente)
     {
         const string titulo = "DLSS 5 aplicado na imagem (RenoDX DLSS do ShortFuse)";
@@ -87,7 +94,7 @@ public sealed record ShortFuseStatus(
                 "baixe o Pass Count para 1 e teste de novo.");
         if (Avaliou)
         {
-            var detalhe = $"O addon avaliou o Neural Rendering na imagem (\"DLSS-NR source evaluation completed\"), com {passesPedidas} passada(s) pedida(s) no ini.";
+            var detalhe = $"O addon avaliou o Neural Rendering na imagem (\"DLSS-NR source evaluation completed\"), com {passesPedidas} passada(s) pedida(s) no ini." + (Evidencia.Length > 0 ? " Log:" + Evidencia + "." : "");
             if (reinicioPendente)
                 return new CheckResult(14, titulo, CheckStatus.Warning,
                     detalhe + " Porém o PC não foi reiniciado desde o override: esse \"ativo\" pode ser vazio.",
@@ -125,6 +132,17 @@ public static class ShortFuseLog
         else if (text.Contains("DLSS-NR source evaluation failed", StringComparison.OrdinalIgnoreCase) && !avaliou)
             falha = "A avaliação do Neural Rendering falhou (\"DLSS-NR source evaluation failed\") e nenhuma outra completou.";
         bool pedeReinicio = text.Contains("LoadFromDllMain in ReShade.ini. Restart required", StringComparison.OrdinalIgnoreCase);
-        return new ShortFuseStatus(registrado, anexou, avaliou, falha.Length > 0, pedeReinicio, falha);
+        // O que o SH2 EE (host64, 09/09/2026) mostrou: "DLSS-NR direct: attached snippet ...nvngx_dlssnr.dll",
+        // "CreateFeature(Reserved18) succeeded: handle=... size=WxH" (uma feature por passada; recriadas ao
+        // mudar Pass Count ou escala) e "EvaluateFeature succeeded: evaluation=N" (N cresce por quadro).
+        int avaliacoes = 0, features = 0; string? ultimoTamanho = null;
+        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(text, @"EvaluateFeature succeeded: evaluation=(\d+)"))
+            if (int.TryParse(m.Groups[1].Value, out var n) && n > avaliacoes) avaliacoes = n;
+        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(text, @"CreateFeature\(Reserved18\) succeeded: handle=\S+ size=(\d+x\d+)"))
+        { features++; ultimoTamanho = m.Groups[1].Value; }
+        bool snippet = text.Contains("DLSS-NR direct: attached snippet", StringComparison.OrdinalIgnoreCase);
+        // Uma avaliação da feature 18 concluída também conta como "avaliou", mesmo sem a linha de resumo.
+        if (!avaliou && avaliacoes > 0) avaliou = true;
+        return new ShortFuseStatus(registrado, anexou, avaliou, falha.Length > 0, pedeReinicio, falha, avaliacoes, features, snippet, ultimoTamanho);
     }
 }
