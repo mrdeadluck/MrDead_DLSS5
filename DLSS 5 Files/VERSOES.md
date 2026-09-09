@@ -64,7 +64,7 @@ do Feeder), e o Feeder 0.15.0+ aceita **três consumidores** ali — só um por 
 |---|---|---|---|
 | RenoDX DLSS5 (Krish) — `renodx-dlss5.addon64` | 1 | `host64\renodx-dlss5.addon64` | kit (4.70; 4.55 em `versoes-anteriores/`) |
 | **OptiScaler DLSS-NR** (v10.0.0-pre1, nightly de 04/09/2026 do 7z do Discord — **o único build com a chave `Passes`**; o fork Dagherbou v0.2.0-patch1 do GitHub faz uma passada só e foi para `versoes-anteriores/`) | **1 a 5** (`[DlssNr] Passes=`) | `host64\winmm.dll` (é o `OptiScaler.dll` renomeado, proxy que o host já importa) + `host64\nvngx.dll_dlssnr.dll` + `host64\OptiScaler\D3D12_OptiScaler\D3D12Core.dll` + `host64\OptiScaler.ini` gerado (`Enabled=true`, `Passes=N`, `Dx12Upscaler=dlss`) | kit: `OptiScaler-DLSSNR-v10.0.0-pre1 (consumidor neural 32-bit, 1 a 5 passadas)/` (vem do seu 7z, via `repo:` no `extras-desejado.txt`) |
-| **RenoDX DLSS (ShortFuse)** dentro do host64 — **EXPERIMENTAL** | **1 a 10** (`[RENODX-DLSS] DirectNeuralRenderingPassCount`) | `host64\renodx-dlss.addon64` + `host64\ReShade.ini` com `[ADDON] LoadFromDllMain=renodx-dlss.addon64` (mesclado no ini que o host grava). O addon intercepta o `NVSDK_NGX_D3D12_EvaluateFeature` que o host faz por quadro; o Feeder **não** o reconhece como consumidor e ninguém mediu o arranjo — se a imagem não mudar ou o host cair, volte ao OptiScaler | kit (SF 0.54) |
+| **RenoDX DLSS (ShortFuse)** dentro do host64 — **VALIDADO** (Silent Hill 2 EE, 09/09/2026: o único motor em que o x2+ apareceu na tela) | **1 a 10** (`[RENODX-DLSS] DirectNeuralRenderingPassCount`) | `host64\renodx-dlss.addon64` + `host64\ReShade.ini` com `[ADDON] LoadFromDllMain=renodx-dlss.addon64` (mesclado no ini que o host grava). O addon intercepta o `NVSDK_NGX_D3D12_EvaluateFeature` que o host faz por quadro; o Feeder **não** o reconhece como consumidor (loga "renodx-dlss5*.addon64 not found" e segue servindo DLAA), e mesmo assim as passadas saem na tela. É o motor recomendado para x2+ em 32-bit | kit (SF 0.54) |
 | **Deep Fried Chicken** 1.4.8 | **1 a 30** (`layers=`) | `host64\deep-fried-chicken.addon64` + `-nvngx.dll` + `.cfg` gerado (`enabled=1`, `arm=1`, `layers=N`) | **só no Discord** (veja a tabela no fim); coloque os três arquivos em qualquer pasta do kit |
 
 Na tela de detecção de um jogo 32-bit o combo "Motor do DLSS 5" passou a listar esses três
@@ -75,6 +75,11 @@ architecture 0x0` = o OptiScaler respondeu; `nvngx.dll_dlssnr.dll` carregado = p
 e o item 26 (falha `0xC0000005` dentro do NGX = driver 616.64+ com addon 4.6/4.7). O menu do
 OptiScaler abre com **Insert** na janela do host (`host_window=1` no `dlss5-feed.cfg` se quiser
 vê-la). Em D3D11 o OptiScaler roda o DLSS por dx11on12, que é o que o host já usa.
+
+**Resultado do dia 09/09 no Silent Hill 2 EE: o OptiScaler NÃO entregou x2+ visível em nenhuma tentativa; o
+RenoDX DLSS (ShortFuse) dentro do host64 entregou.** O que o log do OptiScaler mostra abaixo é que as
+passadas foram construídas e custaram GPU, mas na tela não houve diferença de x1 para x4 (a composição
+dele blenda o resultado com `TransferStrength`, e passadas compostas assim podem se anular; não investigado).
 
 Medido no Silent Hill 2 EE (09/09, RTX 4070 Ti, driver 616.64): com o OptiScaler v10.0.0-pre1 e
 `Passes=4`, o `OptiScaler.log` mostra `pass 2/3/4 built at 1920x1080` e o custo de DLSS do host

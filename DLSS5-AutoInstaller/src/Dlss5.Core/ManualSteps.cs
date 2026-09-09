@@ -56,7 +56,7 @@ public static class ManualSteps
                 OptiScalerNr.PassoManual(profile.PassCount), false));
 
         if (profile.UsesShortFuseNoHost64)
-            steps.Add(new ManualStep(n++, $"EXPERIMENTAL — RenoDX DLSS (ShortFuse) dentro do host64: conferir que anexou e as {profile.PassCount} passada(s)",
+            steps.Add(new ManualStep(n++, $"RenoDX DLSS (ShortFuse) dentro do host64: conferir que anexou e as {profile.PassCount} passada(s)",
                 ShortFuseNoHost64.PassoManual(profile.PassCount), false));
 
         if (profile.UsesDeepFriedChicken)

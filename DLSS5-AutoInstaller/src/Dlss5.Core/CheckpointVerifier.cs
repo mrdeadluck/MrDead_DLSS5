@@ -1207,7 +1207,7 @@ public static class CheckpointVerifier
                 bool cedo = ShortFuseNoHost64.CarregaCedo(iniTexto);
                 var pedidas = ShortFuseNoHost64.LerPassadas(iniTexto);
                 bool arquivos = File.Exists(addon) && cedo && pedidas == passes;
-                yield return new CheckResult(25, "RenoDX DLSS (ShortFuse) no host64 (experimental): arquivos e ini",
+                yield return new CheckResult(25, "RenoDX DLSS (ShortFuse) no host64: arquivos e ini",
                     arquivos ? CheckStatus.Pass : CheckStatus.Fail,
                     !File.Exists(addon) ? $"host64\\{ShortFuseDlss.Addon} não existe."
                     : !cedo ? "host64\\ReShade.ini sem [ADDON] LoadFromDllMain=renodx-dlss.addon64: o addon pede carga cedo."

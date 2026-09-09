@@ -70,9 +70,10 @@ VERSÕES E O QUE FALTA BAIXAR
        é o único com a chave Passes; o fork do GitHub faz 1 passada e
        ficou em versoes-anteriores); entra em host64\ como winmm.dll,
        com o OptiScaler.ini gerado pelo programa;
-     - RenoDX DLSS (ShortFuse) dentro do host64: 1 a 10 passadas,
-       EXPERIMENTAL (o Feeder não o reconhece; se não mudar nada ou o
-       host cair, volte ao OptiScaler);
+     - RenoDX DLSS (ShortFuse) dentro do host64: 1 a 10 passadas. É o
+       que funcionou de verdade (Silent Hill 2 EE, 09/09/2026): escolha
+       este para x2+ em 32-bit. O OptiScaler construía as passadas no
+       log mas não mudava a imagem;
      - Deep Fried Chicken: 1 a 30 passadas; os três arquivos
        (deep-fried-chicken.addon64, deep-fried-chicken-nvngx.dll,
        deep-fried-chicken.cfg) só existem no Discord do autor — baixe e

@@ -423,7 +423,8 @@ public static class InstallPlanBuilder
                     "Feeder faz, faz o upscaling (DLSS) e roda o Neural Rendering N vezes. É o suporte novo do Feeder 0.15 — " +
                     "checado pelo projeto dele, não por este. O menu do OptiScaler abre com Insert na janela do host. " +
                     "O kit traz o OptiScaler v10.0.0-pre1 (04/09/2026), o build que tem a chave Passes; o modelo original pede RTX 50 e com o nvngx_dlssnr.dll SF-v2 do kit roda em RTX 20/30/40. " +
-                    "Se travar, volte a 1 passada antes de trocar de motor.");
+                    "Se travar, volte a 1 passada antes de trocar de motor. No Silent Hill 2 EE (09/09/2026) o log mostrou as passadas construídas, " +
+                    "mas na tela não houve diferença de x1 para x4 — quem entregou o x2+ visível foi o RenoDX DLSS (ShortFuse) dentro do host64.");
             }
             else if (profile.UsesDeepFriedChicken)
             {
@@ -450,10 +451,10 @@ public static class InstallPlanBuilder
                 RemoverOptiScalerDoHost("o consumidor escolhido é o RenoDX DLSS do ShortFuse");
                 RemoverChickenDoHost("o consumidor escolhido é o RenoDX DLSS do ShortFuse");
                 plan.Warnings.Add(
-                    $"Motor RenoDX DLSS (ShortFuse) DENTRO do host64 ({profile.PassCount} passada(s)) — EXPERIMENTAL: ninguém mediu " +
-                    "este arranjo. O addon intercepta a chamada de DLSS que o host faz; o Feeder não o reconhece como consumidor " +
+                    $"Motor RenoDX DLSS (ShortFuse) DENTRO do host64 ({profile.PassCount} passada(s)): validado no Silent Hill 2 EE " +
+                    "(09/09/2026) — foi o motor em que o x2+ apareceu na tela. O addon intercepta a chamada de DLSS que o host faz; o Feeder não o reconhece como consumidor " +
                     "(o host loga \"renodx-dlss5*.addon64 not found\" e segue servindo DLAA). A prova de que rodou é o " +
-                    "host64\\ReShade.log (item 25 da verificação). Se a imagem não mudar ou o host cair, volte ao OptiScaler DLSS-NR.");
+                    "host64\\ReShade.log (item 25 da verificação). Se o host cair, teste menos passadas.");
             }
             else
             {

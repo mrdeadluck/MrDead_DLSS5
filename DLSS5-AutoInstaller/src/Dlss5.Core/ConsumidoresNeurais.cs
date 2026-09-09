@@ -9,8 +9,8 @@ public static class Motores
 
     public static string Rotulo(NeuralEngine e) => e switch
     {
-        NeuralEngine.RenodxDlssShortFuse => "RenoDX DLSS (ShortFuse) — 1 a 10 passadas (64-bit direto; em 32-bit dentro do host64, EXPERIMENTAL)",
-        NeuralEngine.OptiScalerNr => "OptiScaler DLSS-NR no host64 — 32-bit, 1 a 5 passadas",
+        NeuralEngine.RenodxDlssShortFuse => "RenoDX DLSS (ShortFuse) — 1 a 10 passadas (64-bit direto; 32-bit dentro do host64 — o x2+ que funcionou)",
+        NeuralEngine.OptiScalerNr => "OptiScaler DLSS-NR no host64 — 32-bit, 1 a 5 passadas (no SH2 EE as passadas não fizeram diferença visível)",
         NeuralEngine.DeepFriedChicken => "Deep Fried Chicken no host64 — 32-bit, 1 a 30 passadas (arquivos do Discord)",
         _ => "RenoDX DLSS5 (Krish) + Feeder — uma passada (padrão até aqui)",
     };
@@ -27,7 +27,7 @@ public static class Motores
 
     /// <summary>Os motores que fazem sentido para a arquitetura, na ordem da tela.</summary>
     public static IReadOnlyList<NeuralEngine> Disponiveis(PeArchitecture arch) => arch == PeArchitecture.X86
-        ? new[] { NeuralEngine.RenodxDlss5Feeder, NeuralEngine.OptiScalerNr, NeuralEngine.DeepFriedChicken, NeuralEngine.RenodxDlssShortFuse }
+        ? new[] { NeuralEngine.RenodxDlss5Feeder, NeuralEngine.RenodxDlssShortFuse, NeuralEngine.OptiScalerNr, NeuralEngine.DeepFriedChicken }
         : new[] { NeuralEngine.RenodxDlss5Feeder, NeuralEngine.RenodxDlssShortFuse };
 
     public static bool Aplicavel(NeuralEngine e, PeArchitecture arch) => Disponiveis(arch).Contains(e);
@@ -221,7 +221,9 @@ public static class OptiScalerNr
 }
 
 /// <summary>
-/// O renodx-dlss do ShortFuse DENTRO do host64 (jogo 32-bit) — EXPERIMENTAL. O addon é 64-bit e
+/// O renodx-dlss do ShortFuse DENTRO do host64 (jogo 32-bit) — VALIDADO pelo usuário no Silent Hill 2
+/// Enhanced Edition em 09/09/2026 (foi o único motor em que o x2+ apareceu na tela; o OptiScaler
+/// construía as passadas no log sem diferença visível). O addon é 64-bit e
 /// se pendura no NVSDK_NGX_D3D12_EvaluateFeature do processo em que vive; o host64 faz exatamente
 /// essa chamada (DLAA sintético) para cada quadro do jogo. A ideia: o ReShade x64 do host64 carrega
 /// o addon (LoadFromDllMain), ele intercepta o evaluate do host e roda as N passadas no lugar do
@@ -250,13 +252,13 @@ public static class ShortFuseNoHost64
         (IniTexto.Ler(ini, "ADDON", "LoadFromDllMain") ?? "").Contains(ShortFuseDlss.Addon, StringComparison.OrdinalIgnoreCase);
 
     public static string PassoManual(int passes) =>
-        $"EXPERIMENTAL. O renodx-dlss.addon64 do ShortFuse mora dentro do host64 e intercepta a chamada de DLSS que o " +
+        $"O renodx-dlss.addon64 do ShortFuse mora dentro do host64 e intercepta a chamada de DLSS que o " +
         $"host faz para cada quadro; o host64\\ReShade.ini pede {passes} passada(s) ([RENODX-DLSS] DirectNeuralRenderingPassCount). " +
         "Prova: host64\\ReShade.log com \"Registered add-on \"RenoDX DLSS\"\", \"RenoDX DLSS attached\" e \"DLSS-NR source " +
         "evaluation completed\" (a verificação, item 25, lê). O painel dele abre com Home NA JANELA DO HOST (marque \"Show the " +
         "DLSS 5 host window\" no painel do Feeder): aba RenoDX DLSS → Advanced → Pass Count. O Feeder não o conhece como " +
-        "consumidor (o host diz \"renodx-dlss5*.addon64 not found\" e segue servindo DLAA) — se a imagem não mudar ou o host " +
-        "cair, volte ao OptiScaler DLSS-NR (1 a 5) ou ao Krish.";
+        "consumidor (o host diz \"renodx-dlss5*.addon64 not found\" e segue servindo DLAA), mas foi o motor em que o x2+ " +
+        "apareceu de fato (Silent Hill 2 EE, 09/09/2026). Se o host cair, teste menos passadas antes de trocar de motor.";
 }
 
 /// <summary>

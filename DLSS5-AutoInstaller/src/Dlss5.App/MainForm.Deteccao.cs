@@ -500,9 +500,9 @@ public sealed partial class MainForm
         _lblEngineNote.Text = motor switch
         {
             NeuralEngine.RenodxDlssShortFuse => _profile.Architecture == PeArchitecture.X86
-                ? $"EXPERIMENTAL: {ShortFuseDlss.Addon} entra em host64\\ (intercepta a chamada de DLSS do host); {_profile.PassCount} passada(s); ninguém mediu — se não mudar nada, volte ao OptiScaler"
+                ? $"{ShortFuseDlss.Addon} entra em host64\\ (intercepta a chamada de DLSS do host); {_profile.PassCount} passada(s); validado no SH2 EE — painel com Home na janela do host"
                 : $"{ShortFuseDlss.Addon} substitui o Krish e o Feeder nesta pasta; {_profile.PassCount} passada(s)",
-            NeuralEngine.OptiScalerNr => $"OptiScaler DLSS-NR entra em host64\\ como winmm.dll no lugar do renodx-dlss5; {_profile.PassCount} passada(s); menu na tecla Insert (janela do host)",
+            NeuralEngine.OptiScalerNr => $"OptiScaler DLSS-NR entra em host64\\ como winmm.dll; {_profile.PassCount} passada(s); menu na tecla Insert (janela do host). No SH2 EE as passadas extras não mudaram a imagem — prefira o ShortFuse",
             NeuralEngine.DeepFriedChicken => $"Deep Fried Chicken entra em host64\\ no lugar do renodx-dlss5; {_profile.PassCount} passada(s); o plano cobra os três arquivos se faltarem no kit",
             _ => _profile.Architecture == PeArchitecture.X86
                 ? "uma passada. Para x2+ em 32-bit escolha OptiScaler DLSS-NR ou Deep Fried Chicken (vão para o host64)"
@@ -591,7 +591,7 @@ public sealed partial class MainForm
     {
         NeuralEngine.OptiScalerNr => $" Consumidor neural: OptiScaler DLSS-NR, {_profile!.PassCount} passada(s).",
         NeuralEngine.DeepFriedChicken => $" Consumidor neural: Deep Fried Chicken, {_profile!.PassCount} passada(s).",
-        NeuralEngine.RenodxDlssShortFuse when _profile!.Architecture == PeArchitecture.X86 => $" Consumidor neural: RenoDX DLSS (ShortFuse) dentro do host64, {_profile!.PassCount} passada(s) — EXPERIMENTAL.",
+        NeuralEngine.RenodxDlssShortFuse when _profile!.Architecture == PeArchitecture.X86 => $" Consumidor neural: RenoDX DLSS (ShortFuse) dentro do host64, {_profile!.PassCount} passada(s).",
         _ => string.Empty,
     };
 

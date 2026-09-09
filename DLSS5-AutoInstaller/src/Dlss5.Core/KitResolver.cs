@@ -109,7 +109,7 @@ public sealed class KitInventory
         }
         else if (x86 && consumidor == NeuralEngine.RenodxDlssShortFuse)
         {
-            Need(RenodxDlssShortFuse, ShortFuseDlss.Addon + " (RenoDX DLSS do ShortFuse, para dentro do host64 — experimental)");
+            Need(RenodxDlssShortFuse, ShortFuseDlss.Addon + " (RenoDX DLSS do ShortFuse, para dentro do host64)");
         }
         else if (x86 && consumidor == NeuralEngine.DeepFriedChicken)
         {

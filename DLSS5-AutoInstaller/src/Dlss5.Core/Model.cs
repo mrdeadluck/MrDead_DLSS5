@@ -176,7 +176,7 @@ public sealed class GameProfile
     public bool UsesDeepFriedChicken => Engine == NeuralEngine.DeepFriedChicken && Architecture == PeArchitecture.X86;
 
     /// <summary>
-    /// O renodx-dlss do ShortFuse DENTRO do host64 (jogo 32-bit): experimental. Ver <see cref="ShortFuseNoHost64"/>.
+    /// O renodx-dlss do ShortFuse DENTRO do host64 (jogo 32-bit): validado no SH2 EE. Ver <see cref="ShortFuseNoHost64"/>.
     /// </summary>
     public bool UsesShortFuseNoHost64 => Engine == NeuralEngine.RenodxDlssShortFuse && Architecture == PeArchitecture.X86;
 

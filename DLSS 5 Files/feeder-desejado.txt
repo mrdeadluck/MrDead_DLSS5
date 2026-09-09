@@ -30,4 +30,5 @@
 # 09/09/2026 (2): pacote refeito com a verificacao que le as passadas no OptiScaler.log (item 25b).
 # 09/09/2026 (3): pacote refeito com a verificacao das passadas corrigida, LoadReshade no host e o ShortFuse-no-host64 experimental.
 # 09/09/2026 (4): pacote refeito com OpenGL e D3D10 em 32-bit (caminho B).
+# 09/09/2026 (5): pacote refeito com o ShortFuse-no-host64 como motor recomendado para x2+ em 32-bit.
 versao=v0.15.1

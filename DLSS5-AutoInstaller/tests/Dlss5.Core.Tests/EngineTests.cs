@@ -885,7 +885,7 @@ public class ConsumidoresNoHost64Tests
         x64.Engine = NeuralEngine.OptiScalerNr;
         Assert.False(x64.UsesOptiScalerNr);
         Assert.Equal(NeuralEngine.RenodxDlss5Feeder, x64.MotorEfetivo);
-        Assert.Equal(new[] { NeuralEngine.RenodxDlss5Feeder, NeuralEngine.OptiScalerNr, NeuralEngine.DeepFriedChicken, NeuralEngine.RenodxDlssShortFuse }, Motores.Disponiveis(PeArchitecture.X86));
+        Assert.Equal(new[] { NeuralEngine.RenodxDlss5Feeder, NeuralEngine.RenodxDlssShortFuse, NeuralEngine.OptiScalerNr, NeuralEngine.DeepFriedChicken }, Motores.Disponiveis(PeArchitecture.X86));
         Assert.Equal(5, Motores.PassesMax(NeuralEngine.OptiScalerNr));
         Assert.Equal(30, Motores.PassesMax(NeuralEngine.DeepFriedChicken));
         Assert.Equal(5, Motores.Limitar(NeuralEngine.OptiScalerNr, 9));
@@ -966,7 +966,7 @@ public class ConsumidoresNoHost64Tests
         Assert.DoesNotContain("host64/renodx-dlss5.addon64", copias);
         Assert.Contains(plano.Actions, a => a.Kind == PlanActionKind.DeleteForbiddenFile && Path.GetFileName(a.TargetPath!) == "renodx-dlss5.addon64");
         Assert.Contains(plano.Actions, a => a.Kind == PlanActionKind.WriteGeneratedFile && a.TargetPath!.EndsWith(Path.Combine("host64", "ReShade.ini"), StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(plano.Warnings, w => w.Contains("EXPERIMENTAL", StringComparison.Ordinal));
+        Assert.Contains(plano.Warnings, w => w.Contains("DENTRO do host64", StringComparison.Ordinal));
 
         // O ini gerado mescla: mantém o que o host gravou e acrescenta as chaves do addon.
         var gerado = ShortFuseNoHost64.GerarIni(File.ReadAllText(Path.Combine(host64, "ReShade.ini")), 6);
