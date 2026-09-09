@@ -891,6 +891,63 @@ public class PlanBuilderTests
     }
 
     [Fact]
+    public void RotaC_D3D8_ModComD3d8to9_DgVoodooEntraComoD3D9()
+    {
+        // Silent Hill 2 Enhanced Edition: o d3d8.dll da pasta é a própria mod, que converte
+        // para DirectX 9 e prefere um d3d9.dll local. Antes o plano recusava ("não é o
+        // dgVoodoo"); agora a mod fica e o dgVoodoo entra como D3D9.dll ao lado.
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5sh2_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "D3D8.dll"), "MZ ... Starting Silent Hill 2 Enhancements! v1.0 ...");
+            var perfil = PerfilRotaC(dir);
+            perfil.Api = GraphicsApi.D3D8;
+            Assert.Equal("D3D8.dll", perfil.DgVoodooWrapperName);
+
+            var plan = InstallPlanBuilder.Build(perfil, FullKit(), new InstallOptions());
+
+            Assert.True(plan.CanRun, string.Join("; ", plan.Blockers));
+            Assert.True(perfil.D3d8ViaD3D9);
+            Assert.Equal("D3D9.dll", perfil.DgVoodooWrapperName);
+            // O D3D8.dll da mod não é alvo de nada; o dgVoodoo D3D9 x86 do kit vira D3D9.dll.
+            Assert.DoesNotContain(plan.Actions, a =>
+                Path.GetFileName(a.TargetPath ?? "").Equals("D3D8.dll", StringComparison.OrdinalIgnoreCase));
+            var copia = Assert.Single(plan.Actions, a =>
+                a.Kind == PlanActionKind.CopyFile &&
+                Path.GetFileName(a.TargetPath ?? "").Equals("D3D9.dll", StringComparison.OrdinalIgnoreCase));
+            Assert.EndsWith(@"MS\x86\D3D9.dll", copia.SourcePath!, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(plan.Warnings, w => w.Contains("Silent Hill 2 Enhanced Edition", StringComparison.Ordinal));
+            // A mod quer resolução moderna: perfil padrão do dgVoodoo, não o "Legado".
+            Assert.Equal(DgVoodooProfile.Padrao, DgVoodooConfigurator.ProfileFor(perfil));
+
+            // O manifesto leva a decisão, para a verificação e a desinstalação olharem o D3D9.dll.
+            var m = InstallManifest.Para(plan, FullKit());
+            Assert.True(m.D3d8ViaD3D9);
+            Assert.Equal("D3D9.dll", m.PerfilGravado()!.DgVoodooWrapperName);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void RotaC_D3D8_WrapperDesconhecidoContinuaBloqueando()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5sh2_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "D3D8.dll"), "MZ ... ENBSeries ...");
+            var perfil = PerfilRotaC(dir);
+            perfil.Api = GraphicsApi.D3D8;
+            var plan = InstallPlanBuilder.Build(perfil, FullKit(), new InstallOptions());
+            Assert.False(perfil.D3d8ViaD3D9);
+            Assert.Contains(plan.Blockers, b => b.Contains("não é o dgVoodoo", StringComparison.Ordinal));
+            Assert.Null(D3d8to9Wrapper.Qual(dir));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
     public void RotaC_DgVoodooJaInstaladoPodeSerSobrescrito()
     {
         // Reinstalar por cima do próprio dgVoodoo é o caso normal — e tem backup.

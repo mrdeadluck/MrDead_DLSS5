@@ -215,7 +215,7 @@ public sealed partial class InstallerEngine
 
                     case PlanActionKind.PatchDgVoodooConf:
                     {
-                        var perfil = DgVoodooConfigurator.ProfileFor(profile.Api);
+                        var perfil = DgVoodooConfigurator.ProfileFor(profile);
                         var patched = DgVoodooConfigurator.Patch(File.ReadAllText(action.SourcePath!), perfil,
                             hardwareTnL: null);
                         if (!plan.Options.DgVoodooWatermark)

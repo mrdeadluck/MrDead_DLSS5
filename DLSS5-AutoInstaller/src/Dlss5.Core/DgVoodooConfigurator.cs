@@ -79,6 +79,14 @@ public static class DgVoodooConfigurator
         api == GraphicsApi.D3D8 ? DgVoodooProfile.Legado : DgVoodooProfile.Padrao;
 
     /// <summary>
+    /// Idem, pelo perfil: jogo DirectX 8 atrás de uma mod com d3d8to9 fala DirectX 9 com o
+    /// dgVoodoo, e a mod (SH2 Enhanced Edition) quer as resoluções modernas — o perfil
+    /// "Legado" (resoluções clássicas, VRAM 256) esconderia a resolução do monitor dela.
+    /// </summary>
+    public static DgVoodooProfile ProfileFor(GameProfile p) =>
+        p.D3d8ViaD3D9 ? DgVoodooProfile.Padrao : ProfileFor(p.Api);
+
+    /// <summary>
     /// Placas que o dgVoodoo sabe fingir, na ordem em que vale a pena tentar. Os nomes
     /// vêm da lista que o próprio dgVoodoo.conf documenta — nome fora dela é ignorado
     /// em silêncio, e o jogo continua recusando sem que se saiba por quê.

@@ -308,7 +308,25 @@ public sealed class GameProfile
     /// Wrapper do dgVoodoo2 correspondente à API do jogo (rota C). O dgVoodoo traz um
     /// arquivo por API, e o jogo só carrega o que tem o nome certo.
     /// </summary>
-    public string DgVoodooWrapperName => Api == GraphicsApi.D3D8 ? "D3D8.dll" : "D3D9.dll";
+    public string DgVoodooWrapperName => Api == GraphicsApi.D3D8 && !D3d8ViaD3D9 ? "D3D8.dll" : "D3D9.dll";
+
+    /// <summary>
+    /// Jogo DirectX 8 cujo D3D8.dll é uma mod com d3d8to9 (Silent Hill 2 Enhanced Edition):
+    /// ela converte para DirectX 9 e carrega um d3d9.dll local de preferência, então o
+    /// dgVoodoo entra como D3D9.dll ao lado, e o D3D8.dll dela fica. Ver <see cref="D3d8to9Wrapper"/>.
+    /// Decidido pela pasta (<see cref="AtualizarD3d8ViaD3D9"/>) e guardado no manifesto.
+    /// </summary>
+    public bool D3d8ViaD3D9 { get; set; }
+
+    /// <summary>Olha a pasta do renderizador e decide <see cref="D3d8ViaD3D9"/>. Devolve o marcador achado.</summary>
+    public string? AtualizarD3d8ViaD3D9()
+    {
+        string? marca = null;
+        if (Api == GraphicsApi.D3D8 && RealExePath is not null)
+            marca = D3d8to9Wrapper.Qual(RendererFolder ?? ExeFolder);
+        D3d8ViaD3D9 = marca is not null;
+        return marca;
+    }
 
     /// <summary>
     /// Nome do dgVoodoo quando o nome original já é de outro wrapper (DxWrapper) e os

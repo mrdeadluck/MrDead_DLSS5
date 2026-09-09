@@ -460,7 +460,22 @@ public static class InstallPlanBuilder
         if (route == InstallRoute.C)
         {
             var renderer = profile.RendererFolder ?? exe;
-            var wrapperSrc = profile.Api == GraphicsApi.D3D8 ? kit.DgVoodooD3D8X86 : kit.DgVoodooD3D9X86;
+
+            // DirectX 8 com o D3D8.dll ocupado por uma mod que converte para DirectX 9 e
+            // prefere um d3d9.dll local (Silent Hill 2 Enhanced Edition): a mod fica, e o
+            // dgVoodoo entra como D3D9.dll ao lado dela. Ver D3d8to9Wrapper.
+            var marcaD3d8to9 = profile.AtualizarD3d8ViaD3D9();
+            if (marcaD3d8to9 is not null)
+            {
+                plan.Warnings.Add(
+                    $"O D3D8.dll desta pasta é {D3d8to9Wrapper.Descrever(marcaD3d8to9)}. Ele FICA: converte o " +
+                    "jogo para DirectX 9 (d3d8to9) e carrega de preferência um d3d9.dll da própria pasta, " +
+                    "então o dgVoodoo entra como D3D9.dll ao lado dele — a mod continua inteira e o dgVoodoo " +
+                    "traduz o DirectX 9 dela para D3D11, onde o ReShade e o Feeder entram. Se a mod estiver " +
+                    "com d3d8to9 = 0 no d3d8.ini, volte para 1 (é o padrão): sem isso o D3D9.dll não é usado.");
+            }
+            var wrapperSrc = profile.DgVoodooWrapperName.Equals("D3D8.dll", StringComparison.OrdinalIgnoreCase)
+                ? kit.DgVoodooD3D8X86 : kit.DgVoodooD3D9X86;
 
             // O dgVoodoo só funciona com ESTE nome de arquivo — e ele pode já estar ocupado
             // por outro wrapper que o usuário pôs ali de propósito. Foi o Dead Space 2: o

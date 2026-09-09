@@ -514,6 +514,7 @@ public sealed partial class MainForm
         if (_cboArch.SelectedItem is PeArchitecture a) _profile.Architecture = a;
         if (_cboApi.SelectedItem is GraphicsApi g) _profile.Api = g;
         if (!string.IsNullOrWhiteSpace(_txtRenderer.Text)) _profile.RendererFolder = _txtRenderer.Text;
+        _profile.AtualizarD3d8ViaD3D9();
         _profile.MvProvider = _options.MvProvider;
         if (_cboEngine.SelectedIndex >= 0 && _cboEngine.SelectedIndex < _motoresNaTela.Count)
             _profile.Engine = _motoresNaTela[_cboEngine.SelectedIndex];
@@ -602,7 +603,9 @@ public sealed partial class MainForm
                 ? $"✔ Caminho A (motor ShortFuse) — 64-bit: ReShade ({_profile.ReShadeHookName}) + {ShortFuseDlss.Addon} na pasta do executável, {_profile.PassCount} passada(s) de Neural Rendering."
                 : $"✔ Caminho A — 64-bit: ReShade ({_profile.ReShadeHookName}) + addons direto na pasta do executável.",
             InstallRoute.B => "✔ Caminho B — 32-bit D3D11: addon32 na raiz e o resto do Feeder dentro de host64\\." + ConsumidorNoRotulo(),
-            InstallRoute.C => $"✔ Caminho C — 32-bit {_profile.Api}: dgVoodoo2 ({_profile.DgVoodooWrapperName}) traduz para D3D11, mais o layout do caminho B." + ConsumidorNoRotulo(),
+            InstallRoute.C => $"✔ Caminho C — 32-bit {_profile.Api}: dgVoodoo2 ({_profile.DgVoodooWrapperName}) traduz para D3D11, mais o layout do caminho B."
+                + (_profile.D3d8ViaD3D9 ? " O D3D8.dll da pasta é a mod (d3d8to9) e fica: o dgVoodoo entra como D3D9.dll atrás dela." : string.Empty)
+                + ConsumidorNoRotulo(),
             _ => "✖ Sem caminho suportado para esta combinação. " +
                  (_profile.Architecture == PeArchitecture.X86 && _profile.Api is GraphicsApi.Vulkan or GraphicsApi.OpenGL
                      ? $"Jogo 32-bit em {_profile.Api} não funciona (o addon32 só aceita D3D11): troque para D3D9 ou D3D11 se o jogo permitir."

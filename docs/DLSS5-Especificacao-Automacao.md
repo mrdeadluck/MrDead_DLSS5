@@ -401,6 +401,11 @@ Estado final HL2: dgVoodoo em `bin\`, ReShade `dxgi.dll` na raiz, overlays desli
 - Atingido: watermark do dgVoodoo visível. Pendente: reinstalar ReShade em D3D10/11/12, provedor MV.
 - Aviso: medidor de VRAM do menu do jogo lê o valor virtual do dgVoodoo (1 GB).
 
+### Silent Hill 2 Enhanced Edition — x86, D3D8 atrás da mod (d3d8to9)
+- O `d3d8.dll` da pasta é o módulo **Silent Hill 2 Enhancements** — a própria mod (60 fps, widescreen, texturas), não um wrapper sobrando. Com `d3d8to9 = 1` (padrão, exigido pelos shaders dela) ele converte o jogo para DirectX 9 e, ao criar o Direct3D 9, tenta nesta ordem: 9On12 (se ligado no ini), o **`d3d9.dll` da própria pasta** (`GetLocalDirect3DCreate9`) e só então o do System32.
+- Logo o dgVoodoo **não** entra como `D3D8.dll` (sobrescrever tira a mod; foi o que a instalação antiga fazia, e a checagem de ocupante passou a recusar): entra como **`D3D9.dll`** ao lado (`GameProfile.D3d8ViaD3D9`, decidido pelo marcador `Silent Hill 2 Enhancements` ou `d3d8to9` no `D3D8.dll`; ver `D3d8to9Wrapper`). O `dgVoodoo.conf` sai no perfil padrão, não no "Legado": a mod quer a resolução do monitor. O resto é a rota C normal: dgVoodoo → D3D11 → `dxgi.dll` (ReShade x86) → Feeder addon32 + `host64\`.
+- O manifesto guarda a decisão; verificação (item 5), isolamento (só desliga o `D3D8.dll`/`D3D9.dll` que tenha o marcador `dgVoodoo`) e desinstalação olham o `D3D9.dll`.
+
 ### Castlevania: Lords of Shadow Ultimate Edition — x86, D3D9
 - Caminho C, **variante simples**: exe, dgVoodoo e ReShade na mesma pasta. Funcionou de primeira seguindo a sequência padrão — primeira validação limpa do Caminho C do início ao fim.
 - AA do jogo é **FXAA** (pós-processo): não conflita com o Generic Depth, não precisa desligar. A regra "desligar AA" vale para MSAA/SSAA, não para FXAA/SMAA.
@@ -456,6 +461,7 @@ Estado final HL2: dgVoodoo em `bin\`, ReShade `dxgi.dll` na raiz, overlays desli
 - `VRAM=256MB` de fábrica causa crash de memória.
 - Watermark é o único teste confiável de que está ativo.
 - Versão 1.x é outro produto (Glide). Teste: o zip tem pasta `MS`?
+- Nome ocupado: `D3D9.dll` do DxWrapper → encadeia por `RealDllPath` (6.x, Dead Space 2); `D3D8.dll` de uma mod com d3d8to9 (SH2 Enhanced Edition) → o dgVoodoo entra como `D3D9.dll` atrás dela; qualquer outro wrapper com o nome → o plano recusa, porque sobrescrever é apostar com o jogo.
 
 ### 8.8 Overlays
 - Injetam na criação do processo: `gameoverlayrenderer.dll` (Steam), `nvspcap.dll` (NVIDIA ShadowPlay), `NvCamera32.dll` (Ansel), `DiscordHook`, `RTSSHooks`.

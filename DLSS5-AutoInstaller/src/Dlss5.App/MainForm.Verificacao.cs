@@ -956,7 +956,7 @@ public sealed partial class MainForm
         var (rotulo, valor) = DgVoodooConfigurator.Placas[idx];
         try
         {
-            var perfil = DgVoodooConfigurator.ProfileFor(_profile!.Api);
+            var perfil = DgVoodooConfigurator.ProfileFor(_profile!);
             File.WriteAllText(conf, DgVoodooConfigurator.Patch(File.ReadAllText(conf), perfil, valor, _chkTnL.Checked));
             _diario.Info($"dgVoodoo.conf: VideoCard={valor}, T&L={_chkTnL.Checked}");
             Status($"dgVoodoo agora se apresenta como {rotulo}. Abra o jogo e veja se muda.");

@@ -70,11 +70,13 @@ public sealed class Isolamento
                 Path.Combine(rendererFolder, DxWrapperChain.NomeEncadeado("D3D8.dll")),
                 Path.Combine(rendererFolder, DxWrapperChain.NomeEncadeado("D3D9.dll")),
             },
+            // Só o que é dgVoodoo de fato: num jogo DirectX 8 atrás do SH2 Enhancements o
+            // D3D8.dll é a mod, e desligá-la junto faria o teste concluir errado.
             EstadoIsolamento.SemDgVoodoo => new[]
             {
                 Path.Combine(rendererFolder, "D3D8.dll"),
                 Path.Combine(rendererFolder, "D3D9.dll"),
-            },
+            }.Where(EhDgVoodoo).ToArray(),
             // TODOS os nomes com que o ReShade pode ter sido instalado. Enquanto isto
             // listava só dxgi.dll e opengl32.dll, num jogo instalado como d3d11.dll (MGS V)
             // o teste renomeava NADA e mesmo assim se apresentava como "ReShade desligado" —
@@ -115,6 +117,13 @@ public sealed class Isolamento
             },
             _ => Array.Empty<string>(),
         };
+
+    private static bool EhDgVoodoo(string caminho)
+    {
+        if (!File.Exists(caminho)) return false;
+        try { return ApiDetector.ScanForMarkers(caminho, new[] { "dgVoodoo" }, 32L * 1024 * 1024).Count > 0; }
+        catch { return false; }
+    }
 
     /// <summary>
     /// Deixa a pasta no estado pedido: religa tudo e depois desliga só o suspeito da vez.
