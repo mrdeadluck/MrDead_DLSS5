@@ -838,3 +838,180 @@ public class MotorShortFuseTests
         Assert.DoesNotContain(passos, s => s.Title.Contains("DESLIGAR o DLSS", StringComparison.Ordinal));
     }
 }
+
+public class ConsumidoresNoHost64Tests
+{
+    private static InstallOptions OpcoesX86(Cenario c)
+    {
+        var o = c.Opcoes();
+        o.MvProvider = MvProvider.Launchpad; // o kit do cenário só tem o Launchpad
+        return o;
+    }
+
+    private static GameProfile PerfilX86(Cenario c, NeuralEngine motor, int passes)
+    {
+        var p = c.Perfil(PeArchitecture.X86, GraphicsApi.D3D11);
+        p.Engine = motor;
+        p.PassCount = passes;
+        return p;
+    }
+
+    private static void KitComOptiScaler(Cenario c)
+    {
+        var pasta = Path.Combine(c.Kit, "OptiScaler-DLSSNR");
+        Directory.CreateDirectory(Path.Combine(pasta, "OptiScaler", "D3D12_OptiScaler"));
+        File.WriteAllText(Path.Combine(pasta, OptiScalerNr.Dll), "MZ OptiScaler.ini");
+        File.WriteAllText(Path.Combine(pasta, OptiScalerNr.Shim), "MZ shim");
+        File.WriteAllText(Path.Combine(pasta, OptiScalerNr.Ini), "[Upscalers]\r\nDx12Upscaler=auto\r\n\r\n[DlssNr]\r\nToggleKey=auto\r\n; comentário\r\nEnabled=auto\r\n\r\n[Log]\r\nLogToFile=true\r\nLogLevel=2\r\n");
+        File.WriteAllText(Path.Combine(pasta, "OptiScaler", "D3D12_OptiScaler", OptiScalerNr.AgilityDll), "MZ agility");
+        var inv = KitResolver.Resolve(c.Kit);
+        c.Inventario.OptiScalerNrDll = inv.OptiScalerNrDll;
+        c.Inventario.OptiScalerNrIni = inv.OptiScalerNrIni;
+        c.Inventario.OptiScalerNrShim = inv.OptiScalerNrShim;
+        c.Inventario.OptiScalerNrAgility = inv.OptiScalerNrAgility;
+        Assert.True(c.Inventario.HasOptiScalerNr);
+        Assert.NotNull(c.Inventario.OptiScalerNrAgility);
+    }
+
+    [Fact]
+    public void PerfilSoAceitaConsumidorAlternativoEm32Bit()
+    {
+        using var c = new Cenario();
+        var x86 = PerfilX86(c, NeuralEngine.OptiScalerNr, 3);
+        Assert.True(x86.UsesOptiScalerNr);
+        Assert.True(x86.NeedsFeeder);
+        Assert.Equal(NeuralEngine.OptiScalerNr, x86.MotorEfetivo);
+        var x64 = c.Perfil(PeArchitecture.X64, GraphicsApi.D3D11);
+        x64.Engine = NeuralEngine.OptiScalerNr;
+        Assert.False(x64.UsesOptiScalerNr);
+        Assert.Equal(NeuralEngine.RenodxDlss5Feeder, x64.MotorEfetivo);
+        Assert.Equal(new[] { NeuralEngine.RenodxDlss5Feeder, NeuralEngine.OptiScalerNr, NeuralEngine.DeepFriedChicken }, Motores.Disponiveis(PeArchitecture.X86));
+        Assert.Equal(5, Motores.PassesMax(NeuralEngine.OptiScalerNr));
+        Assert.Equal(30, Motores.PassesMax(NeuralEngine.DeepFriedChicken));
+        Assert.Equal(5, Motores.Limitar(NeuralEngine.OptiScalerNr, 9));
+    }
+
+    [Fact]
+    public void KitSemOFork_BloqueiaSoQuandoEleEhOConsumidor()
+    {
+        using var c = new Cenario();
+        var plano = InstallPlanBuilder.Build(PerfilX86(c, NeuralEngine.OptiScalerNr, 2), c.Inventario, OpcoesX86(c));
+        Assert.Contains(plano.Blockers, b => b.Contains(OptiScalerNr.Dll, StringComparison.Ordinal));
+        var krish = InstallPlanBuilder.Build(PerfilX86(c, NeuralEngine.RenodxDlss5Feeder, 1), c.Inventario, OpcoesX86(c));
+        Assert.Empty(krish.Blockers);
+        // Deep Fried Chicken sem os três arquivos: bloqueio que diz onde buscar.
+        var dfc = InstallPlanBuilder.Build(PerfilX86(c, NeuralEngine.DeepFriedChicken, 2), c.Inventario, OpcoesX86(c));
+        Assert.Contains(dfc.Blockers, b => b.Contains("Discord", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void PlanoOptiScaler_EntraComoWinmmNoHost64ETiraOKrish()
+    {
+        using var c = new Cenario();
+        KitComOptiScaler(c);
+        var host64 = Path.Combine(c.Jogo, "host64");
+        Directory.CreateDirectory(host64);
+        File.WriteAllText(Path.Combine(host64, "renodx-dlss5.addon64"), "krish");
+        File.WriteAllText(Path.Combine(host64, "renodx-dlss5-4.55.addon64"), "krish antigo");
+
+        var plano = InstallPlanBuilder.Build(PerfilX86(c, NeuralEngine.OptiScalerNr, 3), c.Inventario, OpcoesX86(c));
+        Assert.Empty(plano.Blockers);
+        var copias = plano.Actions.Where(a => a.Kind == PlanActionKind.CopyFile)
+            .Select(a => Path.GetRelativePath(c.Jogo, a.TargetPath!).Replace('\\', '/')).ToList();
+        Assert.Contains("host64/winmm.dll", copias);
+        Assert.Contains("host64/nvngx.dll_dlssnr.dll", copias);
+        Assert.Contains("host64/OptiScaler/D3D12_OptiScaler/D3D12Core.dll", copias);
+        Assert.Contains("host64/nvngx_dlssnr.dll", copias);
+        Assert.DoesNotContain("host64/renodx-dlss5.addon64", copias);
+        var gerados = plano.Actions.Where(a => a.Kind == PlanActionKind.WriteGeneratedFile).Select(a => Path.GetFileName(a.TargetPath!)).ToList();
+        Assert.Contains(OptiScalerNr.Ini, gerados);
+        var removidos = plano.Actions.Where(a => a.Kind == PlanActionKind.DeleteForbiddenFile).Select(a => Path.GetFileName(a.TargetPath!)).ToList();
+        Assert.Contains("renodx-dlss5.addon64", removidos);
+        Assert.Contains("renodx-dlss5-4.55.addon64", removidos);
+        Assert.Contains(plano.Warnings, w => w.Contains("3 passada", StringComparison.Ordinal));
+
+        var m = InstallManifest.Para(plano, c.Inventario);
+        Assert.Equal(nameof(NeuralEngine.OptiScalerNr), m.Engine);
+        Assert.Equal(3, m.PerfilGravado()!.PassCount);
+    }
+
+    [Fact]
+    public void PlanoKrish_TiraOOptiScalerDoHost64SoSeForEle()
+    {
+        using var c = new Cenario();
+        var host64 = Path.Combine(c.Jogo, "host64");
+        Directory.CreateDirectory(host64);
+        File.WriteAllText(Path.Combine(host64, "winmm.dll"), "MZ ... OptiScaler.ini ...");
+        File.WriteAllText(Path.Combine(host64, "version.dll"), "MZ outra coisa");
+        File.WriteAllText(Path.Combine(host64, OptiScalerNr.Ini), "[DlssNr]\r\nEnabled=true\r\n");
+        File.WriteAllText(Path.Combine(host64, DeepFriedChicken.Addon), "chicken");
+        var plano = InstallPlanBuilder.Build(PerfilX86(c, NeuralEngine.RenodxDlss5Feeder, 1), c.Inventario, OpcoesX86(c));
+        var removidos = plano.Actions.Where(a => a.Kind == PlanActionKind.DeleteForbiddenFile).Select(a => Path.GetFileName(a.TargetPath!)).ToList();
+        Assert.Contains("winmm.dll", removidos);
+        Assert.DoesNotContain("version.dll", removidos);
+        Assert.Contains(OptiScalerNr.Ini, removidos);
+        Assert.Contains(DeepFriedChicken.Addon, removidos);
+    }
+
+    [Fact]
+    public void IniDoOptiScalerSaiComOQueOFeedPrecisa()
+    {
+        var original = "[Upscalers]\r\n; Select Upscaler for Dx12 games\r\nDx12Upscaler=auto\r\n\r\n[Inputs]\r\nEnableXeSSInputs=auto\r\n\r\n[DlssNr]\r\nToggleKey=auto\r\n; DLSS 5 Neural Rendering\r\nEnabled=auto\r\n\r\nTransferStrength=auto\r\n\r\n[Log]\r\nLogToFile=true\r\nLogLevel=2\r\n";
+        var ini = OptiScalerNr.GerarIni(original, 4);
+        Assert.Equal("true", IniTexto.Ler(ini, "DlssNr", "Enabled"));
+        Assert.Equal("4", IniTexto.Ler(ini, "DlssNr", "Passes"));
+        Assert.Equal("false", IniTexto.Ler(ini, "DlssNr", "ScanExposure"));
+        Assert.Equal("dlss", IniTexto.Ler(ini, "Upscalers", "Dx12Upscaler"));
+        Assert.Equal("false", IniTexto.Ler(ini, "Spoofing", "Dxgi"));
+        Assert.Equal("false", IniTexto.Ler(ini, "Inputs", "EnableXeSSInputs"));
+        Assert.Equal("false", IniTexto.Ler(ini, "Hotfix", "CheckForUpdate"));
+        Assert.Equal("auto", IniTexto.Ler(ini, "DlssNr", "TransferStrength"));   // o resto fica como estava
+        Assert.True(OptiScalerNr.Ligado(ini));
+        Assert.Equal(4, OptiScalerNr.LerPassadas(ini));
+        Assert.Equal(5, OptiScalerNr.LerPassadas(OptiScalerNr.GerarIni(original, 50)));
+        // Chave gravada dentro da seção certa, não na primeira "Enabled=" que aparecer.
+        int secao = ini.IndexOf("[DlssNr]", StringComparison.Ordinal);
+        int enabledTrue = ini.IndexOf("Enabled=true", StringComparison.Ordinal);
+        Assert.True(enabledTrue > secao);
+        Assert.False(OptiScalerNr.Ligado(original));
+    }
+
+    [Fact]
+    public void CfgDoChickenGanhaLayersEMantemORestante()
+    {
+        var cfg = DeepFriedChicken.GerarCfg("arm=1\r\nenabled=1\r\nlayers=1\r\nneural_work_percent=100\r\n", 6);
+        Assert.Equal(6, DeepFriedChicken.LerPassadas(cfg));
+        Assert.Equal("100", DeepFriedChicken.LerChave(cfg, "neural_work_percent"));
+        Assert.True(DeepFriedChicken.Armado(cfg));
+        var vazio = DeepFriedChicken.GerarCfg("", 2);
+        Assert.Equal(2, DeepFriedChicken.LerPassadas(vazio));
+        Assert.Equal("1", DeepFriedChicken.LerChave(vazio, "enabled"));
+        Assert.False(DeepFriedChicken.Armado("arm=0\r\nlayers=2\r\n"));
+        Assert.Equal(30, DeepFriedChicken.LerPassadas(DeepFriedChicken.GerarCfg("", 99)));
+    }
+
+    [Fact]
+    public void LeituraDoTesteDoHost()
+    {
+        var ok = HostTest.Ler("12:00:00.000  [host] --test: 1920x1080 synthetic DLAA\n12:00:09.000  [host] --test finished: 300/300 evaluates succeeded\n");
+        Assert.True(ok.Passou);
+        Assert.Contains("300/300", ok.Titulo);
+        var driver = HostTest.Ler("[host] evaluate raised 0xC0000005 (reading address FFFFFFFFFFFFFFFF) in D3D12Core.dll\n[host] --test finished: 0/300 evaluates succeeded\n");
+        Assert.False(driver.Passou);
+        Assert.True(driver.FalhaNoDriver);
+        Assert.Contains("616.64", driver.Texto);
+        var amd = HostTest.Ler("NGX is NVIDIA's runtime and this is not an NVIDIA GPU\n");
+        Assert.True(amd.NaoEhNvidia);
+        Assert.Null(HostTest.Ler("").Sucessos);
+    }
+
+    [Fact]
+    public void PassosManuaisDoConsumidor()
+    {
+        using var c = new Cenario();
+        var opti = ManualSteps.For(PerfilX86(c, NeuralEngine.OptiScalerNr, 2), OpcoesX86(c));
+        Assert.Contains(opti, s => s.Title.Contains("OptiScaler", StringComparison.Ordinal) && s.Detail.Contains("Insert", StringComparison.Ordinal));
+        var dfc = ManualSteps.For(PerfilX86(c, NeuralEngine.DeepFriedChicken, 2), OpcoesX86(c));
+        Assert.Contains(dfc, s => s.Title.Contains("Deep Fried Chicken", StringComparison.Ordinal) && s.Detail.Contains("Defender", StringComparison.Ordinal));
+    }
+}

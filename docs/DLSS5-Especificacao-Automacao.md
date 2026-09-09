@@ -69,11 +69,11 @@ Regra derivada: **32 bits obriga D3D11.** Se o jogo x86 oferece Vulkan e D3D9, e
 
 | Arquivo | Tamanho | Arch | Local |
 |---|---|---|---|
-| `dlss5-feed.addon32` | 161.792 B | x86 | pasta do exe (única peça do Feeder fora de `host64\`). 0.13.1: D3D10 nativo. |
-| `dlss5-feed-host64.exe` | 118.784 B | x64 | `host64\` — protocolo v7; **precisa ser do mesmo build do addon32** |
+| `dlss5-feed.addon32` | 176.640 B (0.15.1) | x86 | pasta do exe (única peça do Feeder fora de `host64\`). 0.13.1: D3D10 nativo. |
+| `dlss5-feed-host64.exe` | 146.944 B (0.15.1) | x64 | `host64\` — protocolo v9; **precisa ser do mesmo build do addon32**. `--test` = 300 avaliações sem jogo (botão "Testar o host64…") |
 | `dxgi.dll` (ReShade x86) | 4.398.080 B | x86 | pasta do exe |
 | `dxgi.dll` (ReShade x64) | 5.592.064 B | x64 | `host64\` |
-| `renodx-dlss5.addon64` | | x64 | `host64\` (**não** na raiz) |
+| `renodx-dlss5.addon64` | | x64 | `host64\` (**não** na raiz) — consumidor neural padrão, 1 passada. **Ou, no lugar dele** (nunca dois): `winmm.dll` (= `OptiScaler.dll` do fork DLSS-NR) + `nvngx.dll_dlssnr.dll` + `OptiScaler\D3D12_OptiScaler\D3D12Core.dll` + `OptiScaler.ini` gerado (1–5 passadas), ou `deep-fried-chicken.addon64` + `-nvngx.dll` + `.cfg` gerado (1–30). Ver 6.5. |
 | `nvngx_dlssnr.dll` | | x64 | `host64\` (**não** na raiz) |
 | `nvngx_dlss.dll` | | x64 | `host64\` (**não** na raiz) |
 
@@ -332,6 +332,39 @@ Krish (`DLSS5 Generic`, `feature 18 evaluation succeeded`) não existe neste mot
 Não validado em jogo por este projeto: o motor entrou pelo que o binário declara e pelo que a
 comunidade mostra. Se um jogo cair, o primeiro teste é Pass Count 1; o segundo é voltar ao Krish.
 
+### 6.5 Passadas múltiplas em 32-bit: consumidor neural dentro de `host64\`
+
+O addon do ShortFuse é 64-bit e vive no processo do jogo, logo não existe em caminho B/C. Em
+32-bit o Neural Rendering acontece no `host64\dlss5-feed-host64.exe`, e o Feeder 0.15.0+
+reconhece **três consumidores** ali (README: "OptiScaler is 64-bit only, so a 32-bit game runs
+it inside host64\"; "exactly one may be present, or one of them goes inert while every check
+still looks fine"). O perfil guarda `Engine` + `PassCount`; `MotorEfetivo` ignora ShortFuse em
+x86 e OptiScaler/DFC em x64 (cai no Krish).
+
+| Motor (`NeuralEngine`) | Arquivos em `host64\` | Passadas | Config gerada |
+|---|---|---|---|
+| `RenodxDlss5Feeder` (Krish) | `renodx-dlss5.addon64` | 1 | — |
+| `OptiScalerNr` (fork Dagherbou v0.2.0-patch1) | `winmm.dll` (cópia de `OptiScaler.dll`: proxy que o host já importa), `nvngx.dll_dlssnr.dll` (shim que o fork carrega para a passada neural), `OptiScaler\D3D12_OptiScaler\D3D12Core.dll` (Agility SDK próprio), `OptiScaler.ini` | 1–5 | a partir do ini do kit: `[Upscalers] Dx12Upscaler=dlss`, `Dx11Upscaler=dlss_12`, `[DlssNr] Enabled=true`, `Passes=N`, `[Log] LogToFile=true`. Menu do OptiScaler na tecla Insert (janela do host) |
+| `DeepFriedChicken` 1.4.8 | `deep-fried-chicken.addon64`, `deep-fried-chicken-nvngx.dll`, `deep-fried-chicken.cfg` | 1–30 | a partir do cfg do kit: `enabled=1`, `arm=1`, `layers=N` |
+
+Plano (32-bit): o bloco `host64\` copia o consumidor escolhido e agenda `DeleteForbiddenFile`
+(com backup) para os arquivos dos outros dois — inclusive `renodx-dlss5-*.addon64` de qualquer
+nome, que o Feeder também carregaria. O `KitResolver` acha `OptiScaler.dll` pelo marcador
+`OptiScaler.ini` na mesma pasta (o `winmm.dll` de um jogo pode ser outra coisa; a remoção só
+apaga o `winmm.dll` que contém o texto `OptiScaler.ini`) e os três do DFC pelo nome exato. Kit
+sem o fork → bloqueio "Falta no kit: OptiScaler.dll…"; sem o DFC → bloqueio apontando o
+Discord. Em 64-bit nenhum dos dois é oferecido (lá o x2+ é o ShortFuse).
+
+Verificação: item 25 lê `host64\OptiScaler.log` (`min GPU architecture 0x0` = o OptiScaler
+respondeu à sondagem do DLSS, `nvngx.dll_dlssnr.dll` carregado após o primeiro evaluate =
+passada neural rodou) ou o log do DFC; item 26 lê `host64\dlss5-feed-host.log` à procura de
+`evaluate raised 0xC0000005 in D3D12Core.dll` — o defeito **driver 616.64+ × renodx-dlss5
+4.6/4.7** medido pelo autor do Feeder (0/300; 4.55, DFC e OptiScaler 300/300). O botão
+"Testar o host64…" roda `dlss5-feed-host64.exe --test` (DLAA sintético + NR, 300 avaliações,
+~15 s, sem jogo) e interpreta `--test finished: N/300 evaluates succeeded`.
+
+Não validado em jogo por este projeto (sem GPU no ambiente): se cair, `Passes=1`, depois Krish.
+
 ## 7. O que fizemos em cada jogo
 
 ### RE2 Remake — x64, D3D12, sem DLSS nativo
@@ -476,6 +509,9 @@ Estado final HL2: dgVoodoo em `bin\`, ReShade `dxgi.dll` na raiz, overlays desli
 | 14 | Painel Feed: `Feed: built`, `Host: running`, `Motion vectors → <nome>` | aba Add-ons | Ver diagnóstico |
 | 15 | `dlss5-feed.log`: `feature ready … DLAA`, `frame N delivered` | arquivo | — |
 | 16 | (x64) `NGX hooks: creates 1`, `Successful NR frames` > 0 | painel RenoDX | STANDBY: esperar 10 s (warm-up frame 180) |
+| 24 | (ShortFuse) Pass Count do `ReShade.ini` = o do perfil | `[RENODX-DLSS] DirectNeuralRenderingPassCount` | Instalar de novo |
+| 25 | (32-bit, OptiScaler/DFC) consumidor alternativo rodou em `host64\` | `host64\OptiScaler.log`: `min GPU architecture 0x0` + `nvngx.dll_dlssnr.dll`; DFC: log próprio | dois consumidores na pasta / `Enabled=false` / Defender apagou o DFC |
+| 26 | (32-bit) nenhuma falha dentro do NGX do driver | `host64\dlss5-feed-host.log` sem `evaluate raised 0xC0000005 in D3D12Core.dll` | driver 616.64+ com addon 4.6/4.7: usar 4.55, DFC ou OptiScaler; ou driver 616.56. "Testar o host64…" reproduz em 15 s |
 
 ---
 
@@ -649,9 +685,9 @@ Get-FileHash $dll -Algorithm SHA256
 
 ---
 
-## 14. Chaves úteis do `dlss5-feed.cfg` (Feeder 0.13.1-beta.1)
+## 14. Chaves úteis do `dlss5-feed.cfg` (Feeder 0.15.1)
 
-O kit traz o **dlss5-feed 0.13.1-beta.1** (desde 04/09; antes 0.12.0, guardado em `versoes-anteriores/feeder-0.12.0/`) (`DLSS 5 Files/feeder-versao.txt` registra a release e os
+O kit traz o **dlss5-feed 0.15.1** (desde 09/09; 0.13.1-beta.1 de 04/09 a 09/09; antes 0.12.0, guardado em `versoes-anteriores/feeder-0.12.0/`) (`DLSS 5 Files/feeder-versao.txt` registra a release e os
 hashes; `feeder-desejado.txt` é o que se muda para trocar). Até 02/09 o kit trazia o 0.5.0,
 que derrubava a sessão inteira quando o jogo recriava a swapchain — trocar resolução, tela
 cheia ou qualidade dentro do jogo — e criava a feature de novo bem quando o addon do RenoDX
@@ -679,6 +715,7 @@ pré-processador **por efeito** — na seção `[DLSS5_Feed.fx]` do `ReShadePres
 | `host_window` | 0 | jogos 32-bit: 0 esconde a janela do auxiliar (o painel é projetado no jogo); 1 dá janela própria |
 | `async_home` | 1 | 32-bit: handoff em pipeline (tira o teto de ~35 fps); 0 = mesmo frame |
 | `enabled` | 1 | 0.13.0+: 0 desliga tudo de verdade (antes só parava o trabalho neural) |
+| `hdr_bridge` | -1 | 0.15.1: em swapchain HDR10 (R10G10B10A2 PQ) decodifica para linear FP16 antes do consumidor e volta a PQ depois (os brilhos estouravam); 0 desliga, 1 força |
 
 ---
 

@@ -686,7 +686,7 @@ public static class CheckpointVerifier
             feedStatus, profile.UsesShortFuse, profile.PassCount));
 
         // 14/15/16 — dependem do jogo rodando
-        r.AddRange(VerifyFeedLogs(exe, route, profile.NeedsFeeder));
+        r.AddRange(VerifyFeedLogs(exe, route, profile.NeedsFeeder, profile.MotorEfetivo, profile.PassCount));
 
         return r;
     }
@@ -1012,7 +1012,8 @@ public static class CheckpointVerifier
     }
 
     private static IEnumerable<CheckResult> VerifyFeedLogs(
-        string exeFolder, InstallRoute route, bool needsFeeder = true)
+        string exeFolder, InstallRoute route, bool needsFeeder = true,
+        NeuralEngine consumidor = NeuralEngine.RenodxDlss5Feeder, int passes = 1)
     {
         if (!needsFeeder)
         {
@@ -1108,6 +1109,66 @@ public static class CheckpointVerifier
                 File.Exists(hostLog) ? "host64\\dlss5-feed-host.log presente." : "Log do host ainda não existe.",
                 null);
 
+            // 26 — a falha que o projeto do Feeder mediu: addon do Krish 4.6/4.7 com driver 616.64+
+            // faz cada avaliação faltar dentro do NGX do driver. O host diz exatamente isso.
+            string hostLogTexto = "";
+            try { if (File.Exists(hostLog)) hostLogTexto = ReadShared(hostLog); } catch { }
+            if (hostLogTexto.Contains("evaluate raised 0xC0000005", StringComparison.OrdinalIgnoreCase))
+            {
+                yield return new CheckResult(26, "Avaliação faltando dentro do NGX do driver (host64)", CheckStatus.Fail,
+                    "host64\\dlss5-feed-host.log tem \"evaluate raised 0xC0000005\": a avaliação do Neural Rendering falha " +
+                    "dentro do NGX do próprio driver. O projeto do Feeder mediu 0/300 com o renodx-dlss5 4.6/4.7 em driver " +
+                    "NVIDIA 616.64 ou mais novo; com 4.55, Deep Fried Chicken ou OptiScaler DLSS-NR passa 300/300.",
+                    "Qualquer uma: motor OptiScaler DLSS-NR ou Deep Fried Chicken na tela de detecção; ou o addon 4.55 " +
+                    "(versoes-anteriores do kit) copiado por cima do renodx-dlss5.addon64 do kit e Instalar de novo; ou driver 616.56. " +
+                    "O botão \"Testar o host64\" confirma em 15 s, sem abrir jogo.");
+            }
+
+            // 25 — consumidor alternativo do host64: arquivos, configuração e passadas.
+            if (consumidor == NeuralEngine.OptiScalerNr)
+            {
+                var host = Path.Combine(exeFolder, "host64");
+                var proxy = Path.Combine(host, OptiScalerNr.Proxy);
+                var shim = Path.Combine(host, OptiScalerNr.Shim);
+                var ini = Path.Combine(host, OptiScalerNr.Ini);
+                string iniTexto = "";
+                try { if (File.Exists(ini)) iniTexto = ReadShared(ini); } catch { }
+                bool proxyOk = File.Exists(proxy) && Propriedade.ContemTexto(proxy, OptiScalerNr.Marca);
+                bool ligado = OptiScalerNr.Ligado(iniTexto);
+                var passadas = OptiScalerNr.LerPassadas(iniTexto);
+                bool logou = File.Exists(Path.Combine(host, OptiScalerNr.Log));
+                bool tudo = proxyOk && File.Exists(shim) && ligado && passadas == passes;
+                yield return new CheckResult(25, "OptiScaler DLSS-NR no host64",
+                    tudo ? (logou ? CheckStatus.Pass : CheckStatus.Warning) : CheckStatus.Fail,
+                    !proxyOk ? $"host64\\{OptiScalerNr.Proxy} não é o OptiScaler (ou não existe)."
+                    : !File.Exists(shim) ? $"host64\\{OptiScalerNr.Shim} não existe: o modelo recusa o chamador sem ele."
+                    : !ligado ? "host64\\OptiScaler.ini está com [DlssNr] Enabled diferente de true: o OptiScaler só faz upscaling, sem passada neural."
+                    : passadas != passes ? $"host64\\OptiScaler.ini pede {passadas?.ToString() ?? "(sem Passes)"} passada(s); a detecção pede {passes}."
+                    : logou ? $"winmm.dll é o OptiScaler, encaminhador presente, [DlssNr] Enabled=true, Passes={passes}, e o host64\\OptiScaler.log já existe."
+                    : $"Arquivos e ini certos (Passes={passes}); o host64\\OptiScaler.log ainda não existe — o host ainda não rodou com ele.",
+                    tudo ? (logou ? null : "Abra o jogo, jogue alguns segundos e verifique de novo.")
+                         : "Instale de novo (Atualizar) com o motor OptiScaler DLSS-NR escolhido, ou ajuste no menu do OptiScaler (Insert, na janela do host).");
+            }
+            else if (consumidor == NeuralEngine.DeepFriedChicken)
+            {
+                var host = Path.Combine(exeFolder, "host64");
+                var addon = Path.Combine(host, DeepFriedChicken.Addon);
+                var cfg = Path.Combine(host, DeepFriedChicken.Cfg);
+                string cfgTexto = "";
+                try { if (File.Exists(cfg)) cfgTexto = ReadShared(cfg); } catch { }
+                var passadas = DeepFriedChicken.LerPassadas(cfgTexto);
+                bool armado = DeepFriedChicken.Armado(cfgTexto);
+                bool tudo = File.Exists(addon) && File.Exists(Path.Combine(host, DeepFriedChicken.Nvngx)) && armado && passadas == passes;
+                yield return new CheckResult(25, "Deep Fried Chicken no host64",
+                    tudo ? CheckStatus.Pass : CheckStatus.Fail,
+                    !File.Exists(addon) ? $"host64\\{DeepFriedChicken.Addon} não existe — o Windows Defender costuma apagá-lo logo depois da cópia."
+                    : !armado ? "host64\\deep-fried-chicken.cfg está com arm=0: o Chicken não instala gancho nenhum."
+                    : passadas != passes ? $"host64\\deep-fried-chicken.cfg pede layers={passadas?.ToString() ?? "(sem layers)"}; a detecção pede {passes}."
+                    : $"Addon e ponte NGX no host64, arm=1, layers={passes}.",
+                    tudo ? null : File.Exists(addon) ? "Instale de novo (Atualizar) com o motor Deep Fried Chicken escolhido."
+                        : "Segurança do Windows → Histórico de proteção → restaurar, e adicione a pasta do jogo às exclusões; depois Instalar de novo.");
+            }
+
             // 22 — o NR está LIGADO dentro do host? Max Payne 3: o feed entregava 30 mil quadros,
             // o host avaliava o DLSS, e o addon do host estava com NeuralUplift=0 ("NR toggled
             // OFF") desde uma troca de configuração. Em jogo 32-bit o F6 do jogo não chega ao
@@ -1118,7 +1179,7 @@ public static class CheckpointVerifier
             RenodxStatus? renodxHost = null;
             try { if (File.Exists(hostIni)) uplift = RenodxIni.Ler(ReadShared(hostIni), RenodxIni.ChaveNeuralUplift); } catch { }
             try { if (File.Exists(hostReShadeLog)) renodxHost = RenodxLog.Ler(ReadShared(hostReShadeLog)); } catch { }
-            if (uplift is not null || renodxHost is not null)
+            if (consumidor == NeuralEngine.RenodxDlss5Feeder && (uplift is not null || renodxHost is not null))
             {
                 bool desligado = uplift == 0 || (renodxHost?.NrDesligadoPorToggle ?? false);
                 yield return new CheckResult(22, "Neural Rendering ligado dentro do host64",

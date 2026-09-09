@@ -5104,7 +5104,7 @@ public class FeederKitTests
         Assert.False(FeederKit.Antiga("0.12.0.0"));
         Assert.False(FeederKit.Antiga("v0.13.1"));
         Assert.False(FeederKit.Antiga("1.0.0"));
-        Assert.Equal("0.13.1-beta.1", FeederKit.VersaoDoKit);
+        Assert.Equal("0.15.1", FeederKit.VersaoDoKit);
         Assert.False(FeederKit.Antiga(FeederKit.VersaoDoKit));
     }
 

@@ -60,6 +60,10 @@ public enum NeuralEngine
     RenodxDlss5Feeder,
     /// <summary>renodx-dlss (ShortFuse): fabrica a chamada de DLSS sozinho, 64-bit D3D9/11/12, 1 a 10 passadas.</summary>
     RenodxDlssShortFuse,
+    /// <summary>OptiScaler DLSS-NR (fork Dagherbou) como consumidor do Feeder, dentro do host64\ em jogo 32-bit: 1 a 5 passadas.</summary>
+    OptiScalerNr,
+    /// <summary>Deep Fried Chicken como consumidor do Feeder, dentro do host64\ em jogo 32-bit: 1 a 30 passadas. Arquivos só no Discord.</summary>
+    DeepFriedChicken,
 }
 
 /// <summary>Perfil do jogo: detecção automática + ajustes do usuário (spec 11.4).</summary>
@@ -157,6 +161,26 @@ public sealed class GameProfile
     /// tem versão x86 e o NGX também não, então em 32-bit a escolha é ignorada.
     /// </summary>
     public bool UsesShortFuse => Engine == NeuralEngine.RenodxDlssShortFuse && Architecture == PeArchitecture.X64;
+
+    /// <summary>
+    /// OptiScaler DLSS-NR como consumidor neural do Feeder, dentro do host64\ (jogo 32-bit).
+    /// É o caminho das passadas múltiplas em x86: o Feeder 0.15 aceita o fork como terceiro
+    /// consumidor, e o OptiScaler é 64-bit, então mora no processo auxiliar.
+    /// </summary>
+    public bool UsesOptiScalerNr => Engine == NeuralEngine.OptiScalerNr && Architecture == PeArchitecture.X86;
+
+    /// <summary>Deep Fried Chicken dentro do host64\ (jogo 32-bit). Até 30 passadas; arquivos do Discord.</summary>
+    public bool UsesDeepFriedChicken => Engine == NeuralEngine.DeepFriedChicken && Architecture == PeArchitecture.X86;
+
+    /// <summary>O consumidor neural do host64\ não é o addon do Krish.</summary>
+    public bool ConsumidorAlternativoNoHost64 => UsesOptiScalerNr || UsesDeepFriedChicken;
+
+    /// <summary>O motor depois das regras de arquitetura (o pedido pode não valer para esta).</summary>
+    public NeuralEngine MotorEfetivo =>
+        UsesShortFuse ? NeuralEngine.RenodxDlssShortFuse
+        : UsesOptiScalerNr ? NeuralEngine.OptiScalerNr
+        : UsesDeepFriedChicken ? NeuralEngine.DeepFriedChicken
+        : NeuralEngine.RenodxDlss5Feeder;
 
     /// <summary>
     /// O RenoDX se pendura direto nas chamadas de DLSS que o jogo já faz, mas só enxerga

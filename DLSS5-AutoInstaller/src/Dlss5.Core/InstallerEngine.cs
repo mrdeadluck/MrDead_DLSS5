@@ -357,6 +357,12 @@ public sealed partial class InstallerEngine
     /// </param>
     private static string ConteudoGerado(string target, InstallPlan plan, string? realDllPath = null)
     {
+        // Consumidores do host64: o arquivo do kit vem em SourcePath e sai com as passadas pedidas.
+        var nomeAlvo = Path.GetFileName(target);
+        if (nomeAlvo.Equals(OptiScalerNr.Ini, StringComparison.OrdinalIgnoreCase))
+            return OptiScalerNr.GerarIni(LerSePuder(realDllPath), plan.Profile.PassCount);
+        if (nomeAlvo.Equals(DeepFriedChicken.Cfg, StringComparison.OrdinalIgnoreCase))
+            return DeepFriedChicken.GerarCfg(LerSePuder(realDllPath), plan.Profile.PassCount);
         if (realDllPath is not null)
         {
             string? existente = null;
@@ -379,6 +385,12 @@ public sealed partial class InstallerEngine
                 shortFuse: plan.Profile.UsesShortFuse,
                 passCount: plan.Profile.PassCount)
             : ReShadeConfigWriter.BuildPresetIni(plan.Options.MvProvider, feederUsed: plan.Profile.NeedsFeeder);
+    }
+
+    private static string? LerSePuder(string? caminho)
+    {
+        try { return caminho is not null && File.Exists(caminho) ? File.ReadAllText(caminho) : null; }
+        catch { return null; }
     }
 
     /// <summary>
@@ -639,6 +651,8 @@ public sealed partial class InstallerEngine
         "dxgi.dll", "opengl32.dll", "ReShade.ini", "ReShade.log", "ReShadePreset.ini",
         "ReShade64.json", "ReShade32.json", "ReShade64_XR.json", "ReShade32_XR.json",
         "renodx-dlss5.addon64", ShortFuseDlss.Addon, "nvngx_dlssnr.dll",
+        OptiScalerNr.Ini, OptiScalerNr.Shim, OptiScalerNr.Log,
+        DeepFriedChicken.Addon, DeepFriedChicken.Nvngx, DeepFriedChicken.Cfg,
         "dlss5-feed.addon64", "dlss5-feed.addon32", "dlss5-feed.cfg", "dlss5-feed.log", "dlss5-feed-crash.dmp",
         "D3D9.dll", "D3D8.dll", "dgVoodoo.conf", "dgVoodooCpl.exe",
         "dgVoodoo_D3D9.dll", "dgVoodoo_D3D8.dll",

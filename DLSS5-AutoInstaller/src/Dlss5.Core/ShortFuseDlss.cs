@@ -24,11 +24,7 @@ public static class ShortFuseDlss
 
     public static int Limitar(int passes) => Math.Clamp(passes, PassesMin, PassesMax);
 
-    public static string Rotulo(NeuralEngine e) => e switch
-    {
-        NeuralEngine.RenodxDlssShortFuse => "RenoDX DLSS (ShortFuse) — passadas múltiplas de Neural Rendering",
-        _ => "RenoDX DLSS5 (Krish) + Feeder — uma passada (padrão até aqui)",
-    };
+    public static string Rotulo(NeuralEngine e) => Motores.Rotulo(e);
 
     public static string AvisoDoPlano(int passes) =>
         $"Motor ShortFuse: o {Addon} substitui o renodx-dlss5 e o Feeder nesta pasta (os dois saem, com backup). " +

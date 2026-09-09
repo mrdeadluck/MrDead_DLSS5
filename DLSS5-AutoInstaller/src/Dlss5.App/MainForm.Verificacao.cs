@@ -165,6 +165,9 @@ public sealed partial class MainForm
         bar.Controls.Add(Botao("Abrir pasta do jogo", (_, _) => OpenFolder(_profile?.ExeFolder)));
         bar.Controls.Add(Botao("Abrir o jogo", (_, _) => LaunchGame()));
         bar.Controls.Add(Botao("Isolar a causa…", (_, _) => IsolarCausa()));
+        // Jogo 32-bit: o próprio host do Feeder prova a combinação driver × runtimes × consumidor
+        // em 15 s, sem abrir jogo (é como o projeto do Feeder mediu o defeito do driver 616.64).
+        bar.Controls.Add(Botao("Testar o host64…", async (_, _) => await TestarHost64Async()));
         _btnRenodx.Margin = new Padding(0, 4, 8, 4);
         _btnRenodx.Click += (_, _) => TestarSemRenodx();
         bar.Controls.Add(_btnRenodx);
@@ -584,6 +587,50 @@ public sealed partial class MainForm
             AtualizarBotaoRenodx();
         }
         catch (Exception ex) { Erro("Não consegui alterar os arquivos do teste", ex); }
+    }
+
+    /// <summary>
+    /// host64\dlss5-feed-host64.exe --test: DLAA sintético + Neural Rendering, 300 avaliações, sem
+    /// jogo. "300/300" = driver, runtimes e consumidor neural funcionam juntos; "evaluate raised
+    /// 0xC0000005" = o defeito do addon 4.6/4.7 com driver 616.64+.
+    /// </summary>
+    private async Task TestarHost64Async()
+    {
+        if (_profile is null) return;
+        var exe = Path.Combine(_profile.ExeFolder, "host64", "dlss5-feed-host64.exe");
+        if (!File.Exists(exe))
+        {
+            Aviso("Teste do host64", "host64\\dlss5-feed-host64.exe não está na pasta do jogo. O teste só existe em jogo 32-bit, com o Feeder instalado.");
+            return;
+        }
+        Status("Testando o host64 (--test): até 2 minutos…");
+        string saida;
+        try
+        {
+            using var etapa = _diario.Etapa("host64 --test");
+            var psi = new ProcessStartInfo(exe, "--test")
+            {
+                WorkingDirectory = Path.GetDirectoryName(exe)!,
+                UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true,
+            };
+            using var p = Process.Start(psi)!;
+            var stdout = p.StandardOutput.ReadToEndAsync();
+            var stderr = p.StandardError.ReadToEndAsync();
+            await Task.WhenAny(p.WaitForExitAsync(), Task.Delay(TimeSpan.FromSeconds(150)));
+            string prefixo = "";
+            if (!p.HasExited)
+            {
+                try { p.Kill(true); } catch { }
+                prefixo = "(o teste não terminou em 150 s e foi encerrado)\r\n";
+            }
+            saida = prefixo + await stdout + await stderr;
+            _diario.Tecnico("host64 --test:\r\n" + saida);
+        }
+        catch (Exception ex) { Erro("Não consegui rodar o teste do host64", ex); return; }
+
+        var r = HostTest.Ler(saida);
+        Status("Teste do host64: " + r.Titulo);
+        Dialogos.Informar(this, "Teste do host64 (--test)", r.Titulo, r.Texto + "\r\n\r\nÚltimas linhas do host:\r\n" + r.Trecho);
     }
 
     /// <summary>

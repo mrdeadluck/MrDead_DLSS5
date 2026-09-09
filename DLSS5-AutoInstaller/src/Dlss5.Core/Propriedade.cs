@@ -30,6 +30,9 @@ public static class Propriedade
         "renodx-dlss5.addon64", ShortFuseDlss.Addon, "dlss5-feed.addon64", "dlss5-feed.addon32",
         "dlss5-feed-host64.exe", "dlss5-feed.cfg", "dlss5-feed.log", "dlss5-feed-host.log", "dlss5-feed-crash.dmp",
         "nvngx_dlssnr.dll",
+        // Consumidores alternativos do host64: nenhum jogo traz nada disso.
+        OptiScalerNr.Ini, OptiScalerNr.Shim, OptiScalerNr.Log,
+        DeepFriedChicken.Addon, DeepFriedChicken.Nvngx, DeepFriedChicken.Cfg,
         // O dgVoodoo encadeado atrás do DxWrapper: nenhum jogo traz um arquivo com esse nome.
         "dgVoodoo_D3D9.dll", "dgVoodoo_D3D8.dll",
         "ReShade.ini", "ReShade.log", "ReShadePreset.ini",
@@ -70,6 +73,8 @@ public static class Propriedade
     {
         ("D3D9.dll", "dgVoodoo"),
         ("D3D8.dll", "dgVoodoo"),
+        // O OptiScaler entra no host64 com o nome de uma DLL do sistema; só é nosso se for ele.
+        (OptiScalerNr.Proxy, OptiScalerNr.Marca),
     };
 
     /// <summary>Arquivos que provam que ESTE programa instalou nesta pasta.</summary>
@@ -143,6 +148,8 @@ public static class Propriedade
         "renodx-dlss5.addon64", ShortFuseDlss.Addon, "dlss5-feed.addon64", "dlss5-feed.addon32",
         "dlss5-feed-host64.exe", "dlss5-feed.cfg", "dlss5-feed.log", "dlss5-feed-host.log", "dlss5-feed-crash.dmp",
         "nvngx_dlssnr.dll", "dgVoodoo_D3D9.dll", "dgVoodoo_D3D8.dll", InstallManifest.FileName,
+        OptiScalerNr.Ini, OptiScalerNr.Shim, OptiScalerNr.Log,
+        DeepFriedChicken.Addon, DeepFriedChicken.Nvngx, DeepFriedChicken.Cfg,
     };
 
     /// <summary>Há peça do kit (não só ReShade) nesta pasta ou na de cima?</summary>

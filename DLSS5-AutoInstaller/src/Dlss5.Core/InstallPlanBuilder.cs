@@ -58,7 +58,7 @@ public static class InstallPlanBuilder
             return plan;
         }
 
-        var missing = kit.MissingFor(route, profile.UsesRenodxDirectPath, profile.Api, profile.UsesShortFuse);
+        var missing = kit.MissingFor(route, profile.UsesRenodxDirectPath, profile.Api, profile.UsesShortFuse, profile.MotorEfetivo);
         if (missing.Count > 0)
         {
             foreach (var m in missing)
@@ -350,9 +350,84 @@ public static class InstallPlanBuilder
             Copy(kit.FeedAddon32, exe, "dlss5-feed.addon32");
             Copy(kit.FeedHost64Exe, host64, "dlss5-feed-host64.exe");
             Copy(kit.DxgiX64, host64, "dxgi.dll");
-            Copy(kit.RenodxAddon64, host64, "renodx-dlss5.addon64");
             Copy(kit.NvngxDlssnr, host64, "nvngx_dlssnr.dll");
             CopySemSobrescreverDoJogo(kit.NvngxDlss, host64, "nvngx_dlss.dll");
+
+            // O consumidor neural do host64\: exatamente um. Os outros saem, com backup — dois
+            // consumidores no mesmo processo disputam o NGX (o OptiScaler captura toda carga de
+            // nvngx; o Chicken fica inerte se acha o RenoDX; o Krish e o OptiScaler dobram a passada).
+            void RemoverDoHost(string nome, string porque, string? prova = null)
+            {
+                var caminho = Path.Combine(host64, nome);
+                if (!File.Exists(caminho)) return;
+                if (prova is not null && !Propriedade.ContemTexto(caminho, prova)) return;
+                plan.Actions.Add(new PlanAction(PlanActionKind.DeleteForbiddenFile,
+                    $"Remover {Rel(profile, caminho)} ({porque}; vai para backup)", null, caminho));
+            }
+            void RemoverOptiScalerDoHost(string porque)
+            {
+                foreach (var proxy in new[] { OptiScalerNr.Proxy, "version.dll", "dbghelp.dll", "winhttp.dll", "wininet.dll", OptiScalerNr.Dll })
+                    RemoverDoHost(proxy, porque, OptiScalerNr.Marca);
+                RemoverDoHost(OptiScalerNr.Ini, porque);
+                RemoverDoHost(OptiScalerNr.Shim, porque);
+            }
+            void RemoverChickenDoHost(string porque)
+            {
+                foreach (var f in new[] { DeepFriedChicken.Addon, DeepFriedChicken.Nvngx, DeepFriedChicken.Cfg })
+                    RemoverDoHost(f, porque);
+            }
+            void RemoverKrishDoHost(string porque)
+            {
+                try
+                {
+                    if (Directory.Exists(host64))
+                        foreach (var f in Directory.EnumerateFiles(host64, "renodx-dlss5*.addon64"))
+                            RemoverDoHost(Path.GetFileName(f), porque);
+                }
+                catch { }
+            }
+
+            if (profile.UsesOptiScalerNr)
+            {
+                // OptiScaler DLSS-NR entra como winmm.dll (o host importa winmm.dll e version.dll ao
+                // iniciar; com outro nome ele não está no processo quando a primeira chamada de NGX
+                // acontece). O ini vem do kit com [DlssNr] ligada e as passadas; o encaminhador
+                // nvngx.dll_dlssnr.dll é o que o modelo exige do chamador; o Agility SDK vai junto
+                // porque o host é D3D12.
+                Copy(kit.OptiScalerNrDll, host64, OptiScalerNr.Proxy);
+                Copy(kit.OptiScalerNrShim, host64, OptiScalerNr.Shim);
+                if (kit.OptiScalerNrAgility is not null)
+                    Copy(kit.OptiScalerNrAgility, Path.Combine(host64, OptiScalerNr.AgilityRel), OptiScalerNr.AgilityDll);
+                plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
+                    $"Gerar host64\\{OptiScalerNr.Ini} ([DlssNr] Enabled=true, Passes={profile.PassCount}, Dx12Upscaler=dlss, spoof desligado)",
+                    kit.OptiScalerNrIni, Path.Combine(host64, OptiScalerNr.Ini)));
+                RemoverKrishDoHost("o consumidor escolhido é o OptiScaler DLSS-NR");
+                RemoverChickenDoHost("o consumidor escolhido é o OptiScaler DLSS-NR");
+                plan.Warnings.Add(
+                    $"Motor OptiScaler DLSS-NR no host64 ({profile.PassCount} passada(s)): o OptiScaler toma a chamada de DLSS que o " +
+                    "Feeder faz, faz o upscaling (DLSS) e roda o Neural Rendering N vezes. É o suporte novo do Feeder 0.15 — " +
+                    "checado pelo projeto dele, não por este. O menu do OptiScaler abre com Insert na janela do host. " +
+                    "O README do fork pede RTX 50 para o modelo original; com o nvngx_dlssnr.dll SF-v2 do kit roda em RTX 20/30/40. " +
+                    "Se travar, volte a 1 passada antes de trocar de motor.");
+            }
+            else if (profile.UsesDeepFriedChicken)
+            {
+                Copy(kit.DfcAddon64, host64, DeepFriedChicken.Addon);
+                Copy(kit.DfcNvngx, host64, DeepFriedChicken.Nvngx);
+                plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
+                    $"Gerar host64\\{DeepFriedChicken.Cfg} (layers={profile.PassCount}, enabled=1, arm=1)",
+                    kit.DfcCfg, Path.Combine(host64, DeepFriedChicken.Cfg)));
+                RemoverKrishDoHost("o consumidor escolhido é o Deep Fried Chicken (ele fica inerte se acha o RenoDX)");
+                RemoverOptiScalerDoHost("o consumidor escolhido é o Deep Fried Chicken");
+                plan.Warnings.Add(
+                    $"Motor Deep Fried Chicken no host64 ({profile.PassCount} passada(s)): " + DeepFriedChicken.PassoManual(profile.PassCount));
+            }
+            else
+            {
+                Copy(kit.RenodxAddon64, host64, "renodx-dlss5.addon64");
+                RemoverOptiScalerDoHost("o consumidor escolhido é o addon do Krish");
+                RemoverChickenDoHost("o consumidor escolhido é o addon do Krish");
+            }
         }
 
         // d3dcompiler_47.dll do jogo velho demais para cs_5_1 (Spider-Man Remastered traz o

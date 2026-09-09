@@ -37,3 +37,6 @@ DLSS[[:space:]]5[[:space:]]Files/**/*.ps1 !filter !diff !merge -text
 DLSS[[:space:]]5[[:space:]]Files/**/*.json !filter !diff !merge -text
 DLSS[[:space:]]5[[:space:]]Files/**/*.bat !filter !diff !merge -text
 DLSS[[:space:]]5[[:space:]]Files/DLSS5-Reshade-AIO-*/*.fx !filter !diff !merge text
+
+# Configuração do OptiScaler DLSS-NR (texto, poucos KB): fica FORA do LFS, dá para ler no GitHub.
+DLSS[[:space:]]5[[:space:]]Files/OptiScaler-DLSSNR-*/*.ini !filter !diff !merge -text

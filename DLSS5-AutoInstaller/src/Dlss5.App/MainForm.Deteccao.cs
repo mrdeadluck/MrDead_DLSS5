@@ -17,6 +17,9 @@ public sealed partial class MainForm
     private readonly ComboBox _cboEngine = new();
     private readonly NumericUpDown _numPasses = new();
     private readonly Label _lblEngineNote = new();
+    /// <summary>Os motores listados no combo, na ordem dos itens (muda com a arquitetura).</summary>
+    private List<NeuralEngine> _motoresNaTela = new(Motores.Disponiveis(PeArchitecture.X64));
+    private bool _remontandoMotores;
     private readonly CheckBox _chkReFramework = new();
     private readonly ComboBox _cboReShadeNome = new();
     private readonly Label _lblDicaReShadeNome = new();
@@ -154,22 +157,18 @@ public sealed partial class MainForm
 
         // Motor do Neural Rendering (qual addon) e passadas
         _cboEngine.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cboEngine.Items.AddRange(new object[]
-        {
-            ShortFuseDlss.Rotulo(NeuralEngine.RenodxDlss5Feeder),
-            ShortFuseDlss.Rotulo(NeuralEngine.RenodxDlssShortFuse),
-        });
+        _cboEngine.Items.AddRange(_motoresNaTela.Select(m => (object)Motores.Rotulo(m)).ToArray());
         _cboEngine.SelectedIndex = 0;
         _cboEngine.Width = 420;
         _cboEngine.Margin = new Padding(0, 4, 8, 4);
-        _cboEngine.SelectedIndexChanged += (_, _) => SyncProfileFromUi();
+        _cboEngine.SelectedIndexChanged += (_, _) => { if (!_remontandoMotores) SyncProfileFromUi(); };
         Ui.Adaptavel(_cboEngine, 200);   // largura do item mais longo, mas nunca maior que a coluna
         _numPasses.Minimum = ShortFuseDlss.PassesMin;
         _numPasses.Maximum = ShortFuseDlss.PassesMax;
         _numPasses.Value = ShortFuseDlss.PassesPadrao;
         _numPasses.Width = 52;
         _numPasses.Margin = new Padding(0, 4, 8, 4);
-        _numPasses.ValueChanged += (_, _) => SyncProfileFromUi();
+        _numPasses.ValueChanged += (_, _) => { if (!_remontandoMotores) SyncProfileFromUi(); };
         _lblEngineNote.AutoSize = true;
         _lblEngineNote.ForeColor = Ui.Muted;
         _lblEngineNote.Margin = new Padding(0, 8, 0, 0);
@@ -181,7 +180,7 @@ public sealed partial class MainForm
         filaEngine.Controls.Add(_lblEngineNote);
         form.Controls.Add(Ui.Rotulo("Motor do DLSS 5"), 0, linha);
         form.Controls.Add(filaEngine, 1, linha++);
-        form.Controls.Add(Dica("ShortFuse: o renodx-dlss.addon64 fabrica a chamada de DLSS sozinho (jogo com ou sem DLSS, 64-bit, D3D9/11/12) e aplica o Neural Rendering em 1 a 10 passadas — o \"x2\" que a comunidade mostra. Cada passada custa o mesmo que a primeira. Krish + Feeder é o caminho testado até aqui, uma passada, e o único em 32-bit."), 1, linha++);
+        form.Controls.Add(Dica("Passadas múltiplas (o \"x2\" que a comunidade mostra): em 64-bit, o ShortFuse (renodx-dlss.addon64 fabrica a chamada de DLSS sozinho, 1 a 10 passadas). Em 32-bit o consumidor neural mora no host64: OptiScaler DLSS-NR (1 a 5 passadas, vem no kit) ou Deep Fried Chicken (1 a 30, arquivos do Discord). Cada passada custa o mesmo que a primeira. Krish + Feeder é o caminho testado até aqui, uma passada."), 1, linha++);
 
         // Motion vectors
         _cboMv.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -336,15 +335,16 @@ public sealed partial class MainForm
             && Enum.TryParse<NeuralEngine>(_manifest.Engine, out var motorGravado))
         {
             _profile.Engine = motorGravado;
-            _profile.PassCount = ShortFuseDlss.Limitar(_manifest.PassCount);
+            _profile.PassCount = Motores.Limitar(motorGravado, _manifest.PassCount);
         }
         else
         {
             if (Enum.TryParse<NeuralEngine>(_settings.Engine, out var motorPreferido)) _profile.Engine = motorPreferido;
-            _profile.PassCount = ShortFuseDlss.Limitar(_settings.PassCount);
+            _profile.PassCount = Motores.Limitar(_profile.Engine, _settings.PassCount);
         }
-        _cboEngine.SelectedIndex = _profile.Engine == NeuralEngine.RenodxDlssShortFuse ? 1 : 0;
-        _numPasses.Value = _profile.PassCount;
+        // Motor que não vale para esta arquitetura (ShortFuse em x86, OptiScaler em x64) cai no Krish.
+        if (!Motores.Aplicavel(_profile.Engine, _profile.Architecture)) _profile.Engine = NeuralEngine.RenodxDlss5Feeder;
+        RemontarMotores();
         _chkReFramework.Checked = _profile.UsarReFramework;
         PopularNomesDeReShade();
         _txtRenderer.Text = _profile.RendererFolder ?? _profile.ExeFolder;
@@ -466,16 +466,46 @@ public sealed partial class MainForm
         UpdateEngineAvailability();
     }
 
+    /// <summary>Refaz a lista de motores para a arquitetura do perfil e seleciona o motor atual.</summary>
+    private void RemontarMotores()
+    {
+        var arch = _profile?.Architecture ?? PeArchitecture.X64;
+        var motores = Motores.Disponiveis(arch).ToList();
+        var atual = _profile?.Engine ?? NeuralEngine.RenodxDlss5Feeder;
+        if (!motores.Contains(atual)) atual = NeuralEngine.RenodxDlss5Feeder;
+        _remontandoMotores = true;
+        try
+        {
+            if (!motores.SequenceEqual(_motoresNaTela))
+            {
+                _motoresNaTela = motores;
+                _cboEngine.Items.Clear();
+                _cboEngine.Items.AddRange(motores.Select(m => (object)Motores.Rotulo(m)).ToArray());
+                Ui.AjustarLargura(_cboEngine, 200);
+            }
+            _cboEngine.SelectedIndex = Math.Max(0, motores.IndexOf(atual));
+            _numPasses.Maximum = Math.Max(Motores.PassesMin, Motores.PassesMax(atual));
+            _numPasses.Value = Math.Clamp(_profile?.PassCount ?? ShortFuseDlss.PassesPadrao, (int)_numPasses.Minimum, (int)_numPasses.Maximum);
+        }
+        finally { _remontandoMotores = false; }
+    }
+
     private void UpdateEngineAvailability()
     {
-        bool x64 = _profile is null || _profile.Architecture == PeArchitecture.X64;
-        _cboEngine.Enabled = x64;
-        _numPasses.Enabled = x64 && _profile?.UsesShortFuse == true;
-        _lblEngineNote.Text = !x64
-            ? "32-bit: só o caminho Krish + Feeder (o addon do ShortFuse e o NGX são 64-bit)"
-            : _profile?.UsesShortFuse == true
-                ? $"{ShortFuseDlss.Addon} substitui o Krish e o Feeder nesta pasta; {_profile.PassCount} passada(s)"
-                : string.Empty;
+        if (_profile is null) return;
+        var motor = _profile.MotorEfetivo;
+        bool passadas = motor != NeuralEngine.RenodxDlss5Feeder;
+        _cboEngine.Enabled = true;
+        _numPasses.Enabled = passadas;
+        _lblEngineNote.Text = motor switch
+        {
+            NeuralEngine.RenodxDlssShortFuse => $"{ShortFuseDlss.Addon} substitui o Krish e o Feeder nesta pasta; {_profile.PassCount} passada(s)",
+            NeuralEngine.OptiScalerNr => $"OptiScaler DLSS-NR entra em host64\\ como winmm.dll no lugar do renodx-dlss5; {_profile.PassCount} passada(s); menu na tecla Insert (janela do host)",
+            NeuralEngine.DeepFriedChicken => $"Deep Fried Chicken entra em host64\\ no lugar do renodx-dlss5; {_profile.PassCount} passada(s); o plano cobra os três arquivos se faltarem no kit",
+            _ => _profile.Architecture == PeArchitecture.X86
+                ? "uma passada. Para x2+ em 32-bit escolha OptiScaler DLSS-NR ou Deep Fried Chicken (vão para o host64)"
+                : string.Empty,
+        };
     }
 
     private void SyncProfileFromUi()
@@ -485,8 +515,17 @@ public sealed partial class MainForm
         if (_cboApi.SelectedItem is GraphicsApi g) _profile.Api = g;
         if (!string.IsNullOrWhiteSpace(_txtRenderer.Text)) _profile.RendererFolder = _txtRenderer.Text;
         _profile.MvProvider = _options.MvProvider;
-        _profile.Engine = _cboEngine.SelectedIndex == 1 ? NeuralEngine.RenodxDlssShortFuse : NeuralEngine.RenodxDlss5Feeder;
+        if (_cboEngine.SelectedIndex >= 0 && _cboEngine.SelectedIndex < _motoresNaTela.Count)
+            _profile.Engine = _motoresNaTela[_cboEngine.SelectedIndex];
         _profile.PassCount = (int)_numPasses.Value;
+        // A arquitetura pode ter mudado no combo: a lista de motores acompanha.
+        if (!Motores.Disponiveis(_profile.Architecture).SequenceEqual(_motoresNaTela)
+            || _numPasses.Maximum != Math.Max(Motores.PassesMin, Motores.PassesMax(_profile.MotorEfetivo)))
+        {
+            if (!Motores.Aplicavel(_profile.Engine, _profile.Architecture)) _profile.Engine = NeuralEngine.RenodxDlss5Feeder;
+            RemontarMotores();
+            _profile.PassCount = (int)_numPasses.Value;
+        }
         _profile.PreferirFeeder = _chkDireto.Visible && _chkDireto.Checked;
         _profile.UsarReFramework = _chkReFramework.Visible && _chkReFramework.Checked;
         if (_cboReShadeNome.Visible && _cboReShadeNome.SelectedItem is string nomeReShade)
@@ -545,6 +584,13 @@ public sealed partial class MainForm
         SyncProfileFromUi();
     }
 
+    private string ConsumidorNoRotulo() => _profile?.MotorEfetivo switch
+    {
+        NeuralEngine.OptiScalerNr => $" Consumidor neural: OptiScaler DLSS-NR, {_profile!.PassCount} passada(s).",
+        NeuralEngine.DeepFriedChicken => $" Consumidor neural: Deep Fried Chicken, {_profile!.PassCount} passada(s).",
+        _ => string.Empty,
+    };
+
     private void UpdateRouteLabel()
     {
         if (_profile is null) return;
@@ -555,8 +601,8 @@ public sealed partial class MainForm
             InstallRoute.A => _profile.UsesShortFuse
                 ? $"✔ Caminho A (motor ShortFuse) — 64-bit: ReShade ({_profile.ReShadeHookName}) + {ShortFuseDlss.Addon} na pasta do executável, {_profile.PassCount} passada(s) de Neural Rendering."
                 : $"✔ Caminho A — 64-bit: ReShade ({_profile.ReShadeHookName}) + addons direto na pasta do executável.",
-            InstallRoute.B => "✔ Caminho B — 32-bit D3D11: addon32 na raiz e o resto do Feeder dentro de host64\\.",
-            InstallRoute.C => $"✔ Caminho C — 32-bit {_profile.Api}: dgVoodoo2 ({_profile.DgVoodooWrapperName}) traduz para D3D11, mais o layout do caminho B.",
+            InstallRoute.B => "✔ Caminho B — 32-bit D3D11: addon32 na raiz e o resto do Feeder dentro de host64\\." + ConsumidorNoRotulo(),
+            InstallRoute.C => $"✔ Caminho C — 32-bit {_profile.Api}: dgVoodoo2 ({_profile.DgVoodooWrapperName}) traduz para D3D11, mais o layout do caminho B." + ConsumidorNoRotulo(),
             _ => "✖ Sem caminho suportado para esta combinação. " +
                  (_profile.Architecture == PeArchitecture.X86 && _profile.Api is GraphicsApi.Vulkan or GraphicsApi.OpenGL
                      ? $"Jogo 32-bit em {_profile.Api} não funciona (o addon32 só aceita D3D11): troque para D3D9 ou D3D11 se o jogo permitir."
@@ -601,6 +647,8 @@ public sealed partial class MainForm
         if (kit.NvngxDlss is not null) have.Add("nvngx_dlss");
         if (kit.RenodxAddon64 is not null) have.Add("renodx");
         if (kit.RenodxDlssShortFuse is not null) have.Add("renodx-dlss (ShortFuse)");
+        if (kit.HasOptiScalerNr) have.Add("OptiScaler DLSS-NR");
+        if (kit.HasDeepFriedChicken) have.Add("Deep Fried Chicken");
         if (kit.FeedAddon64 is not null) have.Add("feed64");
         if (kit.FeedAddon32 is not null) have.Add("feed32");
         if (kit.FeedHost64Exe is not null) have.Add("host64");

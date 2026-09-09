@@ -14,4 +14,10 @@
 # verdade, dumps de crash, Smooth Motion em D3D11/12, interop com o Deep Fried Chicken e
 # suporte às gerações 4.5/4.6/4.7 do addon do RenoDX (o kit traz o 4.70). O 0.12.0 fica em
 # versoes-anteriores/feeder-0.12.0/ com os nomes trocados.
-versao=v0.13.1-beta.1
+#
+# Por que 0.15.1 (09/09/2026): o host64 reconhece consumidores neurais alternativos dentro de
+# host64\ (OptiScaler DLSS-NR como winmm.dll, Deep Fried Chicken) — é o que dá x2+ em jogo 32-bit —,
+# ganhou "dlss5-feed-host64.exe --test" (300 avaliações sem abrir jogo, prova driver × runtimes ×
+# consumidor) e o aviso do driver 616.64+ (o addon 4.6/4.7 do Krish cai dentro do D3D12Core.dll do
+# NGX; o 4.55 passa). O 0.13.1-beta.1 fica em versoes-anteriores/DLSS5-Feeder-0.13.1-beta.1/.
+versao=v0.15.1

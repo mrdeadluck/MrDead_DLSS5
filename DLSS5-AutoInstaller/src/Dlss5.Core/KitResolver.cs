@@ -11,6 +11,19 @@ public sealed class KitInventory
     public string? RenodxAddon64 { get; set; }
     /// <summary>renodx-dlss.addon64 do ShortFuse (motor alternativo, passadas múltiplas).</summary>
     public string? RenodxDlssShortFuse { get; set; }
+
+    // OptiScaler DLSS-NR (fork): consumidor neural do Feeder em jogo 32-bit (dentro do host64\).
+    public string? OptiScalerNrDll { get; set; }
+    public string? OptiScalerNrIni { get; set; }
+    public string? OptiScalerNrShim { get; set; }
+    public string? OptiScalerNrAgility { get; set; }
+    public bool HasOptiScalerNr => OptiScalerNrDll is not null && OptiScalerNrIni is not null && OptiScalerNrShim is not null;
+
+    // Deep Fried Chicken: só se o usuário pôs os três arquivos do Discord no kit.
+    public string? DfcAddon64 { get; set; }
+    public string? DfcNvngx { get; set; }
+    public string? DfcCfg { get; set; }
+    public bool HasDeepFriedChicken => DfcAddon64 is not null && DfcNvngx is not null && DfcCfg is not null;
     public string? FeedAddon64 { get; set; }
     public string? FeedAddon32 { get; set; }
     public string? FeedHost64Exe { get; set; }
@@ -64,7 +77,8 @@ public sealed class KitInventory
 
     /// <summary>Valida o inventário para uma rota específica; devolve o que falta.</summary>
     public IReadOnlyList<string> MissingFor(
-        InstallRoute route, bool nativeDlss, GraphicsApi api = GraphicsApi.Unknown, bool shortFuse = false)
+        InstallRoute route, bool nativeDlss, GraphicsApi api = GraphicsApi.Unknown, bool shortFuse = false,
+        NeuralEngine consumidor = NeuralEngine.RenodxDlss5Feeder)
     {
         var missing = new List<string>();
         void Need(string? path, string what)
@@ -85,7 +99,24 @@ public sealed class KitInventory
 
         Need(NvngxDlssnr, "nvngx_dlssnr.dll (x64, ~158 MB)");
         Need(NvngxDlss, "nvngx_dlss.dll (x64, ~56 MB)");
-        Need(RenodxAddon64, "renodx-dlss5.addon64");
+        // Em jogo 32-bit o consumidor neural do host64\ pode ser outro que não o Krish.
+        bool x86 = route is InstallRoute.B or InstallRoute.C;
+        if (x86 && consumidor == NeuralEngine.OptiScalerNr)
+        {
+            Need(OptiScalerNrDll, OptiScalerNr.Dll + " (OptiScaler DLSS-NR, fork Dagherbou) — no kit fica em \"OptiScaler-DLSSNR-...\"");
+            Need(OptiScalerNrIni, OptiScalerNr.Ini + " (OptiScaler DLSS-NR)");
+            Need(OptiScalerNrShim, OptiScalerNr.Shim + " (o encaminhador neural do OptiScaler DLSS-NR)");
+        }
+        else if (x86 && consumidor == NeuralEngine.DeepFriedChicken)
+        {
+            Need(DfcAddon64, DeepFriedChicken.Addon + " (Deep Fried Chicken — baixe no Discord " + DeepFriedChicken.Discord + " e copie os três arquivos para qualquer subpasta do kit)");
+            Need(DfcNvngx, DeepFriedChicken.Nvngx + " (Deep Fried Chicken)");
+            Need(DfcCfg, DeepFriedChicken.Cfg + " (Deep Fried Chicken)");
+        }
+        else
+        {
+            Need(RenodxAddon64, "renodx-dlss5.addon64");
+        }
         Need(ShadersDir, "pasta reshade-shaders com DLSS5_Feed.fx");
         if (!HasAnyMvProvider)
             missing.Add("um provedor de motion vectors (vort_Motion.fx, MartysMods_LAUNCHPAD.fx ou lumenite_Kernel.fx)");
@@ -185,6 +216,23 @@ public static class KitResolver
         inv.NvngxDlss = First("nvngx_dlss.dll");
         inv.RenodxAddon64 = First("renodx-dlss5.addon64");
         inv.RenodxDlssShortFuse = First(ShortFuseDlss.Addon);
+
+        // OptiScaler DLSS-NR: a pasta que tem o encaminhador nvngx.dll_dlssnr.dll é a do fork.
+        inv.OptiScalerNrShim = First(OptiScalerNr.Shim);
+        if (inv.OptiScalerNrShim is not null)
+        {
+            var pasta = Path.GetDirectoryName(inv.OptiScalerNrShim)!;
+            var dll = Path.Combine(pasta, OptiScalerNr.Dll);
+            var ini = Path.Combine(pasta, OptiScalerNr.Ini);
+            if (File.Exists(dll) && Ok(dll)) inv.OptiScalerNrDll = dll;
+            if (File.Exists(ini) && Ok(ini)) inv.OptiScalerNrIni = ini;
+            var agility = Path.Combine(pasta, "OptiScaler", "D3D12_OptiScaler", OptiScalerNr.AgilityDll);
+            if (File.Exists(agility) && Ok(agility)) inv.OptiScalerNrAgility = agility;
+        }
+
+        inv.DfcAddon64 = First(DeepFriedChicken.Addon);
+        inv.DfcNvngx = First(DeepFriedChicken.Nvngx);
+        inv.DfcCfg = First(DeepFriedChicken.Cfg);
         inv.FeedAddon64 = First("dlss5-feed.addon64");
         inv.FeedAddon32 = First("dlss5-feed.addon32");
         inv.FeedHost64Exe = First("dlss5-feed-host64.exe");

@@ -92,6 +92,8 @@ public sealed class Isolamento
                 Path.Combine(exeFolder, "renodx-dlss5.addon64"),
                 Path.Combine(exeFolder, "host64", "renodx-dlss5.addon64"),
                 Path.Combine(exeFolder, ShortFuseDlss.Addon),
+                Path.Combine(exeFolder, "host64", OptiScalerNr.Proxy),
+                Path.Combine(exeFolder, "host64", DeepFriedChicken.Addon),
             },
             // O Feeder tem três peças: o addon (64 ou 32 bits) e, em jogo x86, o
             // processo auxiliar que roda o NGX fora dele.

@@ -1,0 +1,89 @@
+DLSS5-Feeder 0.15.1
+===================
+0.15.0 plus one fix, and it is the reason to take this build: on an HDR display,
+neural rendering was damaging the highlights, and nothing you could set anywhere
+would stop it. This release fixes that at its source.
+
+Everything in 0.15.0 is still here -- OptiScaler DLSS-NR as a third neural consumer,
+and six tracker fixes, two of which had been disabling whole classes of game. Its
+notes are worth reading if you are coming from 0.14.x.
+
+Check dlss5-feed.log line 1 to confirm which build you are running; it will say
+"dlss5-feed 0.15.1" (or "dlss5-feed32 0.15.1" on 32-bit).
+
+32-BIT GAMES: take BOTH dlss5-feed.addon32 and host64\dlss5-feed-host64.exe. The IPC
+protocol is v9 and both halves must come from this same zip.
+
+
+HDR HIGHLIGHTS WERE BEING WRECKED BY THE NEURAL PASS
+-----------------------------------------------------
+If you run an HDR game, turn neural rendering on, and the bright parts of the picture
+go wrong -- blown, flat, oddly tinted -- while switching the model off restores them,
+this was why.
+
+An HDR10 swapchain is R10G10B10A2_UNORM carrying PQ BT.2020. That is neither of the
+two things a neural consumer knows how to handle: it is not linear HDR, and it is not
+an sRGB tone-mapped picture. This add-on made it worse by describing it as SDR --
+IsHdrFormat() asked only the DXGI format, and no format test can tell 10-bit SDR from
+HDR10, because they are the same format.
+
+Setting hdr=1 did not help, and that is not a bug in this add-on: OptiScaler DLSS-NR
+gates its HDR path on the buffer FORMAT being a float one, so a 10-bit surface takes
+its "already tone mapped" branch whatever the flag says. There it composes PQ code
+values as if they were sRGB -- its luminance is a BT.709 weighted sum over PQ codes,
+which is not luminance, and the branch that exists to protect highlights is chosen by
+comparing those. PQ and sRGB disagree most at the top of the range. That is where the
+damage lands, and that is exactly what people were seeing.
+
+Its own controls could not reach it either, which is worth knowing if you have been
+turning them: in that branch paper white is pinned to 1.0, and the "guard" is a
+symmetric clamp on the whole composition -- at 1x it does not protect highlights, it
+switches the effect off.
+
+So the lever is not the flag. It is the format.
+
+    hdr_bridge        -1 auto (default), 0 off, 1 force on
+
+On an HDR10 swapchain the frame is now decoded to LINEAR LIGHT in FP16 on the way in
+and re-encoded to PQ on the way out. The consumer is handed the linear HDR it is
+looking for, in a format its own test accepts, and its real HDR path runs.
+
+Auto engages only where the swapchain really is PQ. The add-on now asks ReShade for
+the colour space instead of guessing from the format -- something it had never done --
+and logs the answer either way:
+
+    [feed] swapchain colour space: PQ BT.2020 (HDR10)
+    [feed] HDR10 bridge ON (the swapchain is PQ BT.2020 and the backbuffer is 10-bit)
+    [feed] feature ready: ... (HDR ...) ... [HDR10 bridge: ... this is linear light]
+
+In OptiScaler.log the line that matters flips to "colour transform on (linear HDR)".
+
+    hdr_paper_white   203 (nits mapped to linear 1.0)
+
+ITU-R BT.2408 reference white. Lower it if the picture is dim through the bridge,
+raise it if it is too bright. It changes only the scale the model is shown, never what
+is displayed with the model off.
+
+IF YOU HAVE BEEN COMPENSATING, UNDO IT FIRST. Anyone who raised OptiScaler's
+ColourStrength or WhitePointScale to fight this should put them back to 1.0 before
+judging the result -- with the HDR path actually running, those now do something.
+
+TO CHECK THE BRIDGE ITSELF, set mode=1: the transport runs and DLSS does not, so the
+frame makes the whole PQ -> linear -> PQ round trip and comes back. It should be
+indistinguishable from having no add-on loaded. Measured worst-case error over the
+full 10-bit code range is 0.06 of ONE code value, so anything visible there is a bug
+and worth reporting.
+
+Limits, stated rather than discovered later:
+
+  * D3D11, 64-bit only. The 32-bit, Vulkan and OpenGL paths are unchanged.
+  * work_upscale is ignored while the bridge runs. FSR 1 is a perceptual-space filter
+    and the colour here is linear; the expand-back stays bilinear.
+  * It does not fix everything. OptiScaler still computes luminance with BT.709 weights
+    while HDR10 content is BT.2020 primaries. That is a smaller error than the transfer
+    function was, and it belongs upstream -- but if highlights are better and still not
+    right, that is the next suspect.
+
+This was found by reading the consumer's own source against a real capture, not by
+guessing, and the transfer maths is verified numerically. It has been looked at in one
+HDR application and judged better; it has not been through a wide test. Reports welcome.
