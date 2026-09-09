@@ -27,4 +27,5 @@
 # 09/09/2026: pacote refeito com o OptiScaler DLSS-NR, o SF 0.54 e o 4.55 em versoes-anteriores;
 # depois, de novo, com o instalador que aceita o SH2 Enhanced Edition (dgVoodoo como D3D9.dll);
 # e de novo com o OptiScaler v10.0.0-pre1 (o build com Passes 1 a 5) no lugar do fork de 1 passada.
+# 09/09/2026 (2): pacote refeito com a verificacao que le as passadas no OptiScaler.log (item 25b).
 versao=v0.15.1
