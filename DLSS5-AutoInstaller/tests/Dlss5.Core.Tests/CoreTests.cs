@@ -410,12 +410,12 @@ public class RouteTests
     [InlineData(PeArchitecture.X86, GraphicsApi.D3D8, InstallRoute.C)]
     // OpenGL em 64-bit segue a rota A; muda só o nome com que o ReShade é instalado.
     [InlineData(PeArchitecture.X64, GraphicsApi.OpenGL, InstallRoute.A)]
-    // Regra derivada da spec: 32-bit fora do D3D11 depende do dgVoodoo, e o addon32 só
-    // aceita Direct3D 11 — então Vulkan e OpenGL não têm caminho em x86.
+    // Vulkan 32-bit continua sem caminho (o addon32 precisa do DXVK). OpenGL e D3D10 32-bit
+    // vão pelo mesmo host64 do D3D11 (Feeder 0.13.1+: D3D10 nativo; OpenGL validado em Worms/KOTOR).
     [InlineData(PeArchitecture.X86, GraphicsApi.Vulkan, InstallRoute.Unsupported)]
-    [InlineData(PeArchitecture.X86, GraphicsApi.OpenGL, InstallRoute.Unsupported)]
+    [InlineData(PeArchitecture.X86, GraphicsApi.OpenGL, InstallRoute.B)]
     [InlineData(PeArchitecture.X64, GraphicsApi.D3D10, InstallRoute.Unsupported)]
-    [InlineData(PeArchitecture.X86, GraphicsApi.D3D10, InstallRoute.Unsupported)]
+    [InlineData(PeArchitecture.X86, GraphicsApi.D3D10, InstallRoute.B)]
     [InlineData(PeArchitecture.Unknown, GraphicsApi.D3D11, InstallRoute.Unsupported)]
     public void Route_FollowsDecisionTree(PeArchitecture arch, GraphicsApi api, InstallRoute expected)
     {

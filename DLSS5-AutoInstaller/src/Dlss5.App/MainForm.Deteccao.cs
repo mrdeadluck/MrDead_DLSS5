@@ -605,13 +605,13 @@ public sealed partial class MainForm
             InstallRoute.A => _profile.UsesShortFuse
                 ? $"✔ Caminho A (motor ShortFuse) — 64-bit: ReShade ({_profile.ReShadeHookName}) + {ShortFuseDlss.Addon} na pasta do executável, {_profile.PassCount} passada(s) de Neural Rendering."
                 : $"✔ Caminho A — 64-bit: ReShade ({_profile.ReShadeHookName}) + addons direto na pasta do executável.",
-            InstallRoute.B => "✔ Caminho B — 32-bit D3D11: addon32 na raiz e o resto do Feeder dentro de host64\\." + ConsumidorNoRotulo(),
+            InstallRoute.B => $"✔ Caminho B — 32-bit {_profile.Api}: addon32 na raiz (ReShade como {_profile.ReShadeHookName}) e o resto do Feeder dentro de host64\\." + ConsumidorNoRotulo(),
             InstallRoute.C => $"✔ Caminho C — 32-bit {_profile.Api}: dgVoodoo2 ({_profile.DgVoodooWrapperName}) traduz para D3D11, mais o layout do caminho B."
                 + (_profile.D3d8ViaD3D9 ? " O D3D8.dll da pasta é a mod (d3d8to9) e fica: o dgVoodoo entra como D3D9.dll atrás dela." : string.Empty)
                 + ConsumidorNoRotulo(),
             _ => "✖ Sem caminho suportado para esta combinação. " +
-                 (_profile.Architecture == PeArchitecture.X86 && _profile.Api is GraphicsApi.Vulkan or GraphicsApi.OpenGL
-                     ? $"Jogo 32-bit em {_profile.Api} não funciona (o addon32 só aceita D3D11): troque para D3D9 ou D3D11 se o jogo permitir."
+                 (_profile.Architecture == PeArchitecture.X86 && _profile.Api == GraphicsApi.Vulkan
+                     ? "Jogo 32-bit em Vulkan não tem caminho neste instalador (o Feeder faz via DXVK, à mão): troque para D3D9, D3D11 ou OpenGL se o jogo permitir."
                      : "Confira arquitetura e API."),
         };
     }

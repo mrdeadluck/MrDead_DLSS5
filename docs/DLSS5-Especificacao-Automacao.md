@@ -37,10 +37,14 @@ Limitações estruturais (não são bugs de configuração):
 | x86 | D3D11 | Sim | B | Tomb Raider 2013 |
 | x86 | D3D9 | Sim, via dgVoodoo2 → D3D11 | C | Castlevania: Lords of Shadow (variante simples), Half-Life 2 (variante Source) |
 | x86 | D3D9 | idem | C | GTA IV (parcial: dgVoodoo ok, ReShade pendente) |
-| **x86** | **Vulkan** | **NÃO** — addon32 recusa: "only Direct3D 11 games are supported" | — | HL2 (confirmado no log) |
-| qualquer | D3D10 | Não | — | — |
+| x86 | D3D8 | Sim, via dgVoodoo2 → D3D11 (D3D9.dll atrás de mod com d3d8to9) | C | Silent Hill 2 Enhanced Edition (OptiScaler x4 no host64) |
+| x64 | OpenGL | Sim (Feeder: em processo; MX Bikes relatado) — ReShade como opengl32.dll | A | — |
+| x86 | OpenGL | Sim (Feeder 0.9+: Worms Ultimate Mayhem, KOTOR, pelo host64) — ReShade como opengl32.dll | B | — |
+| x86 | D3D10 | Sim (Feeder 0.13.1+, nativo) — só o LumeniteFX compila como provedor | B | — |
+| **x86** | **Vulkan** | **NÃO** neste instalador — o Feeder faz via DXVK (`layer-x86\`), fora deste fluxo | — | HL2 (confirmado no log) |
+| x64 | D3D10 | Não | — | — |
 
-Regra derivada: **32 bits obriga D3D11.** Se o jogo x86 oferece Vulkan e D3D9, escolha D3D9 + dgVoodoo.
+Regra derivada: em 32 bits, D3D11/D3D10/OpenGL vão direto ao host64; D3D9/D3D8 passam pelo dgVoodoo. Se o jogo x86 oferece Vulkan e D3D9, escolha D3D9 + dgVoodoo. As passadas múltiplas (OptiScaler no host64) valem para todos os caminhos B e C, porque o host é o mesmo.
 
 ---
 

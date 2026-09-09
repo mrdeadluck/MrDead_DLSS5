@@ -128,9 +128,11 @@ public sealed class GameProfile
             {
                 // D3D8 e D3D9 caem os dois no dgVoodoo2, que traduz para D3D11: muda só
                 // qual wrapper é copiado (D3D8.dll ou D3D9.dll).
+                // OpenGL 32-bit: o Feeder verificou (Worms Ultimate Mayhem, KOTOR) pelo mesmo host64,
+                // só trocando o nome do ReShade (opengl32.dll). D3D10 nativo em 32-bit desde o 0.13.1.
                 return Api switch
                 {
-                    GraphicsApi.D3D11 => InstallRoute.B,
+                    GraphicsApi.D3D11 or GraphicsApi.OpenGL or GraphicsApi.D3D10 => InstallRoute.B,
                     GraphicsApi.D3D9 or GraphicsApi.D3D8 => InstallRoute.C,
                     _ => InstallRoute.Unsupported,
                 };

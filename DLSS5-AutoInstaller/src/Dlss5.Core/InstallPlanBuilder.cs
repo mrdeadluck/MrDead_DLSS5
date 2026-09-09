@@ -592,13 +592,23 @@ public static class InstallPlanBuilder
 
         if (profile.Api == GraphicsApi.OpenGL)
         {
+            plan.Warnings.Add(profile.Architecture == PeArchitecture.X86
+                ? "OpenGL 32-bit: o projeto do Feeder validou este caminho (Worms Ultimate Mayhem e KOTOR) — o addon32 " +
+                  "manda o quadro para o mesmo host64 dos jogos D3D11, e o ReShade entra como opengl32.dll. Ninguém " +
+                  "deste projeto rodou um jogo GL ainda. Provedor de vetores: só o LumeniteFX Kernel foi confirmado " +
+                  "compilando no OpenGL (VORT e Launchpad não foram testados lá); se o item 13 reclamar, troque o provedor."
+                : "OpenGL 64-bit: o Feeder faz o caminho em processo (relatado funcionando no MX Bikes pelo projeto dele; " +
+                  "ninguém deste projeto rodou). O ReShade entra como opengl32.dll. O addon do Krish precisa armar " +
+                  "num processo onde o ReShade é opengl32.dll — o autor do Feeder registra isso como não medido. " +
+                  "Se o jogo tiver opção de renderizador DirectX, PREFIRA ela. Depois de abrir o jogo uma vez, " +
+                  "clique em Verificar: o log dirá se o addon foi aceito.");
+        }
+        if (profile.Api == GraphicsApi.D3D10)
+        {
             plan.Warnings.Add(
-                "OpenGL está FORA da matriz validada da especificação (seção 2), e o addon do Feeder " +
-                "anuncia suporte a D3D11/D3D12/Vulkan. O ReShade é instalado com o nome certo " +
-                "(opengl32.dll) e deve carregar e abrir o overlay, mas o DLSS 5 pode não engatar. " +
-                "Se o jogo tiver opção de renderizador DirectX nas configurações, PREFIRA ela — " +
-                "aí o caminho é o validado. Depois de abrir o jogo uma vez, volte e clique em " +
-                "Verificar: o log dirá se o addon foi aceito.");
+                "Direct3D 10 (32-bit): o Feeder 0.13.1+ aceita nativo, sem dgVoodoo. O único provedor de vetores que " +
+                "compila em shader model 4 é o LumeniteFX Kernel (não vem no kit — licença proíbe redistribuir; ver " +
+                "VERSOES.md). Com VORT ou Launchpad o DLSS roda sem vetores (nítido parado, borrado em movimento).");
         }
 
         if (profile.Api == GraphicsApi.D3D8)
@@ -730,10 +740,8 @@ public static class InstallPlanBuilder
             return "Jogo 32-bit em Vulkan não é suportado (o addon32 exige Direct3D 11). " +
                    "Se o jogo também oferecer D3D9, troque a API para D3D9 (rota C).";
         if (p.Api == GraphicsApi.D3D10)
-            return "Direct3D 10 não é suportado por este fluxo.";
-        if (p.Api == GraphicsApi.OpenGL && p.Architecture == PeArchitecture.X86)
-            return "Jogo 32-bit em OpenGL não é suportado: o addon32 do Feeder só aceita Direct3D 11. " +
-                   "Se o jogo oferecer um renderizador DirectX nas configurações, troque para ele.";
+            return "Direct3D 10 em executável 64-bit não tem caminho no Feeder (em 32-bit tem, pelo host64). " +
+                   "Se o jogo oferecer D3D11 ou D3D9 nas configurações, troque para ele.";
         if (p.Api == GraphicsApi.D3D8 && p.Architecture == PeArchitecture.X64)
             return "DirectX 8 em executável 64-bit não existe na prática, e o dgVoodoo2 só traz o " +
                    "wrapper x86. Confira a arquitetura e a API detectadas.";
