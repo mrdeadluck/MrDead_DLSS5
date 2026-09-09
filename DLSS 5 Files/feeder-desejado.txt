@@ -25,5 +25,6 @@
 # pacote da Release precisa acompanhar, basta alterar este arquivo (um comentário serve): o
 # job "trocar" vê que o Feeder já é o pedido e o job "pacote" refaz o zip com o kit atual.
 # 09/09/2026: pacote refeito com o OptiScaler DLSS-NR, o SF 0.54 e o 4.55 em versoes-anteriores;
-# depois, de novo, com o instalador que aceita o SH2 Enhanced Edition (dgVoodoo como D3D9.dll).
+# depois, de novo, com o instalador que aceita o SH2 Enhanced Edition (dgVoodoo como D3D9.dll);
+# e de novo com o OptiScaler v10.0.0-pre1 (o build com Passes 1 a 5) no lugar do fork de 1 passada.
 versao=v0.15.1
