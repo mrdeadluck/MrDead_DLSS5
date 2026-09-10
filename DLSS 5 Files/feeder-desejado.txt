@@ -39,4 +39,5 @@
 # 10/09/2026 04:50 — pacote refeito: item 16b le o dgVoodoo.conf e o ReShade.log do jogo (Enslaved 01:46)
 # 10/09/2026 05:15 — pacote refeito: opção "Forçar janela" grava [APP] ForceWindowed=1 no ReShade.ini do jogo (rota B e C)
 # 10/09/2026 05:45 — pacote refeito: "forçar janela" ja vem marcado em instalacao nova de jogo 32-bit (rota B/C)
+# 10/09/2026 16:30 — pacote refeito: entra o swapchain_override.addon32/64 (forçar janela no ReShade 6)
 versao=v0.15.1
