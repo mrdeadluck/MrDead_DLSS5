@@ -363,6 +363,13 @@ public sealed partial class MainForm
         _chkRegistry.Checked = _options.ApplyRegistryOverride;
         _chkClean.Checked = _options.CleanForbidden;
         _chkWatermark.Checked = _options.DgVoodooWatermark;
+        // Jogo 32-bit que sobe o host64 (rotas B e C): em tela cheia EXCLUSIVA o jogo congela no
+        // aperto de mão com o host (Enslaved). Numa instalação nova já deixamos "forçar janela"
+        // marcado — é o padrão seguro (o README do Feeder diz "windowed is smoother") e evita que
+        // reinstalar não mude nada. Em Atualizar/Reparar respeitamos a escolha gravada no manifesto.
+        if (_fluxo is not (Fluxo.Atualizar or Fluxo.Reparar)
+            && _profile.Route is InstallRoute.B or InstallRoute.C)
+            _options.ForcarJanela = true;
         _chkJanela.Checked = _options.ForcarJanela;
         SelectOverlayKey(_options.OverlayKey);
         UpdateMvAvailability();
