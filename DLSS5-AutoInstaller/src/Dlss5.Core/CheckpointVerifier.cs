@@ -596,6 +596,15 @@ public static class CheckpointVerifier
                     passthru ? CheckStatus.Pass : CheckStatus.Fail,
                     passthru ? "DisableAndPassThru=false (dgVoodoo ativo)." : "DisableAndPassThru ainda está true.",
                     passthru ? null : "Com passthru=true o dgVoodoo não faz nada — causa nº 1 de 'não acontece nada'."));
+                // Tela cheia ou janela: informa sempre, porque é o que decide se o host consegue subir
+                // (Enslaved congelou no aperto de mão em tela cheia exclusiva, 10/09/2026).
+                bool janela = ValueIs(text, "FullScreenMode", "false");
+                r.Add(new CheckResult(5, "dgVoodoo: tela cheia ou janela sem borda", CheckStatus.Pass,
+                    janela
+                        ? "FullScreenMode=false: o dgVoodoo apresenta numa janela do tamanho da tela (o jogo pensa que está em tela cheia)."
+                        : "FullScreenMode=true: o jogo vai para tela cheia EXCLUSIVA. Se o jogo congelar quando o host64 sobe, marque " +
+                          "\"dgVoodoo em janela sem borda\" na detecção e Instale de novo.",
+                    null));
             }
 
             r.Add(new CheckResult(5, "Marca d'água do dgVoodoo na tela", CheckStatus.Manual,

@@ -35,4 +35,5 @@
 # 10/09/2026: pacote refeito com o passo manual sobre frame generation.
 # 10/09/2026 (2): pacote refeito com o item 26b (device D3D12 do host removido).
 # 10/09/2026 (3): pacote refeito com a opcao 'dgVoodoo em janela sem borda' e o item 16b.
+# 10/09/2026 (4): pacote refeito com o item 5 'tela cheia ou janela'.
 versao=v0.15.1
