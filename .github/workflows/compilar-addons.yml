@@ -112,7 +112,7 @@ jobs:
             "Com ele na pasta do jogo (o instalador copia quando 'Forçar o jogo em janela sem borda'",
             "está marcado), o swapchain nasce em janela e o pedido de tela cheia exclusiva do jogo",
             "(SetFullscreenState) é bloqueado — o jogo acha que está em tela cheia, e o host64 não",
-            "congela mais no aperto de mão. Prova: ReShade.log com Registered add-on \"Swap chain override\".",
+            'congela mais no aperto de mão. Prova: ReShade.log com Registered add-on "Swap chain override".',
             "",
             "Chaves que ele lê no ReShade.ini do jogo, seção [APP]: ForceVsync, ForceWindowed,",
             "ForceFullscreen, Force10BitFormat, ForceDefaultRefreshRate, ForceResolution=largura,altura."
