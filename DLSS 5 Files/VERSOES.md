@@ -138,6 +138,24 @@ depois volte ao Krish.
   compatibilidade estática. Se um jogo que rodava com o 4.1.5 parar, o addon antigo está em
   `versoes-anteriores/` — copie de volta para a raiz com o nome `renodx-dlss5.addon64`.
 
+## Jogo que só abre em tela cheia (congela quando o DLSS 5 sobe)
+
+Em 32-bit o Neural Rendering roda num auxiliar, o `host64` (uma janela D3D12 atrás do jogo). Se o
+jogo estiver em **tela cheia EXCLUSIVA** na hora em que essa janela aparece, os dois swapchains
+brigam e o jogo congela no aperto de mão (o `dlss5-feed.log` para em `host spawned` sem
+`host connected`). Visto no Enslaved (10/09/2026): `SetFullscreenState(TRUE)` no `ReShade.log`
+logo antes do host subir.
+
+A saída **geral**, para qualquer jogo — tenha ou não opção de janela no menu — é marcar
+**"Forçar o jogo em janela sem borda"** na tela de detecção. Como o feed é um addon do ReShade
+dentro do próprio jogo, o instalador grava `[APP] ForceWindowed=1` no `ReShade.ini` do jogo, e o
+ReShade obriga o swapchain a nascer em janela em qualquer API (D3D9/10/11/12). Não depende do
+jogo ter modo janela. Prova de que pegou: depois de abrir, o `ReShade.log` do jogo não pode mais
+ter `Fullscreen = TRUE`. Nos jogos antigos por trás do dgVoodoo (rota C) o instalador ainda põe
+`FullScreenMode=false` no `dgVoodoo.conf` — as duas alavancas juntas. Só o Enslaved mostrou que
+editar o dgVoodoo.conf não bastava: ele é **D3D11 nativo (rota B), sem dgVoodoo** — o ForceWindowed
+é que resolve.
+
 ## O que mudou no Feeder de 0.13.1-beta.1 para 0.15.1
 
 - **0.14.x:** consumidores neurais alternativos dentro de `host64\` reconhecidos pelo host, aviso

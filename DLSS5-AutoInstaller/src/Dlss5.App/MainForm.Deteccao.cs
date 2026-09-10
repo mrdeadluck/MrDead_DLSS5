@@ -252,11 +252,11 @@ public sealed partial class MainForm
         _chkWatermark.Checked = true;
         _chkWatermark.Margin = new Padding(0, 4, 0, 0);
         _chkWatermark.CheckedChanged += (_, _) => _options.DgVoodooWatermark = _chkWatermark.Checked;
-        _chkJanela.Text = "dgVoodoo em janela sem borda (só rota C) — para jogo que só tem tela cheia exclusiva";
+        _chkJanela.Text = "Forçar o jogo em janela sem borda — para jogo que só abre em tela cheia (evita o congelamento do host64)";
         Ui.ComQuebra(_chkJanela);
         _chkJanela.Checked = false;
         _chkJanela.Margin = new Padding(0, 4, 0, 0);
-        _chkJanela.CheckedChanged += (_, _) => _options.DgVoodooJanela = _chkJanela.Checked;
+        _chkJanela.CheckedChanged += (_, _) => _options.ForcarJanela = _chkJanela.Checked;
         var opcoes = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1, Margin = new Padding(0) };
         // Percent 100: as caixas e as dicas são medidas na largura da coluna e quebram linha.
         opcoes.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -266,7 +266,7 @@ public sealed partial class MainForm
         opcoes.Controls.Add(Dica("Nunca toca em arquivo do jogo. O instalador vai para .dlss5bak e volta na desinstalação."));
         opcoes.Controls.Add(_chkWatermark);
         opcoes.Controls.Add(_chkJanela);
-        opcoes.Controls.Add(Dica("Em tela cheia exclusiva o host64 (janela atrás do jogo) e o painel brigam com o swapchain do jogo: o Enslaved congelou no aperto de mão com o host. Com isto o dgVoodoo apresenta numa janela do tamanho da tela e o jogo continua achando que está em tela cheia. Se o jogo tiver opção própria de janela/sem borda, use a do jogo."));
+        opcoes.Controls.Add(Dica("Vale para QUALQUER jogo 32-bit que sobe o host64, tenha ou não opção de janela. Em tela cheia exclusiva o host64 (janela atrás do jogo) e o painel brigam com o swapchain do jogo: o Enslaved congelou no aperto de mão com o host. Grava [APP] ForceWindowed=1 no ReShade.ini do jogo (e, na rota C, FullScreenMode=false no dgVoodoo.conf), então o jogo abre em janela sem borda do tamanho da tela achando que está em tela cheia. Se o jogo tiver opção própria de janela, pode usar a do jogo."));
         form.Controls.Add(Ui.Rotulo("Opções"), 0, linha);
         form.Controls.Add(opcoes, 1, linha++);
 
@@ -363,7 +363,7 @@ public sealed partial class MainForm
         _chkRegistry.Checked = _options.ApplyRegistryOverride;
         _chkClean.Checked = _options.CleanForbidden;
         _chkWatermark.Checked = _options.DgVoodooWatermark;
-        _chkJanela.Checked = _options.DgVoodooJanela;
+        _chkJanela.Checked = _options.ForcarJanela;
         SelectOverlayKey(_options.OverlayKey);
         UpdateMvAvailability();
 

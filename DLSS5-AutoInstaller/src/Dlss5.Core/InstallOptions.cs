@@ -27,12 +27,17 @@ public sealed class InstallOptions
     public bool DgVoodooWatermark { get; set; } = true;
 
     /// <summary>
-    /// dgVoodoo apresenta o jogo numa janela sem borda do tamanho da tela, mesmo o jogo pedindo
-    /// tela cheia exclusiva. Para jogo que só oferece tela cheia: em exclusiva o host64 (janela
-    /// atrás do jogo, D3D12) e o painel projetado brigam com o swapchain do jogo — o Enslaved
-    /// congelou no aperto de mão com o host logo depois de SetFullscreenState(TRUE) (10/09/2026),
-    /// e o README do Feeder diz que "windowed is smoother". O jogo continua achando que está em
-    /// tela cheia; quem faz a janela é o dgVoodoo (FullScreenMode=false + WindowedAttributes).
+    /// Força o jogo a rodar em janela (sem borda, do tamanho da tela) mesmo que ele só ofereça
+    /// tela cheia exclusiva. Vale para qualquer jogo que sobe o host64 (rotas B e C, 32-bit):
+    /// em tela cheia EXCLUSIVA o host64 (janela D3D12 atrás do jogo) e o painel projetado brigam
+    /// com o swapchain do jogo, e o jogo congela no aperto de mão com o host (Enslaved, 10/09/2026,
+    /// logo depois de SetFullscreenState(TRUE)); o README do Feeder diz "windowed is smoother".
+    ///
+    /// Como o feed roda como addon do ReShade DENTRO do jogo, a alavanca geral é o ReShade:
+    /// [APP] ForceWindowed=1 no ReShade.ini do jogo obriga o swapchain a nascer em janela em
+    /// qualquer API (D3D9/10/11/12) e independe de o jogo ter opção de janela. Na rota C (jogo
+    /// antigo por trás do dgVoodoo) o dgVoodoo.conf também sai com FullScreenMode=false +
+    /// WindowedAttributes — as duas alavancas juntas.
     /// </summary>
-    public bool DgVoodooJanela { get; set; }
+    public bool ForcarJanela { get; set; }
 }

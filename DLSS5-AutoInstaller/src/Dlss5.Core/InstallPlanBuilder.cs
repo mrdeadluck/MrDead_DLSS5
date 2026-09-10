@@ -347,6 +347,15 @@ public static class InstallPlanBuilder
         else
         {
             // 32-bit (B/C): addon32 na raiz; o resto do Feeder dentro de host64\.
+            // A opção "forçar janela" grava [APP] ForceWindowed=1 no ReShade.ini do jogo (ver
+            // ConteudoGerado). É a alavanca que vale para QUALQUER jogo, tenha ou não opção de
+            // janela — em tela cheia exclusiva o host64 congela no aperto de mão (Enslaved).
+            if (options.ForcarJanela)
+                plan.Warnings.Add(
+                    "Forçar janela: o ReShade.ini do jogo sai com [APP] ForceWindowed=1, então o jogo abre em janela sem " +
+                    "borda do tamanho da tela mesmo sem ter opção própria de janela. É o que impede o host64 de congelar em " +
+                    "tela cheia exclusiva. Se depois de abrir o ReShade.log ainda tiver \"Fullscreen = TRUE\", o jogo troca " +
+                    "de modo por um caminho que o ReShade não pega — aí só o modo de janela do próprio jogo resolve.");
             Copy(kit.FeedAddon32, exe, "dlss5-feed.addon32");
             Copy(kit.FeedHost64Exe, host64, "dlss5-feed-host64.exe");
             Copy(kit.DxgiX64, host64, "dxgi.dll");
@@ -552,13 +561,13 @@ public static class InstallPlanBuilder
                     break;
             }
             Copy(kit.DgVoodooCpl, renderer, "dgVoodooCpl.exe");
-            if (options.DgVoodooJanela)
+            if (options.ForcarJanela)
                 plan.Warnings.Add(
-                    "dgVoodoo em janela sem borda: o dgVoodoo.conf sai com FullScreenMode=false, ScalingMode=stretched_ar e " +
-                    "WindowedAttributes=borderless, fullscreensize — o jogo pede tela cheia exclusiva e recebe uma janela do " +
-                    "tamanho da tela. É para jogo que só tem tela cheia: em exclusiva o host64 e o painel brigam com o " +
-                    "swapchain do jogo (o Enslaved congelou no aperto de mão com o host, 10/09/2026). Desmarque se o jogo " +
-                    "tiver opção de janela/sem borda própria.");
+                    "Forçar janela (rota C): além do ForceWindowed do ReShade, o dgVoodoo.conf sai com FullScreenMode=false, " +
+                    "ScalingMode=stretched_ar e WindowedAttributes=borderless, fullscreensize — o jogo pede tela cheia exclusiva " +
+                    "e recebe uma janela do tamanho da tela. É para jogo que só tem tela cheia: em exclusiva o host64 e o painel " +
+                    "brigam com o swapchain do jogo (o Enslaved congelou no aperto de mão, 10/09/2026). Desmarque se o jogo tiver " +
+                    "opção de janela própria.");
             if (kit.DgVoodooConf is not null)
                 plan.Actions.Add(new PlanAction(PlanActionKind.PatchDgVoodooConf,
                     $"Copiar e ajustar dgVoodoo.conf → {Rel(profile, Path.Combine(renderer, "dgVoodoo.conf"))}",

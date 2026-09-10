@@ -237,6 +237,19 @@ public class ReShadeConfigWriterTests
     }
 
     [Fact]
+    public void Ini_ForceWindowed_SoQuandoPedido()
+    {
+        // Padrão: nada de [APP], nada muda para quem não marcou.
+        var normal = ReShadeConfigWriter.BuildReShadeIni();
+        Assert.DoesNotContain("ForceWindowed", normal);
+        // Marcado: a alavanca geral do ReShade que força janela em qualquer API.
+        var janela = ReShadeConfigWriter.BuildReShadeIni(forceWindowed: true);
+        Assert.Contains("[APP]", janela);
+        Assert.Contains("ForceWindowed=1", janela);
+        Assert.Contains("ForceFullscreen=0", janela);
+    }
+
+    [Fact]
     public void Ini_UsesChosenOverlayKey()
     {
         Assert.Contains("KeyOverlay=45,0,0,0",

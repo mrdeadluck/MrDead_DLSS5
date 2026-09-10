@@ -217,7 +217,7 @@ public sealed partial class InstallerEngine
                     {
                         var perfil = DgVoodooConfigurator.ProfileFor(profile);
                         var patched = DgVoodooConfigurator.Patch(File.ReadAllText(action.SourcePath!), perfil,
-                            hardwareTnL: null, janelaSemBorda: plan.Options.DgVoodooJanela);
+                            hardwareTnL: null, janelaSemBorda: plan.Options.ForcarJanela);
                         if (!plan.Options.DgVoodooWatermark)
                             patched = DgVoodooConfigurator.DefinirChave(patched, "DirectX", "dgVoodooWatermark", "false");
                         Gravar(action.TargetPath!, manifest, anterior, desfazer, resultado,
@@ -387,7 +387,8 @@ public sealed partial class InstallerEngine
                 // base; o BasePath traz a base de volta para a raiz, onde está tudo.
                 basePath: plan.Profile.ReShadeForaDaRaiz ? plan.Profile.ExeFolder : null,
                 shortFuse: plan.Profile.UsesShortFuse,
-                passCount: plan.Profile.PassCount)
+                passCount: plan.Profile.PassCount,
+                forceWindowed: plan.Options.ForcarJanela)
             : ReShadeConfigWriter.BuildPresetIni(plan.Options.MvProvider, feederUsed: plan.Profile.NeedsFeeder);
     }
 

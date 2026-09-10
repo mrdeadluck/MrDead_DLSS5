@@ -157,7 +157,8 @@ public static class ReShadeConfigWriter
         string? baseDir = null,
         string? basePath = null,
         bool shortFuse = false,
-        int passCount = ShortFuseDlss.PassesPadrao)
+        int passCount = ShortFuseDlss.PassesPadrao,
+        bool forceWindowed = false)
     {
         // Sem baseDir tudo continua relativo, como sempre foi.
         string Raiz(string relativo) => baseDir is null
@@ -190,6 +191,16 @@ public static class ReShadeConfigWriter
         sb.AppendLine("[INPUT]");
         sb.AppendLine($"KeyOverlay={overlayKey},{Bit(ctrl)},{Bit(shift)},{Bit(alt)}");
         sb.AppendLine();
+        if (forceWindowed)
+        {
+            // Alavanca geral do ReShade: obriga o swapchain do jogo a nascer em janela, mesmo o
+            // jogo só oferecendo tela cheia exclusiva. Serve para qualquer API que o ReShade
+            // enxerga (D3D9/10/11/12) e é o que impede o congelamento do host64 em tela cheia.
+            sb.AppendLine("[APP]");
+            sb.AppendLine("ForceWindowed=1");
+            sb.AppendLine("ForceFullscreen=0");
+            sb.AppendLine();
+        }
         sb.AppendLine("[ADDON]");
         sb.AppendLine($"AddonPath={(baseDir is null ? @".\" : baseDir)}");
         // O addon do ShortFuse pede para ser carregado no DllMain (ganchos cedo no NGX e no

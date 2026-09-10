@@ -1154,10 +1154,17 @@ public static class CheckpointVerifier
                 string reshadeLogTexto = "";
                 try { var rl = Path.Combine(exeFolder, "ReShade.log"); if (File.Exists(rl)) reshadeLogTexto = ReadShared(rl); } catch { }
                 bool exclusiva = HostLog.FoiParaTelaCheiaExclusiva(reshadeLogTexto);
+                // Rota C: o dgVoodoo.conf manda (FullScreenMode). Rota B (jogo D3D11 nativo, como o
+                // Enslaved): não há dgVoodoo — quem força janela é o [APP] ForceWindowed do ReShade.ini.
+                bool forceWindowedNoIni = false;
+                try { var ini = Path.Combine(exeFolder, "ReShade.ini"); if (File.Exists(ini)) forceWindowedNoIni = ValueIs(ReadShared(ini), "ForceWindowed", "1"); } catch { }
                 string? confTexto = null;
                 if (route == InstallRoute.C && rendererFolder is not null)
                     try { var c = Path.Combine(rendererFolder, "dgVoodoo.conf"); if (File.Exists(c)) confTexto = ReadShared(c); } catch { }
-                bool? janelaValendo = confTexto is null ? null : ValueIs(confTexto, "FullScreenMode", "false");
+                bool? janelaValendo =
+                    forceWindowedNoIni ? true
+                    : confTexto is null ? null
+                    : ValueIs(confTexto, "FullScreenMode", "false");
 
                 string detalhe =
                     "dlss5-feed.log tem \"host spawned\" mas nunca \"host connected\"; o host viu o jogo conectar e nunca recebeu o " +
@@ -1173,10 +1180,10 @@ public static class CheckpointVerifier
                     };
                 string acao = janelaValendo switch
                 {
-                    false => "Marque \"dgVoodoo em janela sem borda (só rota C)\" na tela de detecção e clique em Instalar de novo — ou edite " +
-                             $"{Path.Combine(rendererFolder ?? exeFolder, "dgVoodoo.conf")} na mão: em [General] FullScreenMode = false e " +
-                             "ScalingMode = stretched_ar; em [GeneralExt] WindowedAttributes = borderless, fullscreensize. Depois abra o jogo " +
-                             "e confira: o ReShade.log não pode mais ter \"Fullscreen = TRUE\".",
+                    false => "Marque \"Forçar o jogo em janela sem borda\" na tela de detecção e clique em Instalar de novo. O ReShade.ini do " +
+                             "jogo passa a ter [APP] ForceWindowed=1 (vale para qualquer jogo, tenha ou não opção de janela)" +
+                             (route == InstallRoute.C ? " e o dgVoodoo.conf sai com FullScreenMode=false" : "") +
+                             ". Depois abra o jogo e confira: o ReShade.log não pode mais ter \"Fullscreen = TRUE\".",
                     true => "O dgVoodoo não está sendo quem apresenta (o jogo troca de modo por outro caminho). Teste de isolamento: motor " +
                             "\"RenoDX (Krish)\" na detecção, que dispensa o addon dentro do host; se ainda congelar, abra o jogo, aperte " +
                             "Alt+Tab e clique de volta assim que a tela ficar preta (o host sobe ~2 s depois da primeira imagem).",
