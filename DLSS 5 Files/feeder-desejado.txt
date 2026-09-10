@@ -32,4 +32,5 @@
 # 09/09/2026 (4): pacote refeito com OpenGL e D3D10 em 32-bit (caminho B).
 # 09/09/2026 (5): pacote refeito com o ShortFuse-no-host64 como motor recomendado para x2+ em 32-bit.
 # 09/09/2026 (6): pacote refeito com a verificacao que le as avaliacoes do ShortFuse no host64.
+# 10/09/2026: pacote refeito com o passo manual sobre frame generation.
 versao=v0.15.1

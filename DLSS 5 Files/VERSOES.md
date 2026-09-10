@@ -54,6 +54,17 @@ lugar do Krish e do Feeder (os dois saem da pasta, com backup), grava no `ReShad
 e a verificação lê o log do addon (item 14) e o ini (item 24). Dentro do jogo o controle fica na
 aba **RenoDX DLSS**, seção Advanced, "Pass Count". Cada passada custa o mesmo que a primeira.
 
+### Frame generation: nenhum motor deste kit cria quadros
+
+A aba **DLSS-G** do painel RenoDX DLSS (ShortFuse) só rege o DLSS Frame Generation que o **jogo já
+traz** (Streamline) — em jogo sem ele fica vazia, e nada muda porque não há o que reger. O que existe:
+**NVIDIA Smooth Motion** (driver, RTX 40 e 50; NVIDIA App → jogo → Smooth Motion) em D3D11/D3D12, com o
+Feeder convivendo desde o 0.11 — nunca em Vulkan; em jogo 32-bit atrás do dgVoodoo a apresentação é
+D3D11, então deve valer (não medido). Em 64-bit, o **DLSS5-Reshade-AIO do kibblerz** (pasta do kit,
+manual) traz Frame Generation próprio com o `nvngx_dlssg.dll` do kit, mas substitui o RenoDX + Feeder.
+O **MFG Unlock** só serve em jogo que já tem DLSS-G. Dentro do host64 não existe frame generation: o host
+devolve ao jogo um quadro por quadro. O passo manual da verificação repete isso para cada jogo.
+
 ### x2+ em jogo **32-bit** (caminhos B e C)
 
 O `renodx-dlss.addon64` do ShortFuse é 64-bit e se pendura no processo do jogo: não serve

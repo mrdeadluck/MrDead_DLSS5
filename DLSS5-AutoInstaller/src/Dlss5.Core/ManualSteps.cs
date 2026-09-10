@@ -63,6 +63,24 @@ public static class ManualSteps
             steps.Add(new ManualStep(n++, $"Deep Fried Chicken no host64: Defender, ARMED e {profile.PassCount} passada(s)",
                 DeepFriedChicken.PassoManual(profile.PassCount), true));
 
+        // Frame generation: nenhum dos motores CRIA quadros. A aba DLSS-G do painel do ShortFuse
+        // só rege o DLSS Frame Generation que o jogo já tem (Streamline) — em jogo sem ele fica
+        // vazia. O que existe fora daqui: Smooth Motion do driver (D3D11/D3D12) e o AIO do kibblerz.
+        bool vulkan = profile.Api == GraphicsApi.Vulkan;
+        steps.Add(new ManualStep(n++, "Frame generation (opcional): não vem de nenhum motor deste programa",
+            "A aba DLSS-G do painel RenoDX DLSS (ShortFuse) só controla o DLSS Frame Generation que o JOGO já traz " +
+            "(Streamline): em jogo sem ele a aba fica vazia, e nada neste kit cria quadros. Para dobrar os quadros: " +
+            (vulkan
+                ? "em Vulkan NÃO ligue o NVIDIA Smooth Motion — o Feeder cai (README do Feeder). "
+                : "NVIDIA Smooth Motion, do próprio driver (RTX 40 e 50): NVIDIA App → o jogo → Smooth Motion ligado. Vale para " +
+                  "D3D11 e D3D12" + ((profile.Route == InstallRoute.C) ? " — o jogo 32-bit atrás do dgVoodoo apresenta em D3D11, então deve valer (não medido aqui)" : "") +
+                  "; o Feeder convive com ele desde o 0.11 (o README dele diz para deixar ligado em DX11/12). ") +
+            (profile.Architecture == PeArchitecture.X64
+                ? "Alternativa em 64-bit: o DLSS5-Reshade-AIO do kibblerz (pasta \"(alternativa kibblerz)\" do kit, instalação manual) traz " +
+                  "Frame Generation próprio com o nvngx_dlssg.dll do kit, mas substitui o RenoDX + Feeder. O MFG Unlock só serve em jogo que já tem DLSS-G."
+                : "Dentro do host64 não existe frame generation: o host devolve ao jogo um quadro por quadro."),
+            false));
+
         // Depth pelo Generic Depth e DLAA do Feeder: só existem no caminho do Feeder. No
         // direto o RenoDX recebe depth e motion vectors do contrato NGX do jogo, e o
         // Generic Depth fica desligado de propósito (a cópia antes dos clears derrubou o RE9).
