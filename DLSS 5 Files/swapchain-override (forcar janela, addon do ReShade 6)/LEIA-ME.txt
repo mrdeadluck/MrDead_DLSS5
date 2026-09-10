@@ -1,0 +1,15 @@
+swapchain_override — o 'forçar janela' do instalador (addon do ReShade 6)
+
+É o exemplo oficial 16-swapchain_override do ReShade (crosire/reshade, BSD-3/MIT),
+compilado pelo workflow compilar-addons.yml no commit registrado em
+swapchain-override-versao.txt. A fonte está ao lado (swapchain_override_addon.cpp.txt).
+
+Por que existe: o ReShade 5.x lia [APP] ForceWindowed=1 do ReShade.ini sozinho; o
+ReShade 6 tirou isso do núcleo e transformou neste addon. Sem ele a chave não faz nada.
+Com ele na pasta do jogo (o instalador copia quando 'Forçar o jogo em janela sem borda'
+está marcado), o swapchain nasce em janela e o pedido de tela cheia exclusiva do jogo
+(SetFullscreenState) é bloqueado — o jogo acha que está em tela cheia, e o host64 não
+congela mais no aperto de mão. Prova: ReShade.log com Registered add-on "Swap chain override".
+
+Chaves que ele lê no ReShade.ini do jogo, seção [APP]: ForceVsync, ForceWindowed,
+ForceFullscreen, Force10BitFormat, ForceDefaultRefreshRate, ForceResolution=largura,altura.
