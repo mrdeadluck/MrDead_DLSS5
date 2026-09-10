@@ -1129,6 +1129,23 @@ public static class CheckpointVerifier
                     "O botão \"Testar o host64\" confirma em 15 s, sem abrir jogo.");
             }
 
+            // 26b — o device D3D12 do host morreu: o host sai e o addon do jogo respawna outro, que
+            // pode morrer igual. O código DXGI diz o tipo; o dlss5-feed.log diz quantas vezes.
+            if (HostLog.DeviceRemovido(hostLogTexto) is { } removido)
+            {
+                int perdidos = HostLog.HostsPerdidos(text);
+                bool reinicioPeloPainel = removido.Codigo == "0x887A0001";
+                yield return new CheckResult(26, "Device D3D12 do host64 removido", CheckStatus.Fail,
+                    $"host64\\dlss5-feed-host.log: \"the D3D12 device was removed ({removido.Codigo})\" — {removido.Explicacao}" +
+                    (perdidos > 0 ? $" O addon do jogo viu o host morrer {perdidos} vez(es) nesta sessão (\"host lost\")." : ""),
+                    reinicioPeloPainel
+                        ? "Feche o jogo e abra de novo em vez de usar \"Restart\"/\"Apply to the DLSS 5 host\" no painel (com o " +
+                          "ShortFuse no host, a seção \"neural-rendering settings (on the host)\" é do Krish e não faz nada). Se o " +
+                          "host morrer já na primeira abertura, baixe as passadas ou o \"Work resolution\", ou troque o consumidor."
+                        : "Baixe o \"Work resolution\" do painel do Feeder ou as passadas; se repetir, troque o consumidor (Krish, " +
+                          "OptiScaler) para isolar. O \"Testar o host64\" reproduz sem abrir o jogo.");
+            }
+
             // 25 — consumidor alternativo do host64: arquivos, configuração e passadas.
             if (consumidor == NeuralEngine.OptiScalerNr)
             {

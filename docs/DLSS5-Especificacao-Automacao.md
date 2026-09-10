@@ -562,6 +562,8 @@ Estado final HL2: dgVoodoo em `bin\`, ReShade `dxgi.dll` na raiz, overlays desli
 | `provider … installed but DISABLED` | provedor não marcado | marcar acima do Feed, Re-enable |
 | `no known texMotionVectors provider found` | idem, ou provedor com erro de compilação | ver log por `error X` |
 | `Feed: disabled`, `Host: not running` | consequência de MV ausente | resolver MV |
+| `Stopped: the 64-bit host went away` repetido; `host64\dlss5-feed-host.log` diz `the D3D12 device was removed (0x887A0001) during an evaluate` logo após `feature ready` | Host REINICIADO pelo painel ("Restart"/"Apply to the DLSS 5 host") com o ShortFuse dentro dele: o primeiro host roda, cada host reiniciado morre no primeiro quadro (Silent Hill Homecoming, 10/09/2026). A seção "neural-rendering settings (on the host)" do painel é do Krish e o ShortFuse a ignora — mexer ali só reinicia o host | Fechar e abrir o jogo; nunca o botão de restart com o ShortFuse no host. Item 26b da verificação decodifica o código DXGI |
+| `device was removed (0x887A0006 DEVICE_HUNG)` depois de minutos | GPU hang na avaliação (Feeder issue #57) | baixar `work_resolution`/passadas; trocar consumidor para isolar |
 | `only Direct3D 11 games are supported by the 32-bit add-on` | jogo x86 em Vulkan | D3D9 + dgVoodoo |
 | `WAITING FOR NGX MODULES` (x64) | Feed não entregou frame válido | MV / depth |
 | `0xBAD00007` | NGX nunca recebeu evaluate válido, ou override/reboot faltando | itens 1–2 + MV |

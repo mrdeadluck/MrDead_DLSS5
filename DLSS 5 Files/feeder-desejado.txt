@@ -33,4 +33,5 @@
 # 09/09/2026 (5): pacote refeito com o ShortFuse-no-host64 como motor recomendado para x2+ em 32-bit.
 # 09/09/2026 (6): pacote refeito com a verificacao que le as avaliacoes do ShortFuse no host64.
 # 10/09/2026: pacote refeito com o passo manual sobre frame generation.
+# 10/09/2026 (2): pacote refeito com o item 26b (device D3D12 do host removido).
 versao=v0.15.1

@@ -258,7 +258,44 @@ public static class ShortFuseNoHost64
         "evaluation completed\" (a verificação, item 25, lê). O painel dele abre com Home NA JANELA DO HOST (marque \"Show the " +
         "DLSS 5 host window\" no painel do Feeder): aba RenoDX DLSS → Advanced → Pass Count. O Feeder não o conhece como " +
         "consumidor (o host diz \"renodx-dlss5*.addon64 not found\" e segue servindo DLAA), mas foi o motor em que o x2+ " +
-        "apareceu de fato (Silent Hill 2 EE, 09/09/2026). Se o host cair, teste menos passadas antes de trocar de motor.";
+        "apareceu de fato (Silent Hill 2 EE, 09/09/2026). DUAS ARMADILHAS no painel do Feeder: (1) a seção \"DLSS 5 " +
+        "neural-rendering settings (on the host)\" (NR Preset, Style, Intensity...) é do addon do KRISH — o ShortFuse ignora " +
+        "tudo ali; as opções dele ficam na aba RenoDX DLSS da janela do host; (2) NÃO use \"Apply to the DLSS 5 host\" nem " +
+        "\"Restart the DLSS 5 host\": o host novo morre no primeiro quadro (\"D3D12 device was removed 0x887A0001\", Silent " +
+        "Hill Homecoming, 10/09/2026) e cada tentativa repete. Para mudar qualquer coisa, feche e abra o jogo. Se o host cair " +
+        "logo na primeira abertura, teste menos passadas antes de trocar de motor.";
+}
+
+/// <summary>Leitura do host64\\dlss5-feed-host.log: o device D3D12 do host morreu?</summary>
+public static class HostLog
+{
+    /// <summary>O código DXGI da remoção ("0x887A0006") e a explicação, ou null se o log não a registrou.</summary>
+    public static (string Codigo, string Explicacao)? DeviceRemovido(string? log)
+    {
+        if (string.IsNullOrEmpty(log)) return null;
+        var m = System.Text.RegularExpressions.Regex.Match(log, @"the D3D12 device was removed \((0x[0-9A-Fa-f]{8})");
+        if (!m.Success) return null;
+        var codigo = m.Groups[1].Value.ToUpperInvariant().Replace("0X", "0x");
+        var explicacao = codigo switch
+        {
+            "0x887A0006" => "DEVICE_HUNG: a GPU travou numa avaliação (o projeto do Feeder acompanha em issues/57).",
+            "0x887A0007" => "DEVICE_RESET: o driver reiniciou a GPU (TDR).",
+            "0x887A0005" => "DEVICE_REMOVED: o driver derrubou o device.",
+            "0x887A0001" => "INVALID_CALL: o driver recusou uma chamada no primeiro quadro do host — o padrão visto quando o host é " +
+                            "REINICIADO pelo painel (\"Restart\"/\"Apply to the DLSS 5 host\") com o RenoDX DLSS (ShortFuse) dentro dele " +
+                            "(Silent Hill Homecoming, 10/09/2026: o primeiro host rodou 5 min; cada host reiniciado morreu em 130 ms).",
+            "0x887A0020" => "DRIVER_INTERNAL_ERROR: erro interno do driver.",
+            _ => "código DXGI não catalogado.",
+        };
+        return (codigo, explicacao);
+    }
+
+    /// <summary>Quantas vezes o addon do jogo viu o host morrer ("host lost: frame message failed").</summary>
+    public static int HostsPerdidos(string? feedLog)
+    {
+        if (string.IsNullOrEmpty(feedLog)) return 0;
+        return System.Text.RegularExpressions.Regex.Matches(feedLog, @"host lost: frame message failed").Count;
+    }
 }
 
 /// <summary>

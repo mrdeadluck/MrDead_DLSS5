@@ -927,6 +927,23 @@ public class ConsumidoresNoHost64Tests
     }
 
     [Fact]
+    public void HostLog_DeviceRemovido_DoSilentHillHomecoming()
+    {
+        var host = "00:18:28.580  [host] feature ready: 2560x1440 DLAA flags=74\r\n" +
+                   "00:18:28.591  [host] the D3D12 device was removed (0x887A0001) during an evaluate; exiting so the game can respawn a fresh host\r\n" +
+                   "00:18:28.597  [host] exit 3\r\n";
+        var r = HostLog.DeviceRemovido(host);
+        Assert.NotNull(r);
+        Assert.Equal("0x887A0001", r!.Value.Codigo);
+        Assert.Contains("INVALID_CALL", r.Value.Explicacao);
+        Assert.Contains("DEVICE_HUNG", HostLog.DeviceRemovido("x the D3D12 device was removed (0x887A0006 DEVICE_HUNG) during an evaluate")!.Value.Explicacao);
+        Assert.Null(HostLog.DeviceRemovido("[host] feature ready: 1920x1080 DLAA"));
+        var feed = "a [feed32] host lost: frame message failed (exit code 3)\nb [feed32] host lost: frame message failed (exit code 3)\n";
+        Assert.Equal(2, HostLog.HostsPerdidos(feed));
+        Assert.Equal(0, HostLog.HostsPerdidos(null));
+    }
+
+    [Fact]
     public void LogDoShortFuseNoHost64_DoSH2_ProvaAsAvaliacoes()
     {
         // Trecho real do host64\ReShade.log do Silent Hill 2 EE (09/09/2026), ShortFuse dentro do host.
