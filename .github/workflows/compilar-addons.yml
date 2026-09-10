@@ -67,7 +67,11 @@ jobs:
             $arch = $par[0]; $ext = $par[1]
             $obj = "$saida\obj-$arch\"
             New-Item -ItemType Directory -Path $obj -Force | Out-Null
-            $cmd = "call `"$vcvars`" $arch && cl /nologo /O2 /MT /EHsc /std:c++17 /DNDEBUG /DWIN32_LEAN_AND_MEAN /DNOMINMAX /I `"$inc`" /Fo`"$obj`" /LD `"$src`" /Fe`"$saida\swapchain_override.$ext`" /link /INCREMENTAL:NO"
+            # /Fo vai SEM aspas: a barra final antes da aspa (\") vira aspa escapada para o cl.exe
+            # e engole o resto da linha ("D8003: missing source filename"). O caminho do runner
+            # (D:\a\<repo>\<repo>\saida\obj-x86\) não tem espaço; se um dia tiver, o teste abaixo avisa.
+            if ($obj -match '\s') { throw "caminho de saída com espaço: $obj" }
+            $cmd = "call `"$vcvars`" $arch && cl /nologo /O2 /MT /EHsc /std:c++17 /DNDEBUG /DWIN32_LEAN_AND_MEAN /DNOMINMAX /I `"$inc`" /Fo$obj /LD `"$src`" /Fe`"$saida\swapchain_override.$ext`" /link /INCREMENTAL:NO"
             Write-Host "== $arch =="
             cmd /c $cmd
             if ($LASTEXITCODE -ne 0) { throw "cl.exe falhou para $arch" }
