@@ -505,6 +505,7 @@ public sealed partial class MainForm
         _options.OverlayCtrl = o.OverlayCtrl;
         _options.OverlayShift = o.OverlayShift;
         _options.OverlayAlt = o.OverlayAlt;
+        _options.TeclaLigaDesliga = o.TeclaLigaDesliga;
         _options.ApplyRegistryOverride = o.ApplyRegistryOverride;
         _options.DgVoodooWatermark = o.DgVoodooWatermark;
         _options.ForcarJanela = o.ForcarJanela;

@@ -58,6 +58,7 @@ public sealed class InstallManifest
     public bool OverlayCtrl { get; set; }
     public bool OverlayShift { get; set; }
     public bool OverlayAlt { get; set; }
+    public int TeclaLigaDesliga { get; set; } = ReShadeConfigWriter.KeyF6;
     public bool ApplyRegistryOverride { get; set; } = true;
     public bool DgVoodooWatermark { get; set; } = true;
     /// <summary>dgVoodoo em janela sem borda (jogo que só tem tela cheia exclusiva).</summary>
@@ -234,6 +235,7 @@ public sealed class InstallManifest
             OverlayCtrl = OverlayCtrl,
             OverlayShift = OverlayShift,
             OverlayAlt = OverlayAlt,
+            TeclaLigaDesliga = TeclaLigaDesliga,
             ApplyRegistryOverride = ApplyRegistryOverride,
             DgVoodooWatermark = DgVoodooWatermark,
             ForcarJanela = ForcarJanela,
@@ -294,6 +296,7 @@ public sealed class InstallManifest
             OverlayCtrl = o.OverlayCtrl,
             OverlayShift = o.OverlayShift,
             OverlayAlt = o.OverlayAlt,
+            TeclaLigaDesliga = o.TeclaLigaDesliga,
             ApplyRegistryOverride = o.ApplyRegistryOverride,
             DgVoodooWatermark = o.DgVoodooWatermark,
             ForcarJanela = o.ForcarJanela,

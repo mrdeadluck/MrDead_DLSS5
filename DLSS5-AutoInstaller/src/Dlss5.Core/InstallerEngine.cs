@@ -389,7 +389,8 @@ public sealed partial class InstallerEngine
                 shortFuse: plan.Profile.UsesShortFuse,
                 passCount: plan.Profile.PassCount,
                 forceWindowed: plan.Options.ForcarJanela)
-            : ReShadeConfigWriter.BuildPresetIni(plan.Options.MvProvider, feederUsed: plan.Profile.NeedsFeeder);
+            : ReShadeConfigWriter.BuildPresetIni(plan.Options.MvProvider, feederUsed: plan.Profile.NeedsFeeder,
+                teclaLigaDesliga: plan.Options.TeclaLigaDesliga);
     }
 
     private static string? LerSePuder(string? caminho)

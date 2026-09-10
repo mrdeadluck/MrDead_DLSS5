@@ -290,6 +290,19 @@ public class ReShadeConfigWriterTests
     }
 
     [Fact]
+    public void Preset_GravaATeclaDeAlternanciaDaTechniqueDoFeed()
+    {
+        // Formato do ReShade: Key<nome@arquivo>=tecla,ctrl,shift,alt na raiz do preset.
+        var preset = ReShadeConfigWriter.BuildPresetIni(MvProvider.Vort, feederUsed: true, teclaLigaDesliga: ReShadeConfigWriter.KeyF6);
+        Assert.Contains("KeyDLSS5_Feed@DLSS5_Feed.fx=117,0,0,0", preset);
+        // A chave fica ANTES da seção [DLSS5_Feed.fx], senão o ReShade a leria dentro da seção.
+        Assert.True(preset.IndexOf("KeyDLSS5_Feed@", StringComparison.Ordinal) < preset.IndexOf("[DLSS5_Feed.fx]", StringComparison.Ordinal));
+        // Sem tecla (0): nada gravado. Sem Feeder: preset vazio, nada gravado.
+        Assert.DoesNotContain("KeyDLSS5_Feed@", ReShadeConfigWriter.BuildPresetIni(MvProvider.Vort, feederUsed: true, teclaLigaDesliga: 0));
+        Assert.DoesNotContain("KeyDLSS5_Feed@", ReShadeConfigWriter.BuildPresetIni(MvProvider.Vort, feederUsed: false, teclaLigaDesliga: ReShadeConfigWriter.KeyF6));
+    }
+
+    [Fact]
     public void Preset_IsEmptyWhenFeederNotInstalled()
     {
         // DLSS nativo: quem trabalha é o RenoDX; nenhum efeito do ReShade participa.

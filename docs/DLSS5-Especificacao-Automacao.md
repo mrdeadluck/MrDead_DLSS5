@@ -690,6 +690,7 @@ AddonPath=.\
 ```ini
 Techniques=DRME@MotionEstimation.fx,DLSS5_Feed@DLSS5_Feed.fx
 TechniqueSorting=DRME@MotionEstimation.fx,DLSS5_Feed@DLSS5_Feed.fx
+- Tecla liga/desliga (`InstallOptions.TeclaLigaDesliga`, F6 por padrão): o preset ganha `KeyDLSS5_Feed@DLSS5_Feed.fx=tecla,0,0,0` (a alternância de technique do ReShade, lida na raiz do preset). O addon só trabalha depois de a technique rodar, então a tecla desliga o DLSS 5 inteiro — comparação antes/depois sem abrir o painel. O ShortFuse não tem tecla; o F6 do Krish não chega ao host64 em 32-bit.
 ```
 
 ### 12.7 Patch do dgVoodoo.conf

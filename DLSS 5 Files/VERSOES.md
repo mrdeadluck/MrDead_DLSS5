@@ -162,6 +162,18 @@ igual instalado como D3D11 e como D3D9 (10/09/2026, 13:05); o `ReShade.log` do j
 nos dois casos porque o dgVoodoo, quando está, é o `d3d9.dll` local e nunca aparece no log — o
 D3D11 que aparece é o que ele cria. A rota é detalhe; o que trava é a tela cheia exclusiva.
 
+## Tecla para ligar e desligar o DLSS 5 sem abrir o painel
+
+O instalador grava no preset do ReShade a tecla de alternância da technique "DLSS 5 Feed"
+(`KeyDLSS5_Feed@DLSS5_Feed.fx=117,0,0,0`, F6 por padrão; opção "Tecla liga/desliga do DLSS 5"
+na detecção). O addon do Feeder só trabalha logo depois de essa technique rodar (cabeçalho do
+`DLSS5_Feed.fx`), então desligá-la desliga o DLAA + Neural Rendering inteiro e o jogo mostra o
+quadro cru: é a comparação antes/depois. Aperta de novo e volta. Por que não outra coisa: o
+ShortFuse não tem tecla nenhuma (conferido nas strings do addon), e o F6 do Krish (`NRToggleKey`
+em `[RenoDX.DLSS5]`) não chega ao host64 em jogo 32-bit. Em jogo 64-bit com DLSS nativo o preset
+é vazio e o F6 continua sendo o do Krish — uma tecla só nas duas rotas. Para trocar depois: painel
+do ReShade, botão direito em "DLSS 5 Feed", campo da tecla.
+
 ## O que mudou no Feeder de 0.13.1-beta.1 para 0.15.1
 
 - **0.14.x:** consumidores neurais alternativos dentro de `host64\` reconhecidos pelo host, aviso

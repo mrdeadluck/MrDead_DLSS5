@@ -17,6 +17,22 @@ public sealed class InstallOptions
     public string OverlayKeyLabel =>
         ReShadeConfigWriter.DescribeKey(OverlayKey, OverlayCtrl, OverlayShift, OverlayAlt);
 
+    /// <summary>
+    /// Tecla que liga e desliga o DLSS 5 no jogo sem abrir o painel (0 = nenhuma). É a tecla de
+    /// alternância que o ReShade dá a qualquer technique, gravada no preset como
+    /// Key&lt;technique&gt;; aqui ela vai na "DLSS 5 Feed". O addon do Feeder só trabalha logo
+    /// depois de essa technique rodar (cabeçalho do DLSS5_Feed.fx), então desligá-la desliga o
+    /// DLSS + Neural Rendering inteiro e o jogo mostra o quadro cru — a comparação antes/depois.
+    /// Padrão F6: é a mesma tecla que o addon do Krish usa para o NR em jogo 64-bit (NRToggleKey),
+    /// então uma tecla só vale nas duas rotas. O ShortFuse não tem tecla própria, e o F6 do Krish
+    /// não chega ao host64 em jogo 32-bit — por isso a alternância precisa ser do ReShade do jogo.
+    /// Só faz sentido onde o Feeder está instalado (com DLSS nativo o preset é vazio).
+    /// </summary>
+    public int TeclaLigaDesliga { get; set; } = ReShadeConfigWriter.KeyF6;
+
+    public string TeclaLigaDesligaLabel =>
+        TeclaLigaDesliga == 0 ? "nenhuma" : ReShadeConfigWriter.DescribeKey(TeclaLigaDesliga);
+
     /// <summary>Aplicar o override de assinatura no registro (precisa de admin + reboot).</summary>
     public bool ApplyRegistryOverride { get; set; } = true;
 

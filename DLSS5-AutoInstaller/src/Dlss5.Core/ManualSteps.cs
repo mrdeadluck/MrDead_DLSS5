@@ -129,6 +129,12 @@ public static class ManualSteps
                 "Na aba Complementos → Generic Depth, confirme que o buffer da cena está selecionado e não está " +
                 "marcado como Multisampled. Se a imagem ficar estranha, ative o DisplayDepth.fx para ver o depth: " +
                 "se estiver invertido ou de cabeça para baixo, marque RESHADE_DEPTH_INPUT_IS_REVERSED / IS_UPSIDE_DOWN.", false));
+            if (options.TeclaLigaDesliga > 0)
+                steps.Add(new ManualStep(n++, "Comparar antes/depois sem abrir o painel",
+                    $"No jogo, aperte {options.TeclaLigaDesligaLabel}: o DLSS 5 (DLAA + Neural Rendering) desliga e o jogo mostra o " +
+                    "quadro cru; aperte de novo e volta. É a tecla de alternância da technique \"DLSS 5 Feed\" no preset do " +
+                    "ReShade — o addon só trabalha logo depois de ela rodar, então desligá-la desliga tudo. Para trocar a tecla " +
+                    "depois: painel do ReShade, botão direito em \"DLSS 5 Feed\", campo da tecla.", false));
         }
         else
         {

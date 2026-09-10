@@ -38,6 +38,7 @@ public sealed partial class MainForm
     private readonly CheckBox _chkClean = new();
     private readonly CheckBox _chkWatermark = new();
     private readonly CheckBox _chkJanela = new();
+    private readonly ComboBox _cboTecla = new();
     private readonly TextBox _txtNotes = new();
     private TableLayoutPanel _formDeteccao = new();
 
@@ -232,6 +233,24 @@ public sealed partial class MainForm
         filaKey.Controls.Add(_chkShift);
         filaKey.Controls.Add(_chkAlt);
         filaKey.Controls.Add(_lblKeyNote);
+        // Tecla de liga/desliga do DLSS 5 (alternância da technique "DLSS 5 Feed" no preset).
+        _cboTecla.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cboTecla.MaxDropDownItems = 18;
+        _cboTecla.Width = 220;
+        _cboTecla.Margin = new Padding(0, 4, 8, 4);
+        Ui.Adaptavel(_cboTecla, 160);
+        _cboTecla.Items.Add("Nenhuma");
+        foreach (var k in ReShadeConfigWriter.OverlayKeys) _cboTecla.Items.Add(k.Label);
+        _cboTecla.SelectedIndexChanged += (_, _) =>
+        {
+            int i = _cboTecla.SelectedIndex;
+            _options.TeclaLigaDesliga = i <= 0 ? 0 : ReShadeConfigWriter.OverlayKeys[i - 1].VirtualKey;
+        };
+        var filaTecla = Ui.Fila();
+        filaTecla.Controls.Add(_cboTecla);
+        form.Controls.Add(Ui.Rotulo("Tecla liga/desliga do DLSS 5"), 0, linha);
+        form.Controls.Add(filaTecla, 1, linha++);
+        form.Controls.Add(Dica("Aperta no jogo e o DLSS 5 (DLAA + Neural Rendering) desliga; aperta de novo e volta — sem abrir o painel, para comparar antes/depois. É a tecla de alternância que o ReShade dá à technique \"DLSS 5 Feed\" (gravada no preset). F6 é a mesma tecla do NR do RenoDX em jogo 64-bit. Não pode ser a tecla do painel."), 1, linha++);
         form.Controls.Add(Ui.Rotulo("Tecla do painel do ReShade"), 0, linha);
         form.Controls.Add(filaKey, 1, linha++);
         form.Controls.Add(Dica("Abre o painel do ReShade dentro do jogo. Se o jogo capturar a tecla, use uma combinação (ex.: Ctrl+Shift+Home). A escolha fica guardada para as próximas instalações."), 1, linha++);
@@ -372,6 +391,7 @@ public sealed partial class MainForm
             _options.ForcarJanela = true;
         _chkJanela.Checked = _options.ForcarJanela;
         SelectOverlayKey(_options.OverlayKey);
+        SelectTeclaLigaDesliga(_options.TeclaLigaDesliga);
         UpdateMvAvailability();
 
         var notes = new List<string>(detection.Notes);
@@ -456,6 +476,15 @@ public sealed partial class MainForm
         _options.OverlayShift = _chkShift.Checked;
         _options.OverlayAlt = _chkAlt.Checked;
         _lblKeyNote.Text = "= " + _options.OverlayKeyLabel;
+    }
+
+    private void SelectTeclaLigaDesliga(int virtualKey)
+    {
+        var keys = ReShadeConfigWriter.OverlayKeys;
+        int idx = 0;
+        for (int i = 0; i < keys.Count; i++)
+            if (keys[i].VirtualKey == virtualKey) { idx = i + 1; break; }
+        _cboTecla.SelectedIndex = idx;
     }
 
     private void SelectOverlayKey(int virtualKey)
