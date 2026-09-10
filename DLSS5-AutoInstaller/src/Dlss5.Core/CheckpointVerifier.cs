@@ -696,7 +696,8 @@ public static class CheckpointVerifier
             feedStatus, profile.UsesShortFuse, profile.PassCount));
 
         // 14/15/16 — dependem do jogo rodando
-        r.AddRange(VerifyFeedLogs(exe, route, profile.NeedsFeeder, profile.MotorEfetivo, profile.PassCount));
+        r.AddRange(VerifyFeedLogs(exe, route, profile.NeedsFeeder, profile.MotorEfetivo, profile.PassCount,
+            profile.RendererFolder ?? exe));
 
         return r;
     }
@@ -1023,7 +1024,8 @@ public static class CheckpointVerifier
 
     private static IEnumerable<CheckResult> VerifyFeedLogs(
         string exeFolder, InstallRoute route, bool needsFeeder = true,
-        NeuralEngine consumidor = NeuralEngine.RenodxDlss5Feeder, int passes = 1)
+        NeuralEngine consumidor = NeuralEngine.RenodxDlss5Feeder, int passes = 1,
+        string? rendererFolder = null)
     {
         if (!needsFeeder)
         {
@@ -1146,13 +1148,43 @@ public static class CheckpointVerifier
                 && hostLogTexto.Contains("connected (protocol", StringComparison.OrdinalIgnoreCase)
                 && !hostLogTexto.Contains("[host] build:", StringComparison.OrdinalIgnoreCase))
             {
-                yield return new CheckResult(16, "Jogo parou no aperto de mão com o host64", CheckStatus.Fail,
+                // O ReShade.log do jogo diz se ele foi para tela cheia exclusiva; o dgVoodoo.conf (rota C)
+                // diz se a opção "janela sem borda" está valendo de fato — o log do Enslaved de 01:46
+                // ainda tinha SetFullscreenState(TRUE) depois de a opção existir no instalador.
+                string reshadeLogTexto = "";
+                try { var rl = Path.Combine(exeFolder, "ReShade.log"); if (File.Exists(rl)) reshadeLogTexto = ReadShared(rl); } catch { }
+                bool exclusiva = HostLog.FoiParaTelaCheiaExclusiva(reshadeLogTexto);
+                string? confTexto = null;
+                if (route == InstallRoute.C && rendererFolder is not null)
+                    try { var c = Path.Combine(rendererFolder, "dgVoodoo.conf"); if (File.Exists(c)) confTexto = ReadShared(c); } catch { }
+                bool? janelaValendo = confTexto is null ? null : ValueIs(confTexto, "FullScreenMode", "false");
+
+                string detalhe =
                     "dlss5-feed.log tem \"host spawned\" mas nunca \"host connected\"; o host viu o jogo conectar e nunca recebeu o " +
-                    "pedido de build. O jogo congelou na hora em que o host subiu — visto em tela cheia EXCLUSIVA (Enslaved: " +
-                    "SetFullscreenState(TRUE) no ReShade.log logo antes).",
-                    "Rode o jogo em janela ou sem borda. Se o jogo só tem tela cheia e é rota C, marque \"dgVoodoo em janela sem " +
-                    "borda\" na detecção e Instale de novo (o dgVoodoo apresenta numa janela do tamanho da tela; o jogo não percebe). " +
-                    "No painel do Feeder, use \"Show as texture\" em vez do painel projetado.");
+                    "pedido de build. O jogo congelou na hora em que o host subiu." +
+                    (exclusiva
+                        ? " O ReShade.log do jogo confirma: SetFullscreenState(TRUE) — tela cheia EXCLUSIVA logo antes do host."
+                        : "") +
+                    janelaValendo switch
+                    {
+                        false => " O dgVoodoo.conf do jogo ainda diz FullScreenMode=true: a opção \"dgVoodoo em janela sem borda\" NÃO está valendo.",
+                        true => " O dgVoodoo.conf já diz FullScreenMode=false, e mesmo assim o jogo foi para tela cheia exclusiva.",
+                        null => "",
+                    };
+                string acao = janelaValendo switch
+                {
+                    false => "Marque \"dgVoodoo em janela sem borda (só rota C)\" na tela de detecção e clique em Instalar de novo — ou edite " +
+                             $"{Path.Combine(rendererFolder ?? exeFolder, "dgVoodoo.conf")} na mão: em [General] FullScreenMode = false e " +
+                             "ScalingMode = stretched_ar; em [GeneralExt] WindowedAttributes = borderless, fullscreensize. Depois abra o jogo " +
+                             "e confira: o ReShade.log não pode mais ter \"Fullscreen = TRUE\".",
+                    true => "O dgVoodoo não está sendo quem apresenta (o jogo troca de modo por outro caminho). Teste de isolamento: motor " +
+                            "\"RenoDX (Krish)\" na detecção, que dispensa o addon dentro do host; se ainda congelar, abra o jogo, aperte " +
+                            "Alt+Tab e clique de volta assim que a tela ficar preta (o host sobe ~2 s depois da primeira imagem).",
+                    null => "Rode o jogo em janela ou sem borda. Se o jogo só tem tela cheia e é rota C, marque \"dgVoodoo em janela sem " +
+                            "borda\" na detecção e Instale de novo (o dgVoodoo apresenta numa janela do tamanho da tela; o jogo não percebe). " +
+                            "No painel do Feeder, use \"Show as texture\" em vez do painel projetado.",
+                };
+                yield return new CheckResult(16, "Jogo parou no aperto de mão com o host64", CheckStatus.Fail, detalhe, acao);
             }
 
             // 26b — o device D3D12 do host morreu: o host sai e o addon do jogo respawna outro, que

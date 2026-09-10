@@ -36,4 +36,5 @@
 # 10/09/2026 (2): pacote refeito com o item 26b (device D3D12 do host removido).
 # 10/09/2026 (3): pacote refeito com a opcao 'dgVoodoo em janela sem borda' e o item 16b.
 # 10/09/2026 (4): pacote refeito com o item 5 'tela cheia ou janela'.
+# 10/09/2026 04:50 — pacote refeito: item 16b le o dgVoodoo.conf e o ReShade.log do jogo (Enslaved 01:46)
 versao=v0.15.1

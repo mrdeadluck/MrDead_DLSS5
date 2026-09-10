@@ -927,6 +927,22 @@ public class ConsumidoresNoHost64Tests
     }
 
     [Fact]
+    public void HostLog_FoiParaTelaCheiaExclusiva_LeOReShadeLogDoJogo()
+    {
+        // Enslaved (10/09/2026 01:46): dgVoodoo trocou para tela cheia exclusiva 0,5 s antes do host subir.
+        const string enslaved =
+            "01:46:51:357 [30288] | INFO  | Redirecting IDXGISwapChain::SetFullscreenState(this = 1BAA28B8, Fullscreen = FALSE, pTarget = 00000000) ...\n" +
+            "01:46:51:358 [30288] | INFO  | Redirecting IDXGISwapChain::SetFullscreenState(this = 1BAA28B8, Fullscreen = TRUE, pTarget = 319442C8) ...\n";
+        Assert.True(HostLog.FoiParaTelaCheiaExclusiva(enslaved));
+        // SH2 EE (funcionou): só FALSE.
+        const string sh2 =
+            "12:24:06:535 [20340] | INFO  | Redirecting IDXGISwapChain::SetFullscreenState(this = 157DEF50, Fullscreen = FALSE, pTarget = 00000000) ...\n";
+        Assert.False(HostLog.FoiParaTelaCheiaExclusiva(sh2));
+        Assert.False(HostLog.FoiParaTelaCheiaExclusiva(null));
+        Assert.False(HostLog.FoiParaTelaCheiaExclusiva(""));
+    }
+
+    [Fact]
     public void HostLog_DeviceRemovido_DoSilentHillHomecoming()
     {
         var host = "00:18:28.580  [host] feature ready: 2560x1440 DLAA flags=74\r\n" +

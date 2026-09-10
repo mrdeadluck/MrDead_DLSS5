@@ -269,6 +269,17 @@ public static class ShortFuseNoHost64
 /// <summary>Leitura do host64\\dlss5-feed-host.log: o device D3D12 do host morreu?</summary>
 public static class HostLog
 {
+    /// <summary>
+    /// O ReShade.log do jogo (32-bit) registra a troca para tela cheia exclusiva como
+    /// "SetFullscreenState(... Fullscreen = TRUE ...)". Em janela/sem borda só aparece FALSE.
+    /// </summary>
+    public static bool FoiParaTelaCheiaExclusiva(string? reshadeLog)
+    {
+        if (string.IsNullOrEmpty(reshadeLog)) return false;
+        return System.Text.RegularExpressions.Regex.IsMatch(reshadeLog,
+            @"SetFullscreenState\([^)]*Fullscreen\s*=\s*TRUE", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    }
+
     /// <summary>O código DXGI da remoção ("0x887A0006") e a explicação, ou null se o log não a registrou.</summary>
     public static (string Codigo, string Explicacao)? DeviceRemovido(string? log)
     {
