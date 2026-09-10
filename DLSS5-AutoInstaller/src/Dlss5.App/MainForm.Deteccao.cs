@@ -266,7 +266,7 @@ public sealed partial class MainForm
         opcoes.Controls.Add(Dica("Nunca toca em arquivo do jogo. O instalador vai para .dlss5bak e volta na desinstalação."));
         opcoes.Controls.Add(_chkWatermark);
         opcoes.Controls.Add(_chkJanela);
-        opcoes.Controls.Add(Dica("Vale para QUALQUER jogo 32-bit que sobe o host64, tenha ou não opção de janela. Em tela cheia exclusiva o host64 (janela atrás do jogo) e o painel brigam com o swapchain do jogo: o Enslaved congelou no aperto de mão com o host. Grava [APP] ForceWindowed=1 no ReShade.ini do jogo (e, na rota C, FullScreenMode=false no dgVoodoo.conf), então o jogo abre em janela sem borda do tamanho da tela achando que está em tela cheia. Se o jogo tiver opção própria de janela, pode usar a do jogo."));
+        opcoes.Controls.Add(Dica("Vale para QUALQUER jogo 32-bit que sobe o host64, tenha ou não opção de janela. Em tela cheia exclusiva o host64 (janela atrás do jogo) e o painel brigam com o swapchain do jogo: o Enslaved congelou no aperto de mão com o host. Grava [APP] ForceWindowed=1 no ReShade.ini do jogo e põe na pasta o swapchain_override.addon32 (exemplo do próprio ReShade 6, que é quem lê essa chave; sozinho o ReShade 6 a ignora) — e, na rota C, FullScreenMode=false no dgVoodoo.conf. O jogo abre em janela sem borda do tamanho da tela achando que está em tela cheia. Se o jogo tiver opção própria de janela, pode usar a do jogo."));
         form.Controls.Add(Ui.Rotulo("Opções"), 0, linha);
         form.Controls.Add(opcoes, 1, linha++);
 

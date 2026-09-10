@@ -659,6 +659,7 @@ public sealed partial class InstallerEngine
         OptiScalerNr.Ini, OptiScalerNr.Shim, OptiScalerNr.Log, OptiScalerNr.ReShade64,
         DeepFriedChicken.Addon, DeepFriedChicken.Nvngx, DeepFriedChicken.Cfg,
         "dlss5-feed.addon64", "dlss5-feed.addon32", "dlss5-feed.cfg", "dlss5-feed.log", "dlss5-feed-crash.dmp",
+        JanelaForcada.Addon32, JanelaForcada.Addon64,
         "D3D9.dll", "D3D8.dll", "dgVoodoo.conf", "dgVoodooCpl.exe",
         "dgVoodoo_D3D9.dll", "dgVoodoo_D3D8.dll",
     };

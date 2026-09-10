@@ -1,0 +1,12 @@
+# Pedido do addon "forçar janela" (exemplo 16-swapchain_override do ReShade 6).
+# O workflow compilar-addons.yml lê este arquivo, baixa o repositório crosire/reshade
+# no commit abaixo, compila examples/16-swapchain_override com o MSVC do runner (x86 e
+# x64, CRT estático) e commita os .addon32/.addon64 no LFS em
+# "swapchain-override (forcar janela, addon do ReShade 6)/". Para atualizar, troque o
+# commit (ou acrescente uma linha de comentário datada para forçar uma recompilação).
+#
+# Por que existe: o ReShade 5.x lia [APP] ForceWindowed do ReShade.ini sozinho; o 6.0
+# tirou isso do núcleo e transformou no exemplo 16. Sem o addon a chave é letra morta —
+# e foi por isso que o Enslaved continuou indo para tela cheia exclusiva (e congelando no
+# aperto de mão com o host64) mesmo com a opção marcada.
+commit=358c345ca2fe64f86e67c694f8379c356627adcb

@@ -43,6 +43,7 @@ internal sealed class Cenario : IDisposable
             RenodxAddon64 = K("renodx-dlss5.addon64", "renodx v1"),
             FeedAddon64 = K("dlss5-feed.addon64", "feed64 v1"),
             FeedAddon32 = K("dlss5-feed.addon32", "feed32 v1"),
+            SwapchainOverride32 = K("swapchain_override.addon32", "swapchain override x86"),
             FeedHost64Exe = K("dlss5-feed-host64.exe", "host v1"),
             DxgiX64 = K("dxgi64.dll", "ReShade 6.8.0 x64"),
             DxgiX86 = K("dxgi32.dll", "ReShade 6.8.0 x86"),
@@ -924,6 +925,52 @@ public class ConsumidoresNoHost64Tests
         Assert.Contains("running one pass", OptiScalerNr.MotivoDePassadaPerdida("x DLSS-NR: the extra passes need a second work surface and it would not allocate; running one pass\n")!);
         Assert.Null(OptiScalerNr.PassadasNoLog(""));
         Assert.Null(OptiScalerNr.PassadasNoLog(null));
+    }
+
+    [Fact]
+    public void ForcarJanela_CopiaOAddonDoReShade6ParaAPastaDoJogo()
+    {
+        using var c = new Cenario();
+        var o = OpcoesX86(c); o.ForcarJanela = true;
+        var plano = InstallPlanBuilder.Build(PerfilX86(c, NeuralEngine.RenodxDlss5Feeder, 1), c.Inventario, o);
+        Assert.Empty(plano.Blockers);
+        Assert.Contains(plano.Actions, a => a.Kind == PlanActionKind.CopyFile
+            && a.TargetPath!.EndsWith(JanelaForcada.Addon32, StringComparison.OrdinalIgnoreCase)
+            && Path.GetDirectoryName(a.TargetPath)!.Equals(c.Jogo, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(plano.Warnings, w => w.Contains("Swap chain override", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ForcarJanela_SemOAddonNoKit_AvisaQueAChaveSozinhaNaoFazNada()
+    {
+        using var c = new Cenario();
+        c.Inventario.SwapchainOverride32 = null;
+        var o = OpcoesX86(c); o.ForcarJanela = true;
+        var plano = InstallPlanBuilder.Build(PerfilX86(c, NeuralEngine.RenodxDlss5Feeder, 1), c.Inventario, o);
+        Assert.DoesNotContain(plano.Actions, a => a.TargetPath?.EndsWith(JanelaForcada.Addon32, StringComparison.OrdinalIgnoreCase) == true);
+        Assert.Contains(plano.Warnings, w => w.Contains("ReShade 6 sozinho ignora", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ForcarJanela_Desmarcado_RemoveOAddonQueSobrouDeAntes()
+    {
+        using var c = new Cenario();
+        var sobra = Path.Combine(c.Jogo, JanelaForcada.Addon32);
+        File.WriteAllText(sobra, "addon antigo");
+        var o = OpcoesX86(c); o.ForcarJanela = false;
+        var plano = InstallPlanBuilder.Build(PerfilX86(c, NeuralEngine.RenodxDlss5Feeder, 1), c.Inventario, o);
+        Assert.Contains(plano.Actions, a => a.Kind == PlanActionKind.DeleteForbiddenFile
+            && string.Equals(a.TargetPath, sobra, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void JanelaForcada_ReconheceOAddonNoReShadeLog()
+    {
+        Assert.True(JanelaForcada.Registrado(
+            "13:05:07:315 [16244] | INFO  | Registered add-on \"Swap chain override\" v0.0.0.0 using ReShade API version 20."));
+        Assert.False(JanelaForcada.Registrado(
+            "13:05:07:315 [16244] | INFO  | Registered add-on \"DLSS 5 Feed (32-bit) 0.15.1\" v0.0.0.0 using ReShade API version 20."));
+        Assert.False(JanelaForcada.Registrado(null));
     }
 
     [Fact]

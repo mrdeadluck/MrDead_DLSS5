@@ -26,6 +26,9 @@ public sealed class KitInventory
     public bool HasDeepFriedChicken => DfcAddon64 is not null && DfcNvngx is not null && DfcCfg is not null;
     public string? FeedAddon64 { get; set; }
     public string? FeedAddon32 { get; set; }
+    /// <summary>Exemplo 16-swapchain_override do ReShade 6, compilado pelo kit: lê [APP] ForceWindowed.</summary>
+    public string? SwapchainOverride32 { get; set; }
+    public string? SwapchainOverride64 { get; set; }
     public string? FeedHost64Exe { get; set; }
 
     /// <summary>dxgi.dll do ReShade já extraído, por arquitetura.</summary>
@@ -239,6 +242,8 @@ public static class KitResolver
         inv.DfcCfg = First(DeepFriedChicken.Cfg);
         inv.FeedAddon64 = First("dlss5-feed.addon64");
         inv.FeedAddon32 = First("dlss5-feed.addon32");
+        inv.SwapchainOverride32 = First(JanelaForcada.Addon32);
+        inv.SwapchainOverride64 = First(JanelaForcada.Addon64);
         inv.FeedHost64Exe = First("dlss5-feed-host64.exe");
 
         // REFramework: só o x64 serve, e ele nunca pode ser confundido com um dinput8.dll

@@ -348,14 +348,34 @@ public static class InstallPlanBuilder
         {
             // 32-bit (B/C): addon32 na raiz; o resto do Feeder dentro de host64\.
             // A opção "forçar janela" grava [APP] ForceWindowed=1 no ReShade.ini do jogo (ver
-            // ConteudoGerado). É a alavanca que vale para QUALQUER jogo, tenha ou não opção de
-            // janela — em tela cheia exclusiva o host64 congela no aperto de mão (Enslaved).
+            // ConteudoGerado) E põe na pasta o addon que lê essa chave: no ReShade 6 a chave
+            // sozinha é letra morta (ver JanelaForcada). Vale para QUALQUER jogo, tenha ou não
+            // opção de janela — em tela cheia exclusiva o host64 congela no aperto de mão (Enslaved).
+            var addonJanela = Path.Combine(exe, JanelaForcada.Addon32);
             if (options.ForcarJanela)
-                plan.Warnings.Add(
-                    "Forçar janela: o ReShade.ini do jogo sai com [APP] ForceWindowed=1, então o jogo abre em janela sem " +
-                    "borda do tamanho da tela mesmo sem ter opção própria de janela. É o que impede o host64 de congelar em " +
-                    "tela cheia exclusiva. Se depois de abrir o ReShade.log ainda tiver \"Fullscreen = TRUE\", o jogo troca " +
-                    "de modo por um caminho que o ReShade não pega — aí só o modo de janela do próprio jogo resolve.");
+            {
+                if (kit.SwapchainOverride32 is not null)
+                {
+                    Copy(kit.SwapchainOverride32, exe, JanelaForcada.Addon32);
+                    plan.Warnings.Add(
+                        $"Forçar janela: {JanelaForcada.Addon32} (o exemplo swapchain_override do próprio ReShade 6) vai para a " +
+                        "pasta do jogo e lê [APP] ForceWindowed=1 do ReShade.ini: o swapchain nasce em janela e o pedido de tela " +
+                        "cheia exclusiva (SetFullscreenState) é bloqueado — o jogo acha que está em tela cheia. É o que impede o " +
+                        "host64 de congelar. Prova: o ReShade.log do jogo passa a ter Registered add-on \"Swap chain override\".");
+                }
+                else
+                {
+                    plan.Warnings.Add(
+                        $"Forçar janela: o kit ainda NÃO tem o {JanelaForcada.Addon32}. O ReShade 6 sozinho ignora a chave " +
+                        "[APP] ForceWindowed (ela saiu do núcleo no 6.0 e virou o exemplo swapchain_override). Sem o addon, a " +
+                        "opção não muda nada — baixe o pacote novo (o workflow 'Compilar addons do ReShade' o gera) e Instale de novo.");
+                }
+            }
+            else if (File.Exists(addonJanela))
+            {
+                plan.Actions.Add(new PlanAction(PlanActionKind.DeleteForbiddenFile,
+                    $"Remover {Rel(profile, addonJanela)} (forçar janela desmarcado; vai para backup)", null, addonJanela));
+            }
             Copy(kit.FeedAddon32, exe, "dlss5-feed.addon32");
             Copy(kit.FeedHost64Exe, host64, "dlss5-feed-host64.exe");
             Copy(kit.DxgiX64, host64, "dxgi.dll");

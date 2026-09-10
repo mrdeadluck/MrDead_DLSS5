@@ -147,14 +147,20 @@ brigam e o jogo congela no aperto de mão (o `dlss5-feed.log` para em `host spaw
 logo antes do host subir.
 
 A saída **geral**, para qualquer jogo — tenha ou não opção de janela no menu — é marcar
-**"Forçar o jogo em janela sem borda"** na tela de detecção. Como o feed é um addon do ReShade
-dentro do próprio jogo, o instalador grava `[APP] ForceWindowed=1` no `ReShade.ini` do jogo, e o
-ReShade obriga o swapchain a nascer em janela em qualquer API (D3D9/10/11/12). Não depende do
-jogo ter modo janela. Prova de que pegou: depois de abrir, o `ReShade.log` do jogo não pode mais
+**"Forçar o jogo em janela sem borda"** na tela de detecção. O instalador grava `[APP] ForceWindowed=1`
+no `ReShade.ini` do jogo **e copia `swapchain_override.addon32`** para a pasta do jogo. O ReShade 6
+(6.8, o do kit) **não lê mais essa chave sozinho**: ela existia no ReShade 5.x e saiu do núcleo no
+6.0; a mesma função virou o exemplo oficial `16-swapchain_override` do repositório do crosire, um
+addon que lê as chaves `[APP]`, faz o swapchain nascer em janela e bloqueia o pedido de tela cheia
+exclusiva (`SetFullscreenState`). O kit compila esse exemplo no GitHub Actions
+(`compilar-addons.yml`, commit fixado em `swapchain-override-desejado.txt`) e o guarda em
+`swapchain-override (forcar janela, addon do ReShade 6)/`. Não depende do jogo ter modo janela.
+Prova de que pegou: o `ReShade.log` do jogo ganha `Registered add-on "Swap chain override"`. Prova de que pegou: depois de abrir, o `ReShade.log` do jogo não pode mais
 ter `Fullscreen = TRUE`. Nos jogos antigos por trás do dgVoodoo (rota C) o instalador ainda põe
-`FullScreenMode=false` no `dgVoodoo.conf` — as duas alavancas juntas. Só o Enslaved mostrou que
-editar o dgVoodoo.conf não bastava: ele é **D3D11 nativo (rota B), sem dgVoodoo** — o ForceWindowed
-é que resolve.
+`FullScreenMode=false` no `dgVoodoo.conf` — as duas alavancas juntas. O Enslaved (UE3) congelou
+igual instalado como D3D11 e como D3D9 (10/09/2026, 13:05); o `ReShade.log` do jogo mostra D3D11
+nos dois casos porque o dgVoodoo, quando está, é o `d3d9.dll` local e nunca aparece no log — o
+D3D11 que aparece é o que ele cria. A rota é detalhe; o que trava é a tela cheia exclusiva.
 
 ## O que mudou no Feeder de 0.13.1-beta.1 para 0.15.1
 

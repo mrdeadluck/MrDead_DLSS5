@@ -1153,16 +1153,22 @@ public static class CheckpointVerifier
                 // ainda tinha SetFullscreenState(TRUE) depois de a opção existir no instalador.
                 string reshadeLogTexto = "";
                 try { var rl = Path.Combine(exeFolder, "ReShade.log"); if (File.Exists(rl)) reshadeLogTexto = ReadShared(rl); } catch { }
-                bool exclusiva = HostLog.FoiParaTelaCheiaExclusiva(reshadeLogTexto);
-                // Rota C: o dgVoodoo.conf manda (FullScreenMode). Rota B (jogo D3D11 nativo, como o
-                // Enslaved): não há dgVoodoo — quem força janela é o [APP] ForceWindowed do ReShade.ini.
+                // Com o swapchain_override carregado, o "SetFullscreenState(TRUE)" do log é um pedido
+                // que o addon bloqueou (o ReShade loga antes de consultar os addons), não um estado.
+                bool addonJanelaRegistrado = JanelaForcada.Registrado(reshadeLogTexto);
+                bool exclusiva = HostLog.FoiParaTelaCheiaExclusiva(reshadeLogTexto) && !addonJanelaRegistrado;
                 bool forceWindowedNoIni = false;
                 try { var ini = Path.Combine(exeFolder, "ReShade.ini"); if (File.Exists(ini)) forceWindowedNoIni = ValueIs(ReadShared(ini), "ForceWindowed", "1"); } catch { }
+                bool addonJanelaPresente = File.Exists(Path.Combine(exeFolder, JanelaForcada.Addon32));
+                // Rota C: o dgVoodoo.conf manda (FullScreenMode). Rota B: não há dgVoodoo — quem força
+                // janela é o [APP] ForceWindowed do ReShade.ini, lido pelo addon swapchain_override.
+                // (O ReShade.log do jogo mostra D3D11 nas duas rotas: na C o D3D11 é o que o dgVoodoo
+                // cria, e o dgVoodoo em si nunca aparece.)
                 string? confTexto = null;
                 if (route == InstallRoute.C && rendererFolder is not null)
                     try { var c = Path.Combine(rendererFolder, "dgVoodoo.conf"); if (File.Exists(c)) confTexto = ReadShared(c); } catch { }
                 bool? janelaValendo =
-                    forceWindowedNoIni ? true
+                    forceWindowedNoIni && addonJanelaPresente ? true
                     : confTexto is null ? null
                     : ValueIs(confTexto, "FullScreenMode", "false");
 
@@ -1172,26 +1178,60 @@ public static class CheckpointVerifier
                     (exclusiva
                         ? " O ReShade.log do jogo confirma: SetFullscreenState(TRUE) — tela cheia EXCLUSIVA logo antes do host."
                         : "") +
-                    janelaValendo switch
-                    {
-                        false => " O dgVoodoo.conf do jogo ainda diz FullScreenMode=true: a opção \"dgVoodoo em janela sem borda\" NÃO está valendo.",
-                        true => " O dgVoodoo.conf já diz FullScreenMode=false, e mesmo assim o jogo foi para tela cheia exclusiva.",
-                        null => "",
-                    };
-                string acao = janelaValendo switch
-                {
-                    false => "Marque \"Forçar o jogo em janela sem borda\" na tela de detecção e clique em Instalar de novo. O ReShade.ini do " +
-                             "jogo passa a ter [APP] ForceWindowed=1 (vale para qualquer jogo, tenha ou não opção de janela)" +
-                             (route == InstallRoute.C ? " e o dgVoodoo.conf sai com FullScreenMode=false" : "") +
-                             ". Depois abra o jogo e confira: o ReShade.log não pode mais ter \"Fullscreen = TRUE\".",
-                    true => "O dgVoodoo não está sendo quem apresenta (o jogo troca de modo por outro caminho). Teste de isolamento: motor " +
-                            "\"RenoDX (Krish)\" na detecção, que dispensa o addon dentro do host; se ainda congelar, abra o jogo, aperte " +
-                            "Alt+Tab e clique de volta assim que a tela ficar preta (o host sobe ~2 s depois da primeira imagem).",
-                    null => "Rode o jogo em janela ou sem borda. Se o jogo só tem tela cheia e é rota C, marque \"dgVoodoo em janela sem " +
-                            "borda\" na detecção e Instale de novo (o dgVoodoo apresenta numa janela do tamanho da tela; o jogo não percebe). " +
-                            "No painel do Feeder, use \"Show as texture\" em vez do painel projetado.",
-                };
+                    (forceWindowedNoIni && !addonJanelaPresente
+                        ? $" O ReShade.ini já tem ForceWindowed=1, mas o ReShade 6 ignora essa chave sozinho: quem a lê é o " +
+                          $"{JanelaForcada.Addon32}, que NÃO está na pasta do jogo."
+                        : janelaValendo switch
+                        {
+                            false => " O dgVoodoo.conf do jogo ainda diz FullScreenMode=true: a opção \"forçar janela\" NÃO está valendo.",
+                            true => " A opção \"forçar janela\" está no lugar, e mesmo assim o jogo congelou.",
+                            null => "",
+                        });
+                string acao =
+                    forceWindowedNoIni && !addonJanelaPresente
+                        ? "Baixe o pacote novo (o kit passou a trazer o swapchain_override.addon32, compilado do próprio ReShade 6) e " +
+                          "Instale de novo com \"Forçar o jogo em janela sem borda\" marcado. Prova de que pegou: o ReShade.log do jogo " +
+                          "ganha Registered add-on \"Swap chain override\" e o jogo abre em janela."
+                        : janelaValendo switch
+                        {
+                            false => "Marque \"Forçar o jogo em janela sem borda\" na tela de detecção e clique em Instalar de novo. O " +
+                                     $"{JanelaForcada.Addon32} vai para a pasta do jogo e lê [APP] ForceWindowed=1 do ReShade.ini" +
+                                     (route == InstallRoute.C ? "; o dgVoodoo.conf sai com FullScreenMode=false" : "") +
+                                     ". Depois abra o jogo e confira no ReShade.log: Registered add-on \"Swap chain override\".",
+                            true => "Teste de isolamento: motor \"RenoDX (Krish)\" na detecção, que dispensa o addon dentro do host; se " +
+                                    "ainda congelar, abra o jogo, aperte Alt+Tab e clique de volta assim que a tela ficar preta (o host " +
+                                    "sobe ~2 s depois da primeira imagem). Mande os quatro logs.",
+                            null => "Rode o jogo em janela ou sem borda: marque \"Forçar o jogo em janela sem borda\" na detecção e " +
+                                    "Instale de novo. No painel do Feeder, use \"Show as texture\" em vez do painel projetado.",
+                        };
                 yield return new CheckResult(16, "Jogo parou no aperto de mão com o host64", CheckStatus.Fail, detalhe, acao);
+            }
+
+            // 16c — "forçar janela" pedido no ini: no ReShade 6 a chave só vale com o addon
+            // swapchain_override na pasta do jogo (ver JanelaForcada). Mostra o estado sempre que a
+            // chave está lá, com ou sem congelamento.
+            {
+                string iniJanela = "";
+                try { var ini = Path.Combine(exeFolder, "ReShade.ini"); if (File.Exists(ini)) iniJanela = ReadShared(ini); } catch { }
+                if (ValueIs(iniJanela, "ForceWindowed", "1"))
+                {
+                    bool addonNaPasta = File.Exists(Path.Combine(exeFolder, JanelaForcada.Addon32));
+                    string logJanela = "";
+                    try { var rl = Path.Combine(exeFolder, "ReShade.log"); if (File.Exists(rl)) logJanela = ReadShared(rl); } catch { }
+                    bool registrado = JanelaForcada.Registrado(logJanela);
+                    yield return new CheckResult(16, "Forçar janela (swapchain_override do ReShade 6)",
+                        !addonNaPasta ? CheckStatus.Fail : registrado ? CheckStatus.Pass : CheckStatus.Manual,
+                        !addonNaPasta
+                            ? $"ReShade.ini tem [APP] ForceWindowed=1, mas o {JanelaForcada.Addon32} não está na pasta do jogo — o ReShade 6 " +
+                              "não lê essa chave sozinho (saiu do núcleo no 6.0), então a opção não faz nada."
+                            : registrado
+                                ? $"{JanelaForcada.Addon32} na pasta e registrado no ReShade.log (\"{JanelaForcada.NomeRegistrado}\"): o pedido " +
+                                  "de tela cheia exclusiva do jogo é bloqueado e o swapchain nasce em janela."
+                                : $"{JanelaForcada.Addon32} na pasta; o ReShade.log ainda não mostra \"{JanelaForcada.NomeRegistrado}\" — abra o jogo uma vez.",
+                        !addonNaPasta
+                            ? "Baixe o pacote novo do kit (traz o addon compilado) e clique em Instalar de novo com a opção marcada."
+                            : null);
+                }
             }
 
             // 26b — o device D3D12 do host morreu: o host sai e o addon do jogo respawna outro, que

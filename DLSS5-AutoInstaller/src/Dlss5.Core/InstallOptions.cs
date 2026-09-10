@@ -34,8 +34,9 @@ public sealed class InstallOptions
     /// logo depois de SetFullscreenState(TRUE)); o README do Feeder diz "windowed is smoother".
     ///
     /// Como o feed roda como addon do ReShade DENTRO do jogo, a alavanca geral é o ReShade:
-    /// [APP] ForceWindowed=1 no ReShade.ini do jogo obriga o swapchain a nascer em janela em
-    /// qualquer API (D3D9/10/11/12) e independe de o jogo ter opção de janela. Na rota C (jogo
+    /// [APP] ForceWindowed=1 no ReShade.ini do jogo + o addon swapchain_override (JanelaForcada),
+    /// que é quem lê a chave no ReShade 6, obriga o swapchain a nascer em janela em qualquer API
+    /// (D3D9/10/11/12) e independe de o jogo ter opção de janela. Na rota C (jogo
     /// antigo por trás do dgVoodoo) o dgVoodoo.conf também sai com FullScreenMode=false +
     /// WindowedAttributes — as duas alavancas juntas.
     /// </summary>

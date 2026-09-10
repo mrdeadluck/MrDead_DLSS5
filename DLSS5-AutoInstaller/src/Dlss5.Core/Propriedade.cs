@@ -29,7 +29,7 @@ public static class Propriedade
     {
         "renodx-dlss5.addon64", ShortFuseDlss.Addon, "dlss5-feed.addon64", "dlss5-feed.addon32",
         "dlss5-feed-host64.exe", "dlss5-feed.cfg", "dlss5-feed.log", "dlss5-feed-host.log", "dlss5-feed-crash.dmp",
-        "nvngx_dlssnr.dll",
+        "nvngx_dlssnr.dll", JanelaForcada.Addon32, JanelaForcada.Addon64,
         // Consumidores alternativos do host64: nenhum jogo traz nada disso.
         OptiScalerNr.Ini, OptiScalerNr.Shim, OptiScalerNr.Log,
         DeepFriedChicken.Addon, DeepFriedChicken.Nvngx, DeepFriedChicken.Cfg,
@@ -150,6 +150,7 @@ public static class Propriedade
         "renodx-dlss5.addon64", ShortFuseDlss.Addon, "dlss5-feed.addon64", "dlss5-feed.addon32",
         "dlss5-feed-host64.exe", "dlss5-feed.cfg", "dlss5-feed.log", "dlss5-feed-host.log", "dlss5-feed-crash.dmp",
         "nvngx_dlssnr.dll", "dgVoodoo_D3D9.dll", "dgVoodoo_D3D8.dll", InstallManifest.FileName,
+        JanelaForcada.Addon32, JanelaForcada.Addon64,
         OptiScalerNr.Ini, OptiScalerNr.Shim, OptiScalerNr.Log,
         DeepFriedChicken.Addon, DeepFriedChicken.Nvngx, DeepFriedChicken.Cfg,
     };

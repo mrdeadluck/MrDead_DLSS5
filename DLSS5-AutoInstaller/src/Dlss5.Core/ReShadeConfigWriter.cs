@@ -193,9 +193,10 @@ public static class ReShadeConfigWriter
         sb.AppendLine();
         if (forceWindowed)
         {
-            // Alavanca geral do ReShade: obriga o swapchain do jogo a nascer em janela, mesmo o
-            // jogo só oferecendo tela cheia exclusiva. Serve para qualquer API que o ReShade
-            // enxerga (D3D9/10/11/12) e é o que impede o congelamento do host64 em tela cheia.
+            // Lido pelo addon swapchain_override (exemplo 16 do ReShade 6, que o kit compila e o
+            // plano copia para a pasta do jogo — ver JanelaForcada). O ReShade 6 em si NÃO lê
+            // mais estas chaves: elas saíram do núcleo no 6.0. Com o addon, o swapchain nasce em
+            // janela e o SetFullscreenState(TRUE) do jogo é bloqueado, em qualquer API.
             sb.AppendLine("[APP]");
             sb.AppendLine("ForceWindowed=1");
             sb.AppendLine("ForceFullscreen=0");
