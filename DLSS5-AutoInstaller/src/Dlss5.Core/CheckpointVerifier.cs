@@ -1129,6 +1129,23 @@ public static class CheckpointVerifier
                     "O botão \"Testar o host64\" confirma em 15 s, sem abrir jogo.");
             }
 
+            // 16b — o jogo congelou no aperto de mão: o addon32 lançou o host ("host spawned") e nunca
+            // registrou "host connected", enquanto o host viu o jogo conectar e nunca recebeu o build.
+            // Enslaved (10/09/2026): SetFullscreenState(TRUE) 1,2 s antes — tela cheia exclusiva.
+            if (text.Contains("host spawned", StringComparison.OrdinalIgnoreCase)
+                && !text.Contains("host connected in", StringComparison.OrdinalIgnoreCase)
+                && hostLogTexto.Contains("connected (protocol", StringComparison.OrdinalIgnoreCase)
+                && !hostLogTexto.Contains("[host] build:", StringComparison.OrdinalIgnoreCase))
+            {
+                yield return new CheckResult(16, "Jogo parou no aperto de mão com o host64", CheckStatus.Fail,
+                    "dlss5-feed.log tem \"host spawned\" mas nunca \"host connected\"; o host viu o jogo conectar e nunca recebeu o " +
+                    "pedido de build. O jogo congelou na hora em que o host subiu — visto em tela cheia EXCLUSIVA (Enslaved: " +
+                    "SetFullscreenState(TRUE) no ReShade.log logo antes).",
+                    "Rode o jogo em janela ou sem borda. Se o jogo só tem tela cheia e é rota C, marque \"dgVoodoo em janela sem " +
+                    "borda\" na detecção e Instale de novo (o dgVoodoo apresenta numa janela do tamanho da tela; o jogo não percebe). " +
+                    "No painel do Feeder, use \"Show as texture\" em vez do painel projetado.");
+            }
+
             // 26b — o device D3D12 do host morreu: o host sai e o addon do jogo respawna outro, que
             // pode morrer igual. O código DXGI diz o tipo; o dlss5-feed.log diz quantas vezes.
             if (HostLog.DeviceRemovido(hostLogTexto) is { } removido)

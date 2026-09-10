@@ -552,6 +552,13 @@ public static class InstallPlanBuilder
                     break;
             }
             Copy(kit.DgVoodooCpl, renderer, "dgVoodooCpl.exe");
+            if (options.DgVoodooJanela)
+                plan.Warnings.Add(
+                    "dgVoodoo em janela sem borda: o dgVoodoo.conf sai com FullScreenMode=false, ScalingMode=stretched_ar e " +
+                    "WindowedAttributes=borderless, fullscreensize — o jogo pede tela cheia exclusiva e recebe uma janela do " +
+                    "tamanho da tela. É para jogo que só tem tela cheia: em exclusiva o host64 e o painel brigam com o " +
+                    "swapchain do jogo (o Enslaved congelou no aperto de mão com o host, 10/09/2026). Desmarque se o jogo " +
+                    "tiver opção de janela/sem borda própria.");
             if (kit.DgVoodooConf is not null)
                 plan.Actions.Add(new PlanAction(PlanActionKind.PatchDgVoodooConf,
                     $"Copiar e ajustar dgVoodoo.conf → {Rel(profile, Path.Combine(renderer, "dgVoodoo.conf"))}",

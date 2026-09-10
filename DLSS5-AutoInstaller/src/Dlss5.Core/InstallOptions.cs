@@ -25,4 +25,14 @@ public sealed class InstallOptions
 
     /// <summary>Marca d'água do dgVoodoo ligada (prova de vida; desligar depois).</summary>
     public bool DgVoodooWatermark { get; set; } = true;
+
+    /// <summary>
+    /// dgVoodoo apresenta o jogo numa janela sem borda do tamanho da tela, mesmo o jogo pedindo
+    /// tela cheia exclusiva. Para jogo que só oferece tela cheia: em exclusiva o host64 (janela
+    /// atrás do jogo, D3D12) e o painel projetado brigam com o swapchain do jogo — o Enslaved
+    /// congelou no aperto de mão com o host logo depois de SetFullscreenState(TRUE) (10/09/2026),
+    /// e o README do Feeder diz que "windowed is smoother". O jogo continua achando que está em
+    /// tela cheia; quem faz a janela é o dgVoodoo (FullScreenMode=false + WindowedAttributes).
+    /// </summary>
+    public bool DgVoodooJanela { get; set; }
 }

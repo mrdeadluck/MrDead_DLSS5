@@ -507,12 +507,14 @@ public sealed partial class MainForm
         _options.OverlayAlt = o.OverlayAlt;
         _options.ApplyRegistryOverride = o.ApplyRegistryOverride;
         _options.DgVoodooWatermark = o.DgVoodooWatermark;
+        _options.DgVoodooJanela = o.DgVoodooJanela;
         _cboMv.SelectedIndex = MvProviders.Indice(o.MvProvider);
         _chkCtrl.Checked = o.OverlayCtrl;
         _chkShift.Checked = o.OverlayShift;
         _chkAlt.Checked = o.OverlayAlt;
         _chkRegistry.Checked = o.ApplyRegistryOverride;
         _chkWatermark.Checked = o.DgVoodooWatermark;
+        _chkJanela.Checked = o.DgVoodooJanela;
         SelectOverlayKey(o.OverlayKey);
     }
 

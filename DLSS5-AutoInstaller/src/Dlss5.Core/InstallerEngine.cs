@@ -217,7 +217,7 @@ public sealed partial class InstallerEngine
                     {
                         var perfil = DgVoodooConfigurator.ProfileFor(profile);
                         var patched = DgVoodooConfigurator.Patch(File.ReadAllText(action.SourcePath!), perfil,
-                            hardwareTnL: null);
+                            hardwareTnL: null, janelaSemBorda: plan.Options.DgVoodooJanela);
                         if (!plan.Options.DgVoodooWatermark)
                             patched = DgVoodooConfigurator.DefinirChave(patched, "DirectX", "dgVoodooWatermark", "false");
                         Gravar(action.TargetPath!, manifest, anterior, desfazer, resultado,

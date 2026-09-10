@@ -60,6 +60,8 @@ public sealed class InstallManifest
     public bool OverlayAlt { get; set; }
     public bool ApplyRegistryOverride { get; set; } = true;
     public bool DgVoodooWatermark { get; set; } = true;
+    /// <summary>dgVoodoo em janela sem borda (jogo que só tem tela cheia exclusiva).</summary>
+    public bool DgVoodooJanela { get; set; }
     public bool PreferirFeeder { get; set; }
     /// <summary>Rota C em DirectX 8 com o dgVoodoo entrando como D3D9.dll atrás de uma mod com d3d8to9.</summary>
     public bool D3d8ViaD3D9 { get; set; }
@@ -234,6 +236,7 @@ public sealed class InstallManifest
             OverlayAlt = OverlayAlt,
             ApplyRegistryOverride = ApplyRegistryOverride,
             DgVoodooWatermark = DgVoodooWatermark,
+            DgVoodooJanela = DgVoodooJanela,
         };
         if (Enum.TryParse<MvProvider>(MvProvider, out var mv)) o.MvProvider = mv;
         return o;
@@ -293,6 +296,7 @@ public sealed class InstallManifest
             OverlayAlt = o.OverlayAlt,
             ApplyRegistryOverride = o.ApplyRegistryOverride,
             DgVoodooWatermark = o.DgVoodooWatermark,
+            DgVoodooJanela = o.DgVoodooJanela,
         };
         try
         {

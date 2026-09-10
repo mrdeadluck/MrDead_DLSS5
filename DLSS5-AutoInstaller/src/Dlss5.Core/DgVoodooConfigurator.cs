@@ -113,11 +113,20 @@ public static class DgVoodooConfigurator
     /// grava a escolha: pedindo hardware num adaptador que não oferece, ele recusa antes
     /// de abrir. A chave do dgVoodoo é escrita ao contrário do nome (DisableD3DTnLDevice).
     /// </param>
+    /// <summary>Chaves da janela sem borda: o dgVoodoo ignora o pedido de tela cheia e apresenta numa janela do tamanho da tela.</summary>
+    public static readonly (string Section, string Key, string Value)[] JanelaSemBorda =
+    {
+        ("General",    "FullScreenMode",     "false"),
+        ("General",    "ScalingMode",        "stretched_ar"),
+        ("GeneralExt", "WindowedAttributes", "borderless, fullscreensize"),
+    };
+
     public static string Patch(
         string confText, DgVoodooProfile perfil = DgVoodooProfile.Padrao,
-        string? videoCard = null, bool? hardwareTnL = null)
+        string? videoCard = null, bool? hardwareTnL = null, bool janelaSemBorda = false)
     {
         var Targets = TargetsFor(perfil).ToList();
+        if (janelaSemBorda) Targets.AddRange(JanelaSemBorda);
         if (!string.IsNullOrWhiteSpace(videoCard))
         {
             int i = Targets.FindIndex(t => t.Section == "DirectX" && t.Key == "VideoCard");

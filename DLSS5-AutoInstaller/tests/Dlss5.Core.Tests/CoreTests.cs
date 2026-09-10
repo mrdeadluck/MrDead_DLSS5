@@ -28,6 +28,20 @@ public class DgVoodooConfiguratorTests
         """;
 
     [Fact]
+    public void Patch_JanelaSemBorda_TrocaAsChavesDeTelaCheia()
+    {
+        const string conf = "[General]\nOutputAPI                            = bestavailable\nFullScreenMode                       = true\nScalingMode                          = unspecified\n\n[GeneralExt]\nFreeMouse                            = false\nWindowedAttributes                   = \n\n[DirectX]\nDisableAndPassThru                   = true\nVRAM                                 = 256\ndgVoodooWatermark                    = true\n";
+        var com = DgVoodooConfigurator.Patch(conf, janelaSemBorda: true);
+        Assert.Contains("FullScreenMode                       = false", com);
+        Assert.Contains("ScalingMode                          = stretched_ar", com);
+        Assert.Contains("WindowedAttributes                   = borderless, fullscreensize", com);
+        Assert.Contains("DisableAndPassThru                   = false", com);
+        var sem = DgVoodooConfigurator.Patch(conf);
+        Assert.Contains("FullScreenMode                       = true", sem);
+        Assert.Contains("WindowedAttributes                   = \n", sem.Replace("\r\n", "\n"));
+    }
+
+    [Fact]
     public void Patch_SetsDirectXKeys()
     {
         var result = DgVoodooConfigurator.Patch(Sample);
