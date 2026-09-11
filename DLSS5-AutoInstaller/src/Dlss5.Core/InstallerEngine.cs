@@ -215,9 +215,9 @@ public sealed partial class InstallerEngine
 
                     case PlanActionKind.PatchDgVoodooConf:
                     {
-                        var perfil = DgVoodooConfigurator.ProfileFor(profile.Api);
+                        var perfil = DgVoodooConfigurator.ProfileFor(profile);
                         var patched = DgVoodooConfigurator.Patch(File.ReadAllText(action.SourcePath!), perfil,
-                            hardwareTnL: null);
+                            hardwareTnL: null, janelaSemBorda: plan.Options.ForcarJanela);
                         if (!plan.Options.DgVoodooWatermark)
                             patched = DgVoodooConfigurator.DefinirChave(patched, "DirectX", "dgVoodooWatermark", "false");
                         Gravar(action.TargetPath!, manifest, anterior, desfazer, resultado,
@@ -357,6 +357,16 @@ public sealed partial class InstallerEngine
     /// </param>
     private static string ConteudoGerado(string target, InstallPlan plan, string? realDllPath = null)
     {
+        // Consumidores do host64: o arquivo do kit vem em SourcePath e sai com as passadas pedidas.
+        var nomeAlvo = Path.GetFileName(target);
+        if (nomeAlvo.Equals(OptiScalerNr.Ini, StringComparison.OrdinalIgnoreCase))
+            return OptiScalerNr.GerarIni(LerSePuder(realDllPath), plan.Profile.PassCount);
+        if (nomeAlvo.Equals(DeepFriedChicken.Cfg, StringComparison.OrdinalIgnoreCase))
+            return DeepFriedChicken.GerarCfg(LerSePuder(realDllPath), plan.Profile.PassCount);
+        // host64\ReShade.ini do ShortFuse-no-host: mescla no ini que o host já gravou (ou cria).
+        if (nomeAlvo.Equals(ShortFuseNoHost64.Ini, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(Path.GetFileName(Path.GetDirectoryName(target) ?? ""), "host64", StringComparison.OrdinalIgnoreCase))
+            return ShortFuseNoHost64.GerarIni(LerSePuder(target), plan.Profile.PassCount);
         if (realDllPath is not null)
         {
             string? existente = null;
@@ -377,8 +387,16 @@ public sealed partial class InstallerEngine
                 // base; o BasePath traz a base de volta para a raiz, onde está tudo.
                 basePath: plan.Profile.ReShadeForaDaRaiz ? plan.Profile.ExeFolder : null,
                 shortFuse: plan.Profile.UsesShortFuse,
-                passCount: plan.Profile.PassCount)
-            : ReShadeConfigWriter.BuildPresetIni(plan.Options.MvProvider, feederUsed: plan.Profile.NeedsFeeder);
+                passCount: plan.Profile.PassCount,
+                forceWindowed: plan.Options.ForcarJanela)
+            : ReShadeConfigWriter.BuildPresetIni(plan.Options.MvProvider, feederUsed: plan.Profile.NeedsFeeder,
+                teclaLigaDesliga: plan.Options.TeclaLigaDesliga);
+    }
+
+    private static string? LerSePuder(string? caminho)
+    {
+        try { return caminho is not null && File.Exists(caminho) ? File.ReadAllText(caminho) : null; }
+        catch { return null; }
     }
 
     /// <summary>
@@ -639,7 +657,10 @@ public sealed partial class InstallerEngine
         "dxgi.dll", "opengl32.dll", "ReShade.ini", "ReShade.log", "ReShadePreset.ini",
         "ReShade64.json", "ReShade32.json", "ReShade64_XR.json", "ReShade32_XR.json",
         "renodx-dlss5.addon64", ShortFuseDlss.Addon, "nvngx_dlssnr.dll",
+        OptiScalerNr.Ini, OptiScalerNr.Shim, OptiScalerNr.Log, OptiScalerNr.ReShade64,
+        DeepFriedChicken.Addon, DeepFriedChicken.Nvngx, DeepFriedChicken.Cfg,
         "dlss5-feed.addon64", "dlss5-feed.addon32", "dlss5-feed.cfg", "dlss5-feed.log", "dlss5-feed-crash.dmp",
+        JanelaForcada.Addon32, JanelaForcada.Addon64,
         "D3D9.dll", "D3D8.dll", "dgVoodoo.conf", "dgVoodooCpl.exe",
         "dgVoodoo_D3D9.dll", "dgVoodoo_D3D8.dll",
     };

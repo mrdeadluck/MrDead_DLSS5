@@ -79,6 +79,14 @@ public static class DgVoodooConfigurator
         api == GraphicsApi.D3D8 ? DgVoodooProfile.Legado : DgVoodooProfile.Padrao;
 
     /// <summary>
+    /// Idem, pelo perfil: jogo DirectX 8 atrás de uma mod com d3d8to9 fala DirectX 9 com o
+    /// dgVoodoo, e a mod (SH2 Enhanced Edition) quer as resoluções modernas — o perfil
+    /// "Legado" (resoluções clássicas, VRAM 256) esconderia a resolução do monitor dela.
+    /// </summary>
+    public static DgVoodooProfile ProfileFor(GameProfile p) =>
+        p.D3d8ViaD3D9 ? DgVoodooProfile.Padrao : ProfileFor(p.Api);
+
+    /// <summary>
     /// Placas que o dgVoodoo sabe fingir, na ordem em que vale a pena tentar. Os nomes
     /// vêm da lista que o próprio dgVoodoo.conf documenta — nome fora dela é ignorado
     /// em silêncio, e o jogo continua recusando sem que se saiba por quê.
@@ -105,11 +113,20 @@ public static class DgVoodooConfigurator
     /// grava a escolha: pedindo hardware num adaptador que não oferece, ele recusa antes
     /// de abrir. A chave do dgVoodoo é escrita ao contrário do nome (DisableD3DTnLDevice).
     /// </param>
+    /// <summary>Chaves da janela sem borda: o dgVoodoo ignora o pedido de tela cheia e apresenta numa janela do tamanho da tela.</summary>
+    public static readonly (string Section, string Key, string Value)[] JanelaSemBorda =
+    {
+        ("General",    "FullScreenMode",     "false"),
+        ("General",    "ScalingMode",        "stretched_ar"),
+        ("GeneralExt", "WindowedAttributes", "borderless, fullscreensize"),
+    };
+
     public static string Patch(
         string confText, DgVoodooProfile perfil = DgVoodooProfile.Padrao,
-        string? videoCard = null, bool? hardwareTnL = null)
+        string? videoCard = null, bool? hardwareTnL = null, bool janelaSemBorda = false)
     {
         var Targets = TargetsFor(perfil).ToList();
+        if (janelaSemBorda) Targets.AddRange(JanelaSemBorda);
         if (!string.IsNullOrWhiteSpace(videoCard))
         {
             int i = Targets.FindIndex(t => t.Section == "DirectX" && t.Key == "VideoCard");

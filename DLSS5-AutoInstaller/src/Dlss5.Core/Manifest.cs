@@ -58,9 +58,14 @@ public sealed class InstallManifest
     public bool OverlayCtrl { get; set; }
     public bool OverlayShift { get; set; }
     public bool OverlayAlt { get; set; }
+    public int TeclaLigaDesliga { get; set; } = ReShadeConfigWriter.KeyF6;
     public bool ApplyRegistryOverride { get; set; } = true;
     public bool DgVoodooWatermark { get; set; } = true;
+    /// <summary>dgVoodoo em janela sem borda (jogo que só tem tela cheia exclusiva).</summary>
+    public bool ForcarJanela { get; set; }
     public bool PreferirFeeder { get; set; }
+    /// <summary>Rota C em DirectX 8 com o dgVoodoo entrando como D3D9.dll atrás de uma mod com d3d8to9.</summary>
+    public bool D3d8ViaD3D9 { get; set; }
     /// <summary>Motor do Neural Rendering (<see cref="NeuralEngine"/>) e passadas do ShortFuse.</summary>
     public string Engine { get; set; } = "";
     public int PassCount { get; set; } = ShortFuseDlss.PassesPadrao;
@@ -230,8 +235,10 @@ public sealed class InstallManifest
             OverlayCtrl = OverlayCtrl,
             OverlayShift = OverlayShift,
             OverlayAlt = OverlayAlt,
+            TeclaLigaDesliga = TeclaLigaDesliga,
             ApplyRegistryOverride = ApplyRegistryOverride,
             DgVoodooWatermark = DgVoodooWatermark,
+            ForcarJanela = ForcarJanela,
         };
         if (Enum.TryParse<MvProvider>(MvProvider, out var mv)) o.MvProvider = mv;
         return o;
@@ -249,6 +256,7 @@ public sealed class InstallManifest
             HasNativeDlss = HasNativeDlss,
             IsSourceEngine = IsSourceEngine,
             PreferirFeeder = PreferirFeeder,
+            D3d8ViaD3D9 = D3d8ViaD3D9,
         };
         if (Enum.TryParse<PeArchitecture>(Architecture, out var arch)) p.Architecture = arch;
         if (Enum.TryParse<GraphicsApi>(Api, out var api)) p.Api = api;
@@ -278,6 +286,7 @@ public sealed class InstallManifest
             HasNativeDlss = p.HasNativeDlss,
             IsSourceEngine = p.IsSourceEngine,
             PreferirFeeder = p.PreferirFeeder,
+            D3d8ViaD3D9 = p.D3d8ViaD3D9,
             Engine = p.Engine.ToString(),
             PassCount = p.PassCount,
             KitRoot = kit.KitRoot,
@@ -287,8 +296,10 @@ public sealed class InstallManifest
             OverlayCtrl = o.OverlayCtrl,
             OverlayShift = o.OverlayShift,
             OverlayAlt = o.OverlayAlt,
+            TeclaLigaDesliga = o.TeclaLigaDesliga,
             ApplyRegistryOverride = o.ApplyRegistryOverride,
             DgVoodooWatermark = o.DgVoodooWatermark,
+            ForcarJanela = o.ForcarJanela,
         };
         try
         {

@@ -20,6 +20,7 @@ public sealed partial class MainForm
     private readonly ComboBox _cboPlaca = new();
     private readonly CheckBox _chkTnL = new();
     private readonly Button _btnRenodx = Ui.Secondary("Testar sem o RenoDX");
+    private readonly Button _btnLaa = new();
     private readonly Button _btnFeeder = Ui.Secondary("Testar sem o Feeder");
     private readonly Button _btnSoReShade = Ui.Secondary("Testar só o ReShade");
     // O runtime do DLSS 5 pelo hash: quando o do kit é remendo/original-só-RTX-50, este
@@ -165,6 +166,16 @@ public sealed partial class MainForm
         bar.Controls.Add(Botao("Abrir pasta do jogo", (_, _) => OpenFolder(_profile?.ExeFolder)));
         bar.Controls.Add(Botao("Abrir o jogo", (_, _) => LaunchGame()));
         bar.Controls.Add(Botao("Isolar a causa…", (_, _) => IsolarCausa()));
+        // Jogo 32-bit: o próprio host do Feeder prova a combinação driver × runtimes × consumidor
+        // em 15 s, sem abrir jogo (é como o projeto do Feeder mediu o defeito do driver 616.64).
+        bar.Controls.Add(Botao("Testar o host64…", async (_, _) => await TestarHost64Async()));
+        // Exe 32-bit sem a flag LAA: 2 GB para jogo + dgVoodoo + ReShade + feed + driver. Black Mesa
+        // caiu com "failed to lock vertex buffer". O botão liga o bit com backup ao lado.
+        _btnLaa.Text = "Aplicar 4 GB (LAA) no exe";
+        _btnLaa.Margin = new Padding(0, 4, 8, 4);
+        _btnLaa.Visible = false;
+        _btnLaa.Click += (_, _) => AplicarLaa();
+        bar.Controls.Add(_btnLaa);
         _btnRenodx.Margin = new Padding(0, 4, 8, 4);
         _btnRenodx.Click += (_, _) => TestarSemRenodx();
         bar.Controls.Add(_btnRenodx);
@@ -587,12 +598,86 @@ public sealed partial class MainForm
     }
 
     /// <summary>
+    /// host64\dlss5-feed-host64.exe --test: DLAA sintético + Neural Rendering, 300 avaliações, sem
+    /// jogo. "300/300" = driver, runtimes e consumidor neural funcionam juntos; "evaluate raised
+    /// 0xC0000005" = o defeito do addon 4.6/4.7 com driver 616.64+.
+    /// </summary>
+    private async Task TestarHost64Async()
+    {
+        if (_profile is null) return;
+        var exe = Path.Combine(_profile.ExeFolder, "host64", "dlss5-feed-host64.exe");
+        if (!File.Exists(exe))
+        {
+            Aviso("Teste do host64", "host64\\dlss5-feed-host64.exe não está na pasta do jogo. O teste só existe em jogo 32-bit, com o Feeder instalado.");
+            return;
+        }
+        Status("Testando o host64 (--test): até 2 minutos…");
+        string saida;
+        try
+        {
+            using var etapa = _diario.Etapa("host64 --test");
+            var psi = new ProcessStartInfo(exe, "--test")
+            {
+                WorkingDirectory = Path.GetDirectoryName(exe)!,
+                UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true,
+            };
+            using var p = Process.Start(psi)!;
+            var stdout = p.StandardOutput.ReadToEndAsync();
+            var stderr = p.StandardError.ReadToEndAsync();
+            await Task.WhenAny(p.WaitForExitAsync(), Task.Delay(TimeSpan.FromSeconds(150)));
+            string prefixo = "";
+            if (!p.HasExited)
+            {
+                try { p.Kill(true); } catch { }
+                prefixo = "(o teste não terminou em 150 s e foi encerrado)\r\n";
+            }
+            saida = prefixo + await stdout + await stderr;
+            _diario.Tecnico("host64 --test:\r\n" + saida);
+        }
+        catch (Exception ex) { Erro("Não consegui rodar o teste do host64", ex); return; }
+
+        var r = HostTest.Ler(saida);
+        Status("Teste do host64: " + r.Titulo);
+        Dialogos.Informar(this, "Teste do host64 (--test)", r.Titulo, r.Texto + "\r\n\r\nÚltimas linhas do host:\r\n" + r.Trecho);
+    }
+
+    /// <summary>
     /// Teste avulso do caso "abre, mas o DLSS do MENU do jogo trava ao ligar": desliga só
     /// o addon do RenoDX — quem se pendura na chamada de NGX que o próprio jogo faz —
     /// mantendo ReShade e Feeder ativos. Foi o padrão do GTA 5 depois da recuperação: DLL
     /// original de volta e o travamento continuou, o que tira o arquivo da lista de
     /// suspeitos e deixa a interceptação dentro do processo. O mesmo botão religa.
     /// </summary>
+    private void AplicarLaa()
+    {
+        if (_profile is null) { Aviso("Faça a detecção primeiro."); return; }
+        if (_ocupado) { Status(Textos.OperacaoEmAndamento); return; }
+        var exe = _profile.RealExePath;
+        if (!Patch4Gb.Cabe(exe)) { _btnLaa.Visible = false; Status("O exe já tem a flag LAA (ou não é 32-bit)."); return; }
+        var rodando = Preflight.JogoRodando(exe);
+        if (rodando is not null) { Aviso("O jogo está aberto", $"Feche o jogo ({rodando}.exe) antes: o exe em uso não pode ser gravado."); return; }
+        var nome = Path.GetFileName(exe);
+        var ok = MessageBox.Show(this,
+            $"Ligar a flag Large Address Aware (4 GB) em {nome}?\n\n" +
+            "É 1 bit no cabeçalho do exe, o mesmo que a ferramenta \"4GB Patch\" da NTCore faz. O original fica ao lado como " +
+            $"{nome}{Patch4Gb.SufixoDoBackup}. A Steam repõe o exe original se você verificar a integridade dos arquivos — aí é só " +
+            "clicar aqui de novo.",
+            "Aplicar 4 GB (LAA) no exe", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+        if (ok != DialogResult.Yes) return;
+        try
+        {
+            using var etapa = _diario.Etapa("Aplicar 4 GB (LAA) no exe");
+            Patch4Gb.Aplicar(exe!, _diario.Info);
+            _btnLaa.Visible = false;
+            Status($"Flag LAA ligada em {nome}. Abra o jogo de novo e depois clique em Verificar.");
+            Dialogos.Informar(this, "Aplicar 4 GB (LAA) no exe", "Flag ligada",
+                $"{nome} agora enxerga 4 GB de espaço de endereço. Backup: {nome}{Patch4Gb.SufixoDoBackup}.\n\n" +
+                "Abra o jogo. Se o erro de memória (\"failed to lock vertex buffer\") sumir, era isso. Se continuar, use " +
+                "\"Testar sem o Feeder\" para ver se são as texturas do feed.");
+        }
+        catch (Exception ex) { Erro("Não consegui alterar o exe", ex); }
+    }
+
     private void TestarSemRenodx()
     {
         if (_profile is null) { Aviso("Faça a detecção primeiro."); return; }
@@ -781,6 +866,7 @@ public sealed partial class MainForm
         _btnFeeder.Text = _isolamento == EstadoIsolamento.SemFeeder ? "Religar o Feeder" : "Testar sem o Feeder";
         // Sem Feeder instalado (caminho direto) o teste não existe.
         _btnFeeder.Visible = _profile?.NeedsFeeder ?? false;
+        _btnLaa.Visible = _profile is not null && _profile.Architecture == PeArchitecture.X86 && Patch4Gb.Cabe(_profile.RealExePath);
         _btnSoReShade.Text = _isolamento == EstadoIsolamento.SoOReShade
             ? "Religar os addons"
             : "Testar só o ReShade";
@@ -909,8 +995,8 @@ public sealed partial class MainForm
         var (rotulo, valor) = DgVoodooConfigurator.Placas[idx];
         try
         {
-            var perfil = DgVoodooConfigurator.ProfileFor(_profile!.Api);
-            File.WriteAllText(conf, DgVoodooConfigurator.Patch(File.ReadAllText(conf), perfil, valor, _chkTnL.Checked));
+            var perfil = DgVoodooConfigurator.ProfileFor(_profile!);
+            File.WriteAllText(conf, DgVoodooConfigurator.Patch(File.ReadAllText(conf), perfil, valor, _chkTnL.Checked, _options.ForcarJanela));
             _diario.Info($"dgVoodoo.conf: VideoCard={valor}, T&L={_chkTnL.Checked}");
             Status($"dgVoodoo agora se apresenta como {rotulo}. Abra o jogo e veja se muda.");
             Dialogos.Informar(this, "Placa trocada", $"Gravado: VideoCard = {valor}",

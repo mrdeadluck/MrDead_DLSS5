@@ -28,6 +28,20 @@ public class DgVoodooConfiguratorTests
         """;
 
     [Fact]
+    public void Patch_JanelaSemBorda_TrocaAsChavesDeTelaCheia()
+    {
+        const string conf = "[General]\nOutputAPI                            = bestavailable\nFullScreenMode                       = true\nScalingMode                          = unspecified\n\n[GeneralExt]\nFreeMouse                            = false\nWindowedAttributes                   = \n\n[DirectX]\nDisableAndPassThru                   = true\nVRAM                                 = 256\ndgVoodooWatermark                    = true\n";
+        var com = DgVoodooConfigurator.Patch(conf, janelaSemBorda: true);
+        Assert.Contains("FullScreenMode                       = false", com);
+        Assert.Contains("ScalingMode                          = stretched_ar", com);
+        Assert.Contains("WindowedAttributes                   = borderless, fullscreensize", com);
+        Assert.Contains("DisableAndPassThru                   = false", com);
+        var sem = DgVoodooConfigurator.Patch(conf);
+        Assert.Contains("FullScreenMode                       = true", sem);
+        Assert.Contains("WindowedAttributes                   = \n", sem.Replace("\r\n", "\n"));
+    }
+
+    [Fact]
     public void Patch_SetsDirectXKeys()
     {
         var result = DgVoodooConfigurator.Patch(Sample);
@@ -223,6 +237,19 @@ public class ReShadeConfigWriterTests
     }
 
     [Fact]
+    public void Ini_ForceWindowed_SoQuandoPedido()
+    {
+        // Padrão: nada de [APP], nada muda para quem não marcou.
+        var normal = ReShadeConfigWriter.BuildReShadeIni();
+        Assert.DoesNotContain("ForceWindowed", normal);
+        // Marcado: a alavanca geral do ReShade que força janela em qualquer API.
+        var janela = ReShadeConfigWriter.BuildReShadeIni(forceWindowed: true);
+        Assert.Contains("[APP]", janela);
+        Assert.Contains("ForceWindowed=1", janela);
+        Assert.Contains("ForceFullscreen=0", janela);
+    }
+
+    [Fact]
     public void Ini_UsesChosenOverlayKey()
     {
         Assert.Contains("KeyOverlay=45,0,0,0",
@@ -260,6 +287,19 @@ public class ReShadeConfigWriterTests
         Assert.Contains(keys, k => k.Label == "F1" && k.VirtualKey == 112);
         Assert.Contains(keys, k => k.Label == "F12" && k.VirtualKey == 123);
         Assert.Contains(keys, k => k.Label == "Tecla K" && k.VirtualKey == 75);
+    }
+
+    [Fact]
+    public void Preset_GravaATeclaDeAlternanciaDaTechniqueDoFeed()
+    {
+        // Formato do ReShade: Key<nome@arquivo>=tecla,ctrl,shift,alt na raiz do preset.
+        var preset = ReShadeConfigWriter.BuildPresetIni(MvProvider.Vort, feederUsed: true, teclaLigaDesliga: ReShadeConfigWriter.KeyF6);
+        Assert.Contains("KeyDLSS5_Feed@DLSS5_Feed.fx=117,0,0,0", preset);
+        // A chave fica ANTES da seção [DLSS5_Feed.fx], senão o ReShade a leria dentro da seção.
+        Assert.True(preset.IndexOf("KeyDLSS5_Feed@", StringComparison.Ordinal) < preset.IndexOf("[DLSS5_Feed.fx]", StringComparison.Ordinal));
+        // Sem tecla (0): nada gravado. Sem Feeder: preset vazio, nada gravado.
+        Assert.DoesNotContain("KeyDLSS5_Feed@", ReShadeConfigWriter.BuildPresetIni(MvProvider.Vort, feederUsed: true, teclaLigaDesliga: 0));
+        Assert.DoesNotContain("KeyDLSS5_Feed@", ReShadeConfigWriter.BuildPresetIni(MvProvider.Vort, feederUsed: false, teclaLigaDesliga: ReShadeConfigWriter.KeyF6));
     }
 
     [Fact]
@@ -410,12 +450,12 @@ public class RouteTests
     [InlineData(PeArchitecture.X86, GraphicsApi.D3D8, InstallRoute.C)]
     // OpenGL em 64-bit segue a rota A; muda só o nome com que o ReShade é instalado.
     [InlineData(PeArchitecture.X64, GraphicsApi.OpenGL, InstallRoute.A)]
-    // Regra derivada da spec: 32-bit fora do D3D11 depende do dgVoodoo, e o addon32 só
-    // aceita Direct3D 11 — então Vulkan e OpenGL não têm caminho em x86.
+    // Vulkan 32-bit continua sem caminho (o addon32 precisa do DXVK). OpenGL e D3D10 32-bit
+    // vão pelo mesmo host64 do D3D11 (Feeder 0.13.1+: D3D10 nativo; OpenGL validado em Worms/KOTOR).
     [InlineData(PeArchitecture.X86, GraphicsApi.Vulkan, InstallRoute.Unsupported)]
-    [InlineData(PeArchitecture.X86, GraphicsApi.OpenGL, InstallRoute.Unsupported)]
+    [InlineData(PeArchitecture.X86, GraphicsApi.OpenGL, InstallRoute.B)]
     [InlineData(PeArchitecture.X64, GraphicsApi.D3D10, InstallRoute.Unsupported)]
-    [InlineData(PeArchitecture.X86, GraphicsApi.D3D10, InstallRoute.Unsupported)]
+    [InlineData(PeArchitecture.X86, GraphicsApi.D3D10, InstallRoute.B)]
     [InlineData(PeArchitecture.Unknown, GraphicsApi.D3D11, InstallRoute.Unsupported)]
     public void Route_FollowsDecisionTree(PeArchitecture arch, GraphicsApi api, InstallRoute expected)
     {
@@ -891,6 +931,63 @@ public class PlanBuilderTests
     }
 
     [Fact]
+    public void RotaC_D3D8_ModComD3d8to9_DgVoodooEntraComoD3D9()
+    {
+        // Silent Hill 2 Enhanced Edition: o d3d8.dll da pasta é a própria mod, que converte
+        // para DirectX 9 e prefere um d3d9.dll local. Antes o plano recusava ("não é o
+        // dgVoodoo"); agora a mod fica e o dgVoodoo entra como D3D9.dll ao lado.
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5sh2_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "D3D8.dll"), "MZ ... Starting Silent Hill 2 Enhancements! v1.0 ...");
+            var perfil = PerfilRotaC(dir);
+            perfil.Api = GraphicsApi.D3D8;
+            Assert.Equal("D3D8.dll", perfil.DgVoodooWrapperName);
+
+            var plan = InstallPlanBuilder.Build(perfil, FullKit(), new InstallOptions());
+
+            Assert.True(plan.CanRun, string.Join("; ", plan.Blockers));
+            Assert.True(perfil.D3d8ViaD3D9);
+            Assert.Equal("D3D9.dll", perfil.DgVoodooWrapperName);
+            // O D3D8.dll da mod não é alvo de nada; o dgVoodoo D3D9 x86 do kit vira D3D9.dll.
+            Assert.DoesNotContain(plan.Actions, a =>
+                Path.GetFileName(a.TargetPath ?? "").Equals("D3D8.dll", StringComparison.OrdinalIgnoreCase));
+            var copia = Assert.Single(plan.Actions, a =>
+                a.Kind == PlanActionKind.CopyFile &&
+                Path.GetFileName(a.TargetPath ?? "").Equals("D3D9.dll", StringComparison.OrdinalIgnoreCase));
+            Assert.EndsWith(@"MS\x86\D3D9.dll", copia.SourcePath!, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(plan.Warnings, w => w.Contains("Silent Hill 2 Enhanced Edition", StringComparison.Ordinal));
+            // A mod quer resolução moderna: perfil padrão do dgVoodoo, não o "Legado".
+            Assert.Equal(DgVoodooProfile.Padrao, DgVoodooConfigurator.ProfileFor(perfil));
+
+            // O manifesto leva a decisão, para a verificação e a desinstalação olharem o D3D9.dll.
+            var m = InstallManifest.Para(plan, FullKit());
+            Assert.True(m.D3d8ViaD3D9);
+            Assert.Equal("D3D9.dll", m.PerfilGravado()!.DgVoodooWrapperName);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void RotaC_D3D8_WrapperDesconhecidoContinuaBloqueando()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5sh2_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "D3D8.dll"), "MZ ... ENBSeries ...");
+            var perfil = PerfilRotaC(dir);
+            perfil.Api = GraphicsApi.D3D8;
+            var plan = InstallPlanBuilder.Build(perfil, FullKit(), new InstallOptions());
+            Assert.False(perfil.D3d8ViaD3D9);
+            Assert.Contains(plan.Blockers, b => b.Contains("não é o dgVoodoo", StringComparison.Ordinal));
+            Assert.Null(D3d8to9Wrapper.Qual(dir));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
     public void RotaC_DgVoodooJaInstaladoPodeSerSobrescrito()
     {
         // Reinstalar por cima do próprio dgVoodoo é o caso normal — e tem backup.
@@ -1225,6 +1322,108 @@ public class KitResolverTests
         };
         var missing = inv.MissingFor(InstallRoute.C, nativeDlss: false);
         Assert.Contains(missing, m => m.Contains("D3D9", StringComparison.OrdinalIgnoreCase));
+    }
+}
+
+public class DxvkTests
+{
+    [Fact]
+    public void ReconheceOLogDoDxvkAoLadoDoExe()
+    {
+        var pasta = Path.Combine(Path.GetTempPath(), "dlss5dxvk_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(pasta);
+        try
+        {
+            var exe = Path.Combine(pasta, "bms.exe");
+            File.WriteAllText(exe, "x");
+            Assert.Null(Dxvk.Ativo(exe));
+            // Black Mesa (11/09/2026): bms_d3d9.log começa assim.
+            File.WriteAllText(Path.Combine(pasta, "bms_d3d9.log"),
+                "info:  Game: bms.exe\r\ninfo:  DXVK: v2.6.2\r\ninfo:  Build: x86 gcc 15.1.0\r\n");
+            var ativo = Dxvk.Ativo(exe);
+            Assert.NotNull(ativo);
+            Assert.Equal("v2.6.2", ativo!.Value.Versao);
+            Assert.EndsWith("bms_d3d9.log", ativo.Value.Log);
+            // Um log qualquer com esse nome, sem a assinatura, não conta.
+            File.WriteAllText(Path.Combine(pasta, "bms_d3d9.log"), "algo que nao e o dxvk");
+            Assert.Null(Dxvk.Ativo(exe));
+            // DXVK embutido na Source: bin\thirdparty\dxvk-windows-x86\d3d9.dll.
+            var bin = Path.Combine(pasta, "bin");
+            Assert.False(Dxvk.EmbutidoNaSource(bin));
+            Directory.CreateDirectory(Path.Combine(bin, "thirdparty", "dxvk-windows-x86"));
+            File.WriteAllText(Path.Combine(bin, "thirdparty", "dxvk-windows-x86", "d3d9.dll"), "dxvk");
+            Assert.True(Dxvk.EmbutidoNaSource(bin));
+        }
+        finally { Directory.Delete(pasta, true); }
+    }
+}
+
+public class PeFileLaaTests
+{
+    private static string Pe(ushort characteristics)
+    {
+        // MZ, e_lfanew=0x40, "PE\0\0", Machine x86, ..., Characteristics no offset PE+22.
+        var b = new byte[0x60];
+        b[0] = (byte)'M'; b[1] = (byte)'Z';
+        BitConverter.GetBytes(0x40u).CopyTo(b, 0x3C);
+        b[0x40] = (byte)'P'; b[0x41] = (byte)'E';
+        BitConverter.GetBytes((ushort)0x014C).CopyTo(b, 0x44);
+        BitConverter.GetBytes(characteristics).CopyTo(b, 0x40 + 22);
+        var p = Path.Combine(Path.GetTempPath(), "dlss5laa_" + Guid.NewGuid().ToString("N") + ".exe");
+        File.WriteAllBytes(p, b);
+        return p;
+    }
+
+    [Fact]
+    public void Patch4Gb_LigaAFlagComBackupEEhIdempotente()
+    {
+        var exe = Pe(0x0102);
+        try
+        {
+            Assert.True(Patch4Gb.Cabe(exe));
+            var logs = new List<string>();
+            Patch4Gb.Aplicar(exe, logs.Add);
+            Assert.True(PeFile.IsLargeAddressAware(exe));
+            Assert.True(File.Exists(Patch4Gb.CaminhoDoBackup(exe)));
+            Assert.False(PeFile.IsLargeAddressAware(Patch4Gb.CaminhoDoBackup(exe)));
+            Assert.False(Patch4Gb.Cabe(exe));
+            Patch4Gb.Aplicar(exe, logs.Add);
+            Assert.Contains(logs, l => l.Contains("já tem a flag", StringComparison.Ordinal));
+            Assert.True(Patch4Gb.Reverter(exe));
+            Assert.False(PeFile.IsLargeAddressAware(exe));
+            Assert.False(File.Exists(Patch4Gb.CaminhoDoBackup(exe)));
+        }
+        finally { File.Delete(exe); var b = Patch4Gb.CaminhoDoBackup(exe); if (File.Exists(b)) File.Delete(b); }
+    }
+
+    [Fact]
+    public void Patch4Gb_RecusaExe64Bit()
+    {
+        var b = new byte[0x60];
+        b[0] = (byte)'M'; b[1] = (byte)'Z'; BitConverter.GetBytes(0x40u).CopyTo(b, 0x3C);
+        b[0x40] = (byte)'P'; b[0x41] = (byte)'E'; BitConverter.GetBytes((ushort)0x8664).CopyTo(b, 0x44);
+        var exe = Path.Combine(Path.GetTempPath(), "dlss5laa64_" + Guid.NewGuid().ToString("N") + ".exe");
+        File.WriteAllBytes(exe, b);
+        try
+        {
+            Assert.False(Patch4Gb.Cabe(exe));
+            Assert.Throws<InvalidOperationException>(() => Patch4Gb.Aplicar(exe));
+        }
+        finally { File.Delete(exe); }
+    }
+
+    [Fact]
+    public void LeAFlagLargeAddressAwareDoCabecalhoCoff()
+    {
+        var com = Pe(0x0102 | 0x0020); var sem = Pe(0x0102);
+        try
+        {
+            Assert.True(PeFile.IsLargeAddressAware(com));
+            Assert.False(PeFile.IsLargeAddressAware(sem));
+            Assert.Null(PeFile.IsLargeAddressAware(Path.Combine(Path.GetTempPath(), "nao-existe-" + Guid.NewGuid().ToString("N") + ".exe")));
+            Assert.Null(PeFile.IsLargeAddressAware(null));
+        }
+        finally { File.Delete(com); File.Delete(sem); }
     }
 }
 
@@ -5104,7 +5303,7 @@ public class FeederKitTests
         Assert.False(FeederKit.Antiga("0.12.0.0"));
         Assert.False(FeederKit.Antiga("v0.13.1"));
         Assert.False(FeederKit.Antiga("1.0.0"));
-        Assert.Equal("0.13.1-beta.1", FeederKit.VersaoDoKit);
+        Assert.Equal("0.15.1", FeederKit.VersaoDoKit);
         Assert.False(FeederKit.Antiga(FeederKit.VersaoDoKit));
     }
 

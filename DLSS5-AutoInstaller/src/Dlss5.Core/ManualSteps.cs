@@ -51,6 +51,36 @@ public static class ManualSteps
             steps.Add(new ManualStep(n++, $"Conferir o Pass Count ({profile.PassCount}) no painel RenoDX DLSS",
                 ShortFuseDlss.PassoManual(profile.PassCount), false));
 
+        if (profile.UsesOptiScalerNr)
+            steps.Add(new ManualStep(n++, $"OptiScaler DLSS-NR no host64: conferir Neural Rendering ligado e {profile.PassCount} passada(s)",
+                OptiScalerNr.PassoManual(profile.PassCount), false));
+
+        if (profile.UsesShortFuseNoHost64)
+            steps.Add(new ManualStep(n++, $"RenoDX DLSS (ShortFuse) dentro do host64: conferir que anexou e as {profile.PassCount} passada(s)",
+                ShortFuseNoHost64.PassoManual(profile.PassCount), false));
+
+        if (profile.UsesDeepFriedChicken)
+            steps.Add(new ManualStep(n++, $"Deep Fried Chicken no host64: Defender, ARMED e {profile.PassCount} passada(s)",
+                DeepFriedChicken.PassoManual(profile.PassCount), true));
+
+        // Frame generation: nenhum dos motores CRIA quadros. A aba DLSS-G do painel do ShortFuse
+        // só rege o DLSS Frame Generation que o jogo já tem (Streamline) — em jogo sem ele fica
+        // vazia. O que existe fora daqui: Smooth Motion do driver (D3D11/D3D12) e o AIO do kibblerz.
+        bool vulkan = profile.Api == GraphicsApi.Vulkan;
+        steps.Add(new ManualStep(n++, "Frame generation (opcional): não vem de nenhum motor deste programa",
+            "A aba DLSS-G do painel RenoDX DLSS (ShortFuse) só controla o DLSS Frame Generation que o JOGO já traz " +
+            "(Streamline): em jogo sem ele a aba fica vazia, e nada neste kit cria quadros. Para dobrar os quadros: " +
+            (vulkan
+                ? "em Vulkan NÃO ligue o NVIDIA Smooth Motion — o Feeder cai (README do Feeder). "
+                : "NVIDIA Smooth Motion, do próprio driver (RTX 40 e 50): NVIDIA App → o jogo → Smooth Motion ligado. Vale para " +
+                  "D3D11 e D3D12" + ((profile.Route == InstallRoute.C) ? " — o jogo 32-bit atrás do dgVoodoo apresenta em D3D11, então deve valer (não medido aqui)" : "") +
+                  "; o Feeder convive com ele desde o 0.11 (o README dele diz para deixar ligado em DX11/12). ") +
+            (profile.Architecture == PeArchitecture.X64
+                ? "Alternativa em 64-bit: o DLSS5-Reshade-AIO do kibblerz (pasta \"(alternativa kibblerz)\" do kit, instalação manual) traz " +
+                  "Frame Generation próprio com o nvngx_dlssg.dll do kit, mas substitui o RenoDX + Feeder. O MFG Unlock só serve em jogo que já tem DLSS-G."
+                : "Dentro do host64 não existe frame generation: o host devolve ao jogo um quadro por quadro."),
+            false));
+
         // Depth pelo Generic Depth e DLAA do Feeder: só existem no caminho do Feeder. No
         // direto o RenoDX recebe depth e motion vectors do contrato NGX do jogo, e o
         // Generic Depth fica desligado de propósito (a cópia antes dos clears derrubou o RE9).
@@ -99,6 +129,12 @@ public static class ManualSteps
                 "Na aba Complementos → Generic Depth, confirme que o buffer da cena está selecionado e não está " +
                 "marcado como Multisampled. Se a imagem ficar estranha, ative o DisplayDepth.fx para ver o depth: " +
                 "se estiver invertido ou de cabeça para baixo, marque RESHADE_DEPTH_INPUT_IS_REVERSED / IS_UPSIDE_DOWN.", false));
+            if (options.TeclaLigaDesliga > 0)
+                steps.Add(new ManualStep(n++, "Comparar antes/depois sem abrir o painel",
+                    $"No jogo, aperte {options.TeclaLigaDesligaLabel}: o DLSS 5 (DLAA + Neural Rendering) desliga e o jogo mostra o " +
+                    "quadro cru; aperte de novo e volta. É a tecla de alternância da technique \"DLSS 5 Feed\" no preset do " +
+                    "ReShade — o addon só trabalha logo depois de ela rodar, então desligá-la desliga tudo. Para trocar a tecla " +
+                    "depois: painel do ReShade, botão direito em \"DLSS 5 Feed\", campo da tecla.", false));
         }
         else
         {

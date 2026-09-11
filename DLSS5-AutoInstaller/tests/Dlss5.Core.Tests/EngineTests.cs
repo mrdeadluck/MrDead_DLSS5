@@ -43,6 +43,7 @@ internal sealed class Cenario : IDisposable
             RenodxAddon64 = K("renodx-dlss5.addon64", "renodx v1"),
             FeedAddon64 = K("dlss5-feed.addon64", "feed64 v1"),
             FeedAddon32 = K("dlss5-feed.addon32", "feed32 v1"),
+            SwapchainOverride32 = K("swapchain_override.addon32", "swapchain override x86"),
             FeedHost64Exe = K("dlss5-feed-host64.exe", "host v1"),
             DxgiX64 = K("dxgi64.dll", "ReShade 6.8.0 x64"),
             DxgiX86 = K("dxgi32.dll", "ReShade 6.8.0 x86"),
@@ -836,5 +837,381 @@ public class MotorShortFuseTests
         var passos = ManualSteps.For(PerfilSf(c, passes: 2), c.Opcoes());
         Assert.Contains(passos, s => s.Title.Contains("Pass Count", StringComparison.Ordinal) && s.Detail.Contains("RenoDX DLSS", StringComparison.Ordinal));
         Assert.DoesNotContain(passos, s => s.Title.Contains("DESLIGAR o DLSS", StringComparison.Ordinal));
+    }
+}
+
+public class ConsumidoresNoHost64Tests
+{
+    private static InstallOptions OpcoesX86(Cenario c)
+    {
+        var o = c.Opcoes();
+        o.MvProvider = MvProvider.Launchpad; // o kit do cenário só tem o Launchpad
+        return o;
+    }
+
+    private static GameProfile PerfilX86(Cenario c, NeuralEngine motor, int passes)
+    {
+        var p = c.Perfil(PeArchitecture.X86, GraphicsApi.D3D11);
+        p.Engine = motor;
+        p.PassCount = passes;
+        return p;
+    }
+
+    private static void KitComOptiScaler(Cenario c)
+    {
+        var pasta = Path.Combine(c.Kit, "OptiScaler-DLSSNR");
+        Directory.CreateDirectory(Path.Combine(pasta, "OptiScaler", "D3D12_OptiScaler"));
+        File.WriteAllText(Path.Combine(pasta, OptiScalerNr.Dll), "MZ OptiScaler.ini");
+        File.WriteAllText(Path.Combine(pasta, OptiScalerNr.Shim), "MZ shim");
+        File.WriteAllText(Path.Combine(pasta, OptiScalerNr.Ini), "[Upscalers]\r\nDx12Upscaler=auto\r\n\r\n[DlssNr]\r\nToggleKey=auto\r\n; comentário\r\nEnabled=auto\r\n; 1 to 5\r\nPasses=auto\r\n\r\n[Log]\r\nLogToFile=true\r\nLogLevel=2\r\n");
+        File.WriteAllText(Path.Combine(pasta, "OptiScaler", "D3D12_OptiScaler", OptiScalerNr.AgilityDll), "MZ agility");
+        var inv = KitResolver.Resolve(c.Kit);
+        c.Inventario.OptiScalerNrDll = inv.OptiScalerNrDll;
+        c.Inventario.OptiScalerNrIni = inv.OptiScalerNrIni;
+        c.Inventario.OptiScalerNrShim = inv.OptiScalerNrShim;
+        c.Inventario.OptiScalerNrAgility = inv.OptiScalerNrAgility;
+        Assert.True(c.Inventario.HasOptiScalerNr);
+        Assert.NotNull(c.Inventario.OptiScalerNrAgility);
+    }
+
+    [Fact]
+    public void PerfilSoAceitaConsumidorAlternativoEm32Bit()
+    {
+        using var c = new Cenario();
+        var x86 = PerfilX86(c, NeuralEngine.OptiScalerNr, 3);
+        Assert.True(x86.UsesOptiScalerNr);
+        Assert.True(x86.NeedsFeeder);
+        Assert.Equal(NeuralEngine.OptiScalerNr, x86.MotorEfetivo);
+        var x64 = c.Perfil(PeArchitecture.X64, GraphicsApi.D3D11);
+        x64.Engine = NeuralEngine.OptiScalerNr;
+        Assert.False(x64.UsesOptiScalerNr);
+        Assert.Equal(NeuralEngine.RenodxDlss5Feeder, x64.MotorEfetivo);
+        Assert.Equal(new[] { NeuralEngine.RenodxDlss5Feeder, NeuralEngine.RenodxDlssShortFuse, NeuralEngine.OptiScalerNr, NeuralEngine.DeepFriedChicken }, Motores.Disponiveis(PeArchitecture.X86));
+        Assert.Equal(5, Motores.PassesMax(NeuralEngine.OptiScalerNr));
+        Assert.Equal(30, Motores.PassesMax(NeuralEngine.DeepFriedChicken));
+        Assert.Equal(5, Motores.Limitar(NeuralEngine.OptiScalerNr, 9));
+    }
+
+    [Fact]
+    public void KitSemOFork_BloqueiaSoQuandoEleEhOConsumidor()
+    {
+        using var c = new Cenario();
+        var plano = InstallPlanBuilder.Build(PerfilX86(c, NeuralEngine.OptiScalerNr, 2), c.Inventario, OpcoesX86(c));
+        Assert.Contains(plano.Blockers, b => b.Contains(OptiScalerNr.Dll, StringComparison.Ordinal));
+        var krish = InstallPlanBuilder.Build(PerfilX86(c, NeuralEngine.RenodxDlss5Feeder, 1), c.Inventario, OpcoesX86(c));
+        Assert.Empty(krish.Blockers);
+        // Deep Fried Chicken sem os três arquivos: bloqueio que diz onde buscar.
+        var dfc = InstallPlanBuilder.Build(PerfilX86(c, NeuralEngine.DeepFriedChicken, 2), c.Inventario, OpcoesX86(c));
+        Assert.Contains(dfc.Blockers, b => b.Contains("Discord", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void LogDoOptiScaler_DizQuantasPassadasRodaram()
+    {
+        var log = "12:00 DlssNr_Dx12::Dispatch DLSS-NR composition: paper white 1.00x, detail 1.00, colour 1.00, guard 2.0x, colour transform 0, transfer 1, model 2560x1440 x1 pass(es), debug view 0, compare 0\r\n" +
+                  "12:01 DlssNr_Dx12::Dispatch DLSS-NR: pass 2 built at 2560x1440, 512 MB\r\n" +
+                  "12:01 DlssNr_Dx12::Dispatch DLSS-NR composition: paper white 1.00x, detail 1.00, colour 1.00, guard 2.0x, colour transform 0, transfer 1, model 2560x1440 x2 pass(es), debug view 0, compare 0\r\n";
+        Assert.Equal(2, OptiScalerNr.PassadasNoLog(log));
+        Assert.Null(OptiScalerNr.MotivoDePassadaPerdida(log));
+        // O caso real do SH2: a composition sai uma vez ("x1") e as passadas 2, 3 e 4 são
+        // construídas depois — o que rodou é 4.
+        var sh2 = "a DLSS-NR composition: paper white 1.00x, detail 1.00, model 1920x1080 x1 pass(es), debug view 0\r\n" +
+                  "b DlssNr_Dx12::Dispatch DLSS-NR: pass 2 built at 1920x1080\r\n" +
+                  "c DlssNr_Dx12::Dispatch DLSS-NR: pass 3 built at 1920x1080\r\n" +
+                  "d DlssNr_Dx12::Dispatch DLSS-NR: pass 4 built at 1920x1080\r\n";
+        Assert.Equal(4, OptiScalerNr.PassadasNoLog(sh2));
+        var falho = log + "12:02 DlssNr_Dx12::Dispatch DLSS-NR: pass 3 is waiting on video memory (300 MB free, a feature costs 512 MB)\r\n";
+        Assert.Contains("waiting on video memory", OptiScalerNr.MotivoDePassadaPerdida(falho)!);
+        Assert.Contains("running one pass", OptiScalerNr.MotivoDePassadaPerdida("x DLSS-NR: the extra passes need a second work surface and it would not allocate; running one pass\n")!);
+        Assert.Null(OptiScalerNr.PassadasNoLog(""));
+        Assert.Null(OptiScalerNr.PassadasNoLog(null));
+    }
+
+    [Fact]
+    public void ForcarJanela_CopiaOAddonDoReShade6ParaAPastaDoJogo()
+    {
+        using var c = new Cenario();
+        var o = OpcoesX86(c); o.ForcarJanela = true;
+        var plano = InstallPlanBuilder.Build(PerfilX86(c, NeuralEngine.RenodxDlss5Feeder, 1), c.Inventario, o);
+        Assert.Empty(plano.Blockers);
+        Assert.Contains(plano.Actions, a => a.Kind == PlanActionKind.CopyFile
+            && a.TargetPath!.EndsWith(JanelaForcada.Addon32, StringComparison.OrdinalIgnoreCase)
+            && Path.GetDirectoryName(a.TargetPath)!.Equals(c.Jogo, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(plano.Warnings, w => w.Contains("Swap chain override", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ForcarJanela_SemOAddonNoKit_AvisaQueAChaveSozinhaNaoFazNada()
+    {
+        using var c = new Cenario();
+        c.Inventario.SwapchainOverride32 = null;
+        var o = OpcoesX86(c); o.ForcarJanela = true;
+        var plano = InstallPlanBuilder.Build(PerfilX86(c, NeuralEngine.RenodxDlss5Feeder, 1), c.Inventario, o);
+        Assert.DoesNotContain(plano.Actions, a => a.TargetPath?.EndsWith(JanelaForcada.Addon32, StringComparison.OrdinalIgnoreCase) == true);
+        Assert.Contains(plano.Warnings, w => w.Contains("ReShade 6 sozinho ignora", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ForcarJanela_Desmarcado_RemoveOAddonQueSobrouDeAntes()
+    {
+        using var c = new Cenario();
+        var sobra = Path.Combine(c.Jogo, JanelaForcada.Addon32);
+        File.WriteAllText(sobra, "addon antigo");
+        var o = OpcoesX86(c); o.ForcarJanela = false;
+        var plano = InstallPlanBuilder.Build(PerfilX86(c, NeuralEngine.RenodxDlss5Feeder, 1), c.Inventario, o);
+        Assert.Contains(plano.Actions, a => a.Kind == PlanActionKind.DeleteForbiddenFile
+            && string.Equals(a.TargetPath, sobra, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void JanelaForcada_ReconheceOAddonNoReShadeLog()
+    {
+        Assert.True(JanelaForcada.Registrado(
+            "13:05:07:315 [16244] | INFO  | Registered add-on \"Swap chain override\" v0.0.0.0 using ReShade API version 20."));
+        Assert.False(JanelaForcada.Registrado(
+            "13:05:07:315 [16244] | INFO  | Registered add-on \"DLSS 5 Feed (32-bit) 0.15.1\" v0.0.0.0 using ReShade API version 20."));
+        Assert.False(JanelaForcada.Registrado(null));
+    }
+
+    [Fact]
+    public void HostLog_FoiParaTelaCheiaExclusiva_LeOReShadeLogDoJogo()
+    {
+        // Enslaved (10/09/2026 01:46): dgVoodoo trocou para tela cheia exclusiva 0,5 s antes do host subir.
+        const string enslaved =
+            "01:46:51:357 [30288] | INFO  | Redirecting IDXGISwapChain::SetFullscreenState(this = 1BAA28B8, Fullscreen = FALSE, pTarget = 00000000) ...\n" +
+            "01:46:51:358 [30288] | INFO  | Redirecting IDXGISwapChain::SetFullscreenState(this = 1BAA28B8, Fullscreen = TRUE, pTarget = 319442C8) ...\n";
+        Assert.True(HostLog.FoiParaTelaCheiaExclusiva(enslaved));
+        // SH2 EE (funcionou): só FALSE.
+        const string sh2 =
+            "12:24:06:535 [20340] | INFO  | Redirecting IDXGISwapChain::SetFullscreenState(this = 157DEF50, Fullscreen = FALSE, pTarget = 00000000) ...\n";
+        Assert.False(HostLog.FoiParaTelaCheiaExclusiva(sh2));
+        Assert.False(HostLog.FoiParaTelaCheiaExclusiva(null));
+        Assert.False(HostLog.FoiParaTelaCheiaExclusiva(""));
+    }
+
+    [Fact]
+    public void HostLog_DeviceRemovido_DoSilentHillHomecoming()
+    {
+        var host = "00:18:28.580  [host] feature ready: 2560x1440 DLAA flags=74\r\n" +
+                   "00:18:28.591  [host] the D3D12 device was removed (0x887A0001) during an evaluate; exiting so the game can respawn a fresh host\r\n" +
+                   "00:18:28.597  [host] exit 3\r\n";
+        var r = HostLog.DeviceRemovido(host);
+        Assert.NotNull(r);
+        Assert.Equal("0x887A0001", r!.Value.Codigo);
+        Assert.Contains("INVALID_CALL", r.Value.Explicacao);
+        Assert.Contains("DEVICE_HUNG", HostLog.DeviceRemovido("x the D3D12 device was removed (0x887A0006 DEVICE_HUNG) during an evaluate")!.Value.Explicacao);
+        Assert.Null(HostLog.DeviceRemovido("[host] feature ready: 1920x1080 DLAA"));
+        var feed = "a [feed32] host lost: frame message failed (exit code 3)\nb [feed32] host lost: frame message failed (exit code 3)\n";
+        Assert.Equal(2, HostLog.HostsPerdidos(feed));
+        Assert.Equal(0, HostLog.HostsPerdidos(null));
+    }
+
+    [Fact]
+    public void LogDoShortFuseNoHost64_DoSH2_ProvaAsAvaliacoes()
+    {
+        // Trecho real do host64\ReShade.log do Silent Hill 2 EE (09/09/2026), ShortFuse dentro do host.
+        var log = "12:45:37:674 | INFO | Registered add-on \"RenoDX DLSS\" v0.0.0.0 using ReShade API version 18.\r\n" +
+                  "12:45:37:746 | INFO | [RenoDX DLSS] RenoDX DLSS attached; ReShade logical unload will be ignored.\r\n" +
+                  "12:45:55:694 | INFO | [RenoDX DLSS] [RenoDX] DLSS-NR direct: attached snippet G:\\SH2\\host64\\nvngx_dlssnr.dll\r\n" +
+                  "12:45:56:238 | INFO | [RenoDX DLSS] [RenoDX] DLSS-NR direct: CreateFeature(Reserved18) succeeded: handle=0x27dabd33040 size=900x1064 performance=6 preset=1\r\n" +
+                  "12:45:56:239 | INFO | [RenoDX DLSS] [RenoDX] DLSS-NR direct: EvaluateFeature succeeded: evaluation=1 options_revision=3 result=0x00000001\r\n" +
+                  "12:45:56:240 | INFO | [RenoDX DLSS] RenoDX DLSS-NR source evaluation completed: source=3 application_frame=996 size=900x1064 replace_source=true return_output=false.\r\n" +
+                  "12:45:59:813 | INFO | [RenoDX DLSS] [RenoDX] DLSS-NR direct: CreateFeature(Reserved18) succeeded: handle=0x27dc0e63eb0 size=1920x1080 performance=6 preset=1\r\n" +
+                  "12:46:29:074 | INFO | [RenoDX DLSS] [RenoDX] DLSS-NR direct: EvaluateFeature succeeded: evaluation=2714 options_revision=19 result=0x00000001\r\n";
+        var s = ShortFuseLog.Ler(log);
+        Assert.True(s.Registrado); Assert.True(s.Anexou); Assert.True(s.Avaliou); Assert.False(s.Falhou);
+        Assert.Equal(2714, s.Avaliacoes);
+        Assert.Equal(2, s.FeaturesCriadas);
+        Assert.Equal("1920x1080", s.UltimoTamanho);
+        Assert.True(s.SnippetAnexado);
+        var c = s.Checkpoint14(3, false);
+        Assert.Equal(CheckStatus.Pass, c.State);
+        Assert.Contains("2714", c.Detail);
+        // Sem a linha de resumo, as avaliações da feature 18 bastam para contar como "avaliou".
+        var so = ShortFuseLog.Ler("Registered add-on \"RenoDX DLSS\"\nRenoDX DLSS attached\nEvaluateFeature succeeded: evaluation=7 options_revision=1 result=0x1\n");
+        Assert.True(so.Avaliou);
+    }
+
+    [Fact]
+    public void PlanoOptiScaler_LevaOReShadeParaOHostPeloLoadReshade()
+    {
+        using var c = new Cenario();
+        KitComOptiScaler(c);
+        var plano = InstallPlanBuilder.Build(PerfilX86(c, NeuralEngine.OptiScalerNr, 2), c.Inventario, OpcoesX86(c));
+        Assert.Empty(plano.Blockers);
+        var copias = plano.Actions.Where(a => a.Kind == PlanActionKind.CopyFile)
+            .Select(a => Path.GetRelativePath(c.Jogo, a.TargetPath!).Replace('\\', '/')).ToList();
+        Assert.Contains("host64/ReShade64.dll", copias);
+        var ini = OptiScalerNr.GerarIni(File.ReadAllText(c.Inventario.OptiScalerNrIni!), 2);
+        Assert.Equal("true", IniTexto.Ler(ini, "Plugins", "LoadReshade"));
+    }
+
+    [Fact]
+    public void ShortFuseNoHost64_Experimental_EntraNoHostComIniMesclado()
+    {
+        using var c = new Cenario();
+        c.Inventario.RenodxDlssShortFuse = Path.Combine(c.Kit, ShortFuseDlss.Addon);
+        File.WriteAllText(c.Inventario.RenodxDlssShortFuse, "sf");
+        var host64 = Path.Combine(c.Jogo, "host64");
+        Directory.CreateDirectory(host64);
+        File.WriteAllText(Path.Combine(host64, "renodx-dlss5.addon64"), "krish");
+        File.WriteAllText(Path.Combine(host64, "ReShade.ini"), "[INPUT]\r\nKeyOverlay=36,0,0,0\r\n[RenoDX.DLSS5]\r\nEnableHooks=2\r\n");
+
+        var perfil = PerfilX86(c, NeuralEngine.RenodxDlssShortFuse, 6);
+        Assert.True(perfil.UsesShortFuseNoHost64);
+        Assert.False(perfil.UsesShortFuse);
+        Assert.True(perfil.NeedsFeeder);
+        Assert.Equal(NeuralEngine.RenodxDlssShortFuse, perfil.MotorEfetivo);
+        Assert.Equal(10, Motores.PassesMax(perfil.MotorEfetivo));
+
+        var plano = InstallPlanBuilder.Build(perfil, c.Inventario, OpcoesX86(c));
+        Assert.Empty(plano.Blockers);
+        var copias = plano.Actions.Where(a => a.Kind == PlanActionKind.CopyFile)
+            .Select(a => Path.GetRelativePath(c.Jogo, a.TargetPath!).Replace('\\', '/')).ToList();
+        Assert.Contains("host64/" + ShortFuseDlss.Addon, copias);
+        Assert.DoesNotContain("host64/renodx-dlss5.addon64", copias);
+        Assert.Contains(plano.Actions, a => a.Kind == PlanActionKind.DeleteForbiddenFile && Path.GetFileName(a.TargetPath!) == "renodx-dlss5.addon64");
+        Assert.Contains(plano.Actions, a => a.Kind == PlanActionKind.WriteGeneratedFile && a.TargetPath!.EndsWith(Path.Combine("host64", "ReShade.ini"), StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(plano.Warnings, w => w.Contains("DENTRO do host64", StringComparison.Ordinal));
+
+        // O ini gerado mescla: mantém o que o host gravou e acrescenta as chaves do addon.
+        var gerado = ShortFuseNoHost64.GerarIni(File.ReadAllText(Path.Combine(host64, "ReShade.ini")), 6);
+        Assert.Contains("KeyOverlay=36,0,0,0", gerado);
+        Assert.Contains("EnableHooks=2", gerado);
+        Assert.True(ShortFuseNoHost64.CarregaCedo(gerado));
+        Assert.Equal(6, ShortFuseNoHost64.LerPassadas(gerado));
+
+        // Sem o addon no kit, bloqueia.
+        c.Inventario.RenodxDlssShortFuse = null;
+        var sem = InstallPlanBuilder.Build(PerfilX86(c, NeuralEngine.RenodxDlssShortFuse, 2), c.Inventario, OpcoesX86(c));
+        Assert.Contains(sem.Blockers, b => b.Contains(ShortFuseDlss.Addon, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void OptiScalerSemChavePasses_BloqueiaSoComMaisDeUmaPassada()
+    {
+        // O fork v0.2.0-patch1 não tem Passes: com 2 passadas o plano recusa (senão o jogo abriria
+        // em x1 com o painel dizendo x2); com 1 passada instala normalmente.
+        using var c = new Cenario();
+        KitComOptiScaler(c);
+        File.WriteAllText(c.Inventario.OptiScalerNrIni!, "[Upscalers]\r\nDx12Upscaler=auto\r\n\r\n[DlssNr]\r\nEnabled=auto\r\n\r\n[Log]\r\nLogToFile=true\r\n");
+        Assert.False(OptiScalerNr.SuportaPassadas(File.ReadAllText(c.Inventario.OptiScalerNrIni!)));
+        var duas = InstallPlanBuilder.Build(PerfilX86(c, NeuralEngine.OptiScalerNr, 2), c.Inventario, OpcoesX86(c));
+        Assert.Contains(duas.Blockers, b => b.Contains("Passes", StringComparison.Ordinal));
+        var uma = InstallPlanBuilder.Build(PerfilX86(c, NeuralEngine.OptiScalerNr, 1), c.Inventario, OpcoesX86(c));
+        Assert.Empty(uma.Blockers);
+        // E o ini do v10 (com a chave) passa.
+        Assert.True(OptiScalerNr.SuportaPassadas("[DlssNr]\r\n; 1 to 5\r\nPasses=auto\r\n"));
+    }
+
+    [Fact]
+    public void PlanoOptiScaler_EntraComoWinmmNoHost64ETiraOKrish()
+    {
+        using var c = new Cenario();
+        KitComOptiScaler(c);
+        var host64 = Path.Combine(c.Jogo, "host64");
+        Directory.CreateDirectory(host64);
+        File.WriteAllText(Path.Combine(host64, "renodx-dlss5.addon64"), "krish");
+        File.WriteAllText(Path.Combine(host64, "renodx-dlss5-4.55.addon64"), "krish antigo");
+
+        var plano = InstallPlanBuilder.Build(PerfilX86(c, NeuralEngine.OptiScalerNr, 3), c.Inventario, OpcoesX86(c));
+        Assert.Empty(plano.Blockers);
+        var copias = plano.Actions.Where(a => a.Kind == PlanActionKind.CopyFile)
+            .Select(a => Path.GetRelativePath(c.Jogo, a.TargetPath!).Replace('\\', '/')).ToList();
+        Assert.Contains("host64/winmm.dll", copias);
+        Assert.Contains("host64/nvngx.dll_dlssnr.dll", copias);
+        Assert.Contains("host64/OptiScaler/D3D12_OptiScaler/D3D12Core.dll", copias);
+        Assert.Contains("host64/nvngx_dlssnr.dll", copias);
+        Assert.DoesNotContain("host64/renodx-dlss5.addon64", copias);
+        var gerados = plano.Actions.Where(a => a.Kind == PlanActionKind.WriteGeneratedFile).Select(a => Path.GetFileName(a.TargetPath!)).ToList();
+        Assert.Contains(OptiScalerNr.Ini, gerados);
+        var removidos = plano.Actions.Where(a => a.Kind == PlanActionKind.DeleteForbiddenFile).Select(a => Path.GetFileName(a.TargetPath!)).ToList();
+        Assert.Contains("renodx-dlss5.addon64", removidos);
+        Assert.Contains("renodx-dlss5-4.55.addon64", removidos);
+        Assert.Contains(plano.Warnings, w => w.Contains("3 passada", StringComparison.Ordinal));
+
+        var m = InstallManifest.Para(plano, c.Inventario);
+        Assert.Equal(nameof(NeuralEngine.OptiScalerNr), m.Engine);
+        Assert.Equal(3, m.PerfilGravado()!.PassCount);
+    }
+
+    [Fact]
+    public void PlanoKrish_TiraOOptiScalerDoHost64SoSeForEle()
+    {
+        using var c = new Cenario();
+        var host64 = Path.Combine(c.Jogo, "host64");
+        Directory.CreateDirectory(host64);
+        File.WriteAllText(Path.Combine(host64, "winmm.dll"), "MZ ... OptiScaler.ini ...");
+        File.WriteAllText(Path.Combine(host64, "version.dll"), "MZ outra coisa");
+        File.WriteAllText(Path.Combine(host64, OptiScalerNr.Ini), "[DlssNr]\r\nEnabled=true\r\n");
+        File.WriteAllText(Path.Combine(host64, DeepFriedChicken.Addon), "chicken");
+        var plano = InstallPlanBuilder.Build(PerfilX86(c, NeuralEngine.RenodxDlss5Feeder, 1), c.Inventario, OpcoesX86(c));
+        var removidos = plano.Actions.Where(a => a.Kind == PlanActionKind.DeleteForbiddenFile).Select(a => Path.GetFileName(a.TargetPath!)).ToList();
+        Assert.Contains("winmm.dll", removidos);
+        Assert.DoesNotContain("version.dll", removidos);
+        Assert.Contains(OptiScalerNr.Ini, removidos);
+        Assert.Contains(DeepFriedChicken.Addon, removidos);
+    }
+
+    [Fact]
+    public void IniDoOptiScalerSaiComOQueOFeedPrecisa()
+    {
+        var original = "[Upscalers]\r\n; Select Upscaler for Dx12 games\r\nDx12Upscaler=auto\r\n\r\n[Inputs]\r\nEnableXeSSInputs=auto\r\n\r\n[DlssNr]\r\nToggleKey=auto\r\n; DLSS 5 Neural Rendering\r\nEnabled=auto\r\n\r\nTransferStrength=auto\r\n\r\n[Log]\r\nLogToFile=true\r\nLogLevel=2\r\n";
+        var ini = OptiScalerNr.GerarIni(original, 4);
+        Assert.Equal("true", IniTexto.Ler(ini, "DlssNr", "Enabled"));
+        Assert.Equal("4", IniTexto.Ler(ini, "DlssNr", "Passes"));
+        Assert.Equal("false", IniTexto.Ler(ini, "DlssNr", "ScanExposure"));
+        Assert.Equal("dlss", IniTexto.Ler(ini, "Upscalers", "Dx12Upscaler"));
+        Assert.Equal("false", IniTexto.Ler(ini, "Spoofing", "Dxgi"));
+        Assert.Equal("false", IniTexto.Ler(ini, "Inputs", "EnableXeSSInputs"));
+        Assert.Equal("false", IniTexto.Ler(ini, "Hotfix", "CheckForUpdate"));
+        Assert.Equal("auto", IniTexto.Ler(ini, "DlssNr", "TransferStrength"));   // o resto fica como estava
+        Assert.True(OptiScalerNr.Ligado(ini));
+        Assert.Equal(4, OptiScalerNr.LerPassadas(ini));
+        Assert.Equal(5, OptiScalerNr.LerPassadas(OptiScalerNr.GerarIni(original, 50)));
+        // Chave gravada dentro da seção certa, não na primeira "Enabled=" que aparecer.
+        int secao = ini.IndexOf("[DlssNr]", StringComparison.Ordinal);
+        int enabledTrue = ini.IndexOf("Enabled=true", StringComparison.Ordinal);
+        Assert.True(enabledTrue > secao);
+        Assert.False(OptiScalerNr.Ligado(original));
+    }
+
+    [Fact]
+    public void CfgDoChickenGanhaLayersEMantemORestante()
+    {
+        var cfg = DeepFriedChicken.GerarCfg("arm=1\r\nenabled=1\r\nlayers=1\r\nneural_work_percent=100\r\n", 6);
+        Assert.Equal(6, DeepFriedChicken.LerPassadas(cfg));
+        Assert.Equal("100", DeepFriedChicken.LerChave(cfg, "neural_work_percent"));
+        Assert.True(DeepFriedChicken.Armado(cfg));
+        var vazio = DeepFriedChicken.GerarCfg("", 2);
+        Assert.Equal(2, DeepFriedChicken.LerPassadas(vazio));
+        Assert.Equal("1", DeepFriedChicken.LerChave(vazio, "enabled"));
+        Assert.False(DeepFriedChicken.Armado("arm=0\r\nlayers=2\r\n"));
+        Assert.Equal(30, DeepFriedChicken.LerPassadas(DeepFriedChicken.GerarCfg("", 99)));
+    }
+
+    [Fact]
+    public void LeituraDoTesteDoHost()
+    {
+        var ok = HostTest.Ler("12:00:00.000  [host] --test: 1920x1080 synthetic DLAA\n12:00:09.000  [host] --test finished: 300/300 evaluates succeeded\n");
+        Assert.True(ok.Passou);
+        Assert.Contains("300/300", ok.Titulo);
+        var driver = HostTest.Ler("[host] evaluate raised 0xC0000005 (reading address FFFFFFFFFFFFFFFF) in D3D12Core.dll\n[host] --test finished: 0/300 evaluates succeeded\n");
+        Assert.False(driver.Passou);
+        Assert.True(driver.FalhaNoDriver);
+        Assert.Contains("616.64", driver.Texto);
+        var amd = HostTest.Ler("NGX is NVIDIA's runtime and this is not an NVIDIA GPU\n");
+        Assert.True(amd.NaoEhNvidia);
+        Assert.Null(HostTest.Ler("").Sucessos);
+    }
+
+    [Fact]
+    public void PassosManuaisDoConsumidor()
+    {
+        using var c = new Cenario();
+        var opti = ManualSteps.For(PerfilX86(c, NeuralEngine.OptiScalerNr, 2), OpcoesX86(c));
+        Assert.Contains(opti, s => s.Title.Contains("OptiScaler", StringComparison.Ordinal) && s.Detail.Contains("Insert", StringComparison.Ordinal));
+        var dfc = ManualSteps.For(PerfilX86(c, NeuralEngine.DeepFriedChicken, 2), OpcoesX86(c));
+        Assert.Contains(dfc, s => s.Title.Contains("Deep Fried Chicken", StringComparison.Ordinal) && s.Detail.Contains("Defender", StringComparison.Ordinal));
     }
 }

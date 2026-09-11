@@ -6,6 +6,19 @@ no lugar do novo. Para voltar a uma versão antiga, copie o arquivo para o lugar
 origem com o nome original e clique em Instalar de novo no jogo.
 
 renodx-dlss5-4.1.5.addon64        -> renodx-dlss5.addon64  (Generic 4.1.5, build 30/08/2026)
+renodx-dlss5-4.55.addon64         -> renodx-dlss5.addon64  (4.55, motor clássico: é o que passa
+                                     300/300 no "host64 --test" com driver NVIDIA 616.64+, onde
+                                     o 4.6/4.7 cai dentro do NGX; entra pelo trocar-extras.yml)
+renodx-dlss-SF-0.52.addon64       -> renodx-dlss-SF-.../renodx-dlss.addon64  (ShortFuse 0.52,
+                                     build 04/09/2026; o kit usa o SF 0.54)
+OptiScaler-DLSSNR-fork-v0.2.0-patch1 (1 passada so)/
+  OptiScaler-fork-0.2.0-patch1.dll  -> OptiScaler.dll   (fork Dagherbou/OptiScaler_DLSSNR v0.2.0-patch1:
+  OptiScaler-fork-0.2.0-patch1.ini  -> OptiScaler.ini    NÃO tem a chave Passes, faz uma passada só; o kit
+  nvngx.dll_dlssnr-fork-...dll      -> nvngx.dll_dlssnr.dll   usa o OptiScaler v10.0.0-pre1 do 7z do Discord,
+  D3D12Core-fork-...dll             -> OptiScaler\D3D12_OptiScaler\D3D12Core.dll   que tem Passes 1 a 5)
+DLSS5-Feeder-0.13.1-beta.1/       -> DLSS5-Feeder-.../  (textos, scripts e camada Vulkan do
+                                     Feeder 0.13.1-beta.1; os binários do Feeder anterior o
+                                     workflow trocar-feeder guarda no DLSS5-Feeder-anterior-kit.zip)
 feeder-0.12.0/
   dlss5-feed_0.12.0.addon64       -> dlss5-feed.addon64
   dlss5-feed_0.12.0.addon32       -> dlss5-feed.addon32

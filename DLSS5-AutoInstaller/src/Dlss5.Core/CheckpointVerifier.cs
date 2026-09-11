@@ -509,16 +509,17 @@ public static class CheckpointVerifier
             var techLine = text.Split('\n')
                 .FirstOrDefault(l => l.StartsWith("Techniques=", StringComparison.OrdinalIgnoreCase))?.Trim();
             bool hasFeed = techLine?.Contains("DLSS5_Feed@", StringComparison.OrdinalIgnoreCase) == true;
-            bool hasMv = techLine is not null &&
-                         (techLine.Contains("DRME@", StringComparison.OrdinalIgnoreCase) ||
-                          techLine.Contains("MartysMods_Launchpad@", StringComparison.OrdinalIgnoreCase));
+            // Qualquer provedor que o kit conhece (o VORT é o padrão desde o 0.13; a checagem
+            // antiga só via DRME e Launchpad e reprovava um preset certo com o VORT).
+            var provedores = new[] { "DRME@", "MartysMods_Launchpad@", "vort_MotionEffects@", "lumenite_Kernel@", "lumenite_QuantMotion@" };
+            int mvIdx = techLine is null ? -1
+                : provedores.Select(p => techLine.IndexOf(p, StringComparison.OrdinalIgnoreCase)).Where(i => i >= 0).DefaultIfEmpty(-1).Min();
+            bool hasMv = mvIdx >= 0;
             bool mvFirst = false;
             if (techLine is not null && hasFeed && hasMv)
             {
-                int mvIdx = Math.Max(techLine.IndexOf("DRME@", StringComparison.OrdinalIgnoreCase),
-                                     techLine.IndexOf("MartysMods_Launchpad@", StringComparison.OrdinalIgnoreCase));
                 int feedIdx = techLine.IndexOf("DLSS5_Feed@", StringComparison.OrdinalIgnoreCase);
-                mvFirst = mvIdx >= 0 && mvIdx < feedIdx;
+                mvFirst = mvIdx < feedIdx;
             }
             // O DLSS5_Feed.fx (0.12.0) só lê o provedor certo pela definição por efeito
             // na seção [DLSS5_Feed.fx]. Um preset da versão anterior do programa não a tem:
@@ -551,6 +552,42 @@ public static class CheckpointVerifier
         }
 
         // 5 — dgVoodoo (rota C)
+        // 5c — o DXVK do próprio jogo rodou (Black Mesa, "Play Default"): o D3D9 virou Vulkan, o
+        // dgVoodoo e o feed ficaram fora, e a engine Source cai com "failed to lock vertex buffer".
+        if (route is InstallRoute.B or InstallRoute.C && Dxvk.Ativo(profile.RealExePath) is { } dxvk)
+        {
+            r.Add(new CheckResult(5, "DXVK do próprio jogo ativo (Direct3D 9 virou Vulkan)", CheckStatus.Fail,
+                $"{Path.GetFileName(dxvk.Log)} existe ao lado do exe e se anuncia como DXVK {dxvk.Versao}: o jogo abriu com o DXVK " +
+                "dele como Direct3D 9 (Vulkan). Nesse modo o dgVoodoo e o feed 32-bit não participam (Vulkan 32-bit não tem " +
+                "caminho), e a engine Source responde com \"failed to lock vertex buffer in CMeshDX8::LockVertexBuffer\".",
+                "Na Steam, abra o jogo pela opção \"Play Direct3D 9 Fallback\" (a janela que aparece ao clicar em Jogar), não pelo " +
+                "\"Play Default\". Depois apague esse log do DXVK e clique em Verificar de novo: ele não pode voltar a nascer."));
+        }
+
+        // 5b — jogo 32-bit: o espaço de endereço do processo. Sem a flag LAA são 2 GB para o jogo
+        // + dgVoodoo + ReShade + feed (texturas compartilhadas 2560x1440) + driver; quando acaba, a
+        // engine Source mostra "failed to lock vertex buffer in CMeshDX8::LockVertexBuffer"
+        // (Black Mesa, 11/09/2026). A flag fica no exe que sobe (no Source, o stub da raiz).
+        if (profile.Architecture == PeArchitecture.X86 && route is InstallRoute.B or InstallRoute.C)
+        {
+            var laa = PeFile.IsLargeAddressAware(profile.RealExePath);
+            var nomeExe = Path.GetFileName(profile.RealExePath ?? "");
+            r.Add(new CheckResult(5, "Exe 32-bit com 4 GB de endereço (LAA)",
+                laa == true ? CheckStatus.Pass : laa == false ? CheckStatus.Warning : CheckStatus.Manual,
+                laa == true
+                    ? $"{nomeExe} tem IMAGE_FILE_LARGE_ADDRESS_AWARE: o processo enxerga 4 GB."
+                    : laa == false
+                        ? $"{nomeExe} NÃO tem a flag LAA: o processo fica em 2 GB, e o dgVoodoo + ReShade + feed + driver moderno " +
+                          "moram dentro desses 2 GB. Quando acabam, o jogo cai com erro de memória — na engine Source, " +
+                          "\"failed to lock vertex buffer in CMeshDX8::LockVertexBuffer\" (Black Mesa)."
+                        : "Não deu para ler o cabeçalho do exe.",
+                laa == false
+                    ? "Clique em \"Aplicar 4 GB (LAA) no exe\" aqui nesta tela: o instalador liga a flag (1 bit) e guarda o original " +
+                      $"ao lado como {nomeExe}{Patch4Gb.SufixoDoBackup}. É o mesmo que a ferramenta \"4GB Patch\" da NTCore faz. Depois abra o " +
+                      "jogo de novo. Se o erro continuar, teste \"Isolar a causa\" sem o Feeder: se some, é a memória das texturas do feed."
+                    : null));
+        }
+
         if (route == InstallRoute.C)
         {
             var renderer = profile.RendererFolder ?? exe;
@@ -595,6 +632,15 @@ public static class CheckpointVerifier
                     passthru ? CheckStatus.Pass : CheckStatus.Fail,
                     passthru ? "DisableAndPassThru=false (dgVoodoo ativo)." : "DisableAndPassThru ainda está true.",
                     passthru ? null : "Com passthru=true o dgVoodoo não faz nada — causa nº 1 de 'não acontece nada'."));
+                // Tela cheia ou janela: informa sempre, porque é o que decide se o host consegue subir
+                // (Enslaved congelou no aperto de mão em tela cheia exclusiva, 10/09/2026).
+                bool janela = ValueIs(text, "FullScreenMode", "false");
+                r.Add(new CheckResult(5, "dgVoodoo: tela cheia ou janela sem borda", CheckStatus.Pass,
+                    janela
+                        ? "FullScreenMode=false: o dgVoodoo apresenta numa janela do tamanho da tela (o jogo pensa que está em tela cheia)."
+                        : "FullScreenMode=true: o jogo vai para tela cheia EXCLUSIVA. Se o jogo congelar quando o host64 sobe, marque " +
+                          "\"dgVoodoo em janela sem borda\" na detecção e Instale de novo.",
+                    null));
             }
 
             r.Add(new CheckResult(5, "Marca d'água do dgVoodoo na tela", CheckStatus.Manual,
@@ -686,7 +732,8 @@ public static class CheckpointVerifier
             feedStatus, profile.UsesShortFuse, profile.PassCount));
 
         // 14/15/16 — dependem do jogo rodando
-        r.AddRange(VerifyFeedLogs(exe, route, profile.NeedsFeeder));
+        r.AddRange(VerifyFeedLogs(exe, route, profile.NeedsFeeder, profile.MotorEfetivo, profile.PassCount,
+            profile.RendererFolder ?? exe));
 
         return r;
     }
@@ -1012,7 +1059,9 @@ public static class CheckpointVerifier
     }
 
     private static IEnumerable<CheckResult> VerifyFeedLogs(
-        string exeFolder, InstallRoute route, bool needsFeeder = true)
+        string exeFolder, InstallRoute route, bool needsFeeder = true,
+        NeuralEngine consumidor = NeuralEngine.RenodxDlss5Feeder, int passes = 1,
+        string? rendererFolder = null)
     {
         if (!needsFeeder)
         {
@@ -1089,8 +1138,12 @@ public static class CheckpointVerifier
         }
         else
         {
+            // 0.15 em 32-bit: o addon32 loga "shared set ready ... (host ngx ..., DLSS)" e "the host
+            // answered the build"; o "feature ready" fica no log do host.
             bool ready = feed?.FeaturePronta == true
-                         || text.Contains("DLAA", StringComparison.OrdinalIgnoreCase);
+                         || text.Contains("DLAA", StringComparison.OrdinalIgnoreCase)
+                         || text.Contains("shared set ready", StringComparison.OrdinalIgnoreCase)
+                         || text.Contains("the host answered the build", StringComparison.OrdinalIgnoreCase);
             bool delivered = (feed?.FramesEntregues ?? 0) > 0;
             yield return new CheckResult(15, "Feeder entregando frames",
                 ready && delivered ? CheckStatus.Pass : CheckStatus.Warning,
@@ -1108,6 +1161,247 @@ public static class CheckpointVerifier
                 File.Exists(hostLog) ? "host64\\dlss5-feed-host.log presente." : "Log do host ainda não existe.",
                 null);
 
+            // 26 — a falha que o projeto do Feeder mediu: addon do Krish 4.6/4.7 com driver 616.64+
+            // faz cada avaliação faltar dentro do NGX do driver. O host diz exatamente isso.
+            string hostLogTexto = "";
+            try { if (File.Exists(hostLog)) hostLogTexto = ReadShared(hostLog); } catch { }
+            if (hostLogTexto.Contains("evaluate raised 0xC0000005", StringComparison.OrdinalIgnoreCase))
+            {
+                yield return new CheckResult(26, "Avaliação faltando dentro do NGX do driver (host64)", CheckStatus.Fail,
+                    "host64\\dlss5-feed-host.log tem \"evaluate raised 0xC0000005\": a avaliação do Neural Rendering falha " +
+                    "dentro do NGX do próprio driver. O projeto do Feeder mediu 0/300 com o renodx-dlss5 4.6/4.7 em driver " +
+                    "NVIDIA 616.64 ou mais novo; com 4.55, Deep Fried Chicken ou OptiScaler DLSS-NR passa 300/300.",
+                    "Qualquer uma: motor OptiScaler DLSS-NR ou Deep Fried Chicken na tela de detecção; ou o addon 4.55 " +
+                    "(versoes-anteriores do kit) copiado por cima do renodx-dlss5.addon64 do kit e Instalar de novo; ou driver 616.56. " +
+                    "O botão \"Testar o host64\" confirma em 15 s, sem abrir jogo.");
+            }
+
+            // 16b — o jogo congelou no aperto de mão: o addon32 lançou o host ("host spawned") e nunca
+            // registrou "host connected", enquanto o host viu o jogo conectar e nunca recebeu o build.
+            // Enslaved (10/09/2026): SetFullscreenState(TRUE) 1,2 s antes — tela cheia exclusiva.
+            if (text.Contains("host spawned", StringComparison.OrdinalIgnoreCase)
+                && !text.Contains("host connected in", StringComparison.OrdinalIgnoreCase)
+                && hostLogTexto.Contains("connected (protocol", StringComparison.OrdinalIgnoreCase)
+                && !hostLogTexto.Contains("[host] build:", StringComparison.OrdinalIgnoreCase))
+            {
+                // O ReShade.log do jogo diz se ele foi para tela cheia exclusiva; o dgVoodoo.conf (rota C)
+                // diz se a opção "janela sem borda" está valendo de fato — o log do Enslaved de 01:46
+                // ainda tinha SetFullscreenState(TRUE) depois de a opção existir no instalador.
+                string reshadeLogTexto = "";
+                try { var rl = Path.Combine(exeFolder, "ReShade.log"); if (File.Exists(rl)) reshadeLogTexto = ReadShared(rl); } catch { }
+                // Com o swapchain_override carregado, o "SetFullscreenState(TRUE)" do log é um pedido
+                // que o addon bloqueou (o ReShade loga antes de consultar os addons), não um estado.
+                bool addonJanelaRegistrado = JanelaForcada.Registrado(reshadeLogTexto);
+                bool exclusiva = HostLog.FoiParaTelaCheiaExclusiva(reshadeLogTexto) && !addonJanelaRegistrado;
+                bool forceWindowedNoIni = false;
+                try { var ini = Path.Combine(exeFolder, "ReShade.ini"); if (File.Exists(ini)) forceWindowedNoIni = ValueIs(ReadShared(ini), "ForceWindowed", "1"); } catch { }
+                bool addonJanelaPresente = File.Exists(Path.Combine(exeFolder, JanelaForcada.Addon32));
+                // Rota C: o dgVoodoo.conf manda (FullScreenMode). Rota B: não há dgVoodoo — quem força
+                // janela é o [APP] ForceWindowed do ReShade.ini, lido pelo addon swapchain_override.
+                // (O ReShade.log do jogo mostra D3D11 nas duas rotas: na C o D3D11 é o que o dgVoodoo
+                // cria, e o dgVoodoo em si nunca aparece.)
+                string? confTexto = null;
+                if (route == InstallRoute.C && rendererFolder is not null)
+                    try { var c = Path.Combine(rendererFolder, "dgVoodoo.conf"); if (File.Exists(c)) confTexto = ReadShared(c); } catch { }
+                bool? janelaValendo =
+                    forceWindowedNoIni && addonJanelaPresente ? true
+                    : confTexto is null ? null
+                    : ValueIs(confTexto, "FullScreenMode", "false");
+
+                string detalhe =
+                    "dlss5-feed.log tem \"host spawned\" mas nunca \"host connected\"; o host viu o jogo conectar e nunca recebeu o " +
+                    "pedido de build. O jogo congelou na hora em que o host subiu." +
+                    (exclusiva
+                        ? " O ReShade.log do jogo confirma: SetFullscreenState(TRUE) — tela cheia EXCLUSIVA logo antes do host."
+                        : "") +
+                    (forceWindowedNoIni && !addonJanelaPresente
+                        ? $" O ReShade.ini já tem ForceWindowed=1, mas o ReShade 6 ignora essa chave sozinho: quem a lê é o " +
+                          $"{JanelaForcada.Addon32}, que NÃO está na pasta do jogo."
+                        : janelaValendo switch
+                        {
+                            false => " O dgVoodoo.conf do jogo ainda diz FullScreenMode=true: a opção \"forçar janela\" NÃO está valendo.",
+                            true => " A opção \"forçar janela\" está no lugar, e mesmo assim o jogo congelou.",
+                            null => "",
+                        });
+                string acao =
+                    forceWindowedNoIni && !addonJanelaPresente
+                        ? "Baixe o pacote novo (o kit passou a trazer o swapchain_override.addon32, compilado do próprio ReShade 6) e " +
+                          "Instale de novo com \"Forçar o jogo em janela sem borda\" marcado. Prova de que pegou: o ReShade.log do jogo " +
+                          "ganha Registered add-on \"Swap chain override\" e o jogo abre em janela."
+                        : janelaValendo switch
+                        {
+                            false => "Marque \"Forçar o jogo em janela sem borda\" na tela de detecção e clique em Instalar de novo. O " +
+                                     $"{JanelaForcada.Addon32} vai para a pasta do jogo e lê [APP] ForceWindowed=1 do ReShade.ini" +
+                                     (route == InstallRoute.C ? "; o dgVoodoo.conf sai com FullScreenMode=false" : "") +
+                                     ". Depois abra o jogo e confira no ReShade.log: Registered add-on \"Swap chain override\".",
+                            true => "Teste de isolamento: motor \"RenoDX (Krish)\" na detecção, que dispensa o addon dentro do host; se " +
+                                    "ainda congelar, abra o jogo, aperte Alt+Tab e clique de volta assim que a tela ficar preta (o host " +
+                                    "sobe ~2 s depois da primeira imagem). Mande os quatro logs.",
+                            null => "Rode o jogo em janela ou sem borda: marque \"Forçar o jogo em janela sem borda\" na detecção e " +
+                                    "Instale de novo. No painel do Feeder, use \"Show as texture\" em vez do painel projetado.",
+                        };
+                yield return new CheckResult(16, "Jogo parou no aperto de mão com o host64", CheckStatus.Fail, detalhe, acao);
+            }
+
+            // 16c — "forçar janela" pedido no ini: no ReShade 6 a chave só vale com o addon
+            // swapchain_override na pasta do jogo (ver JanelaForcada). Mostra o estado sempre que a
+            // chave está lá, com ou sem congelamento.
+            {
+                string iniJanela = "";
+                try { var ini = Path.Combine(exeFolder, "ReShade.ini"); if (File.Exists(ini)) iniJanela = ReadShared(ini); } catch { }
+                if (ValueIs(iniJanela, "ForceWindowed", "1"))
+                {
+                    bool addonNaPasta = File.Exists(Path.Combine(exeFolder, JanelaForcada.Addon32));
+                    string logJanela = "";
+                    try { var rl = Path.Combine(exeFolder, "ReShade.log"); if (File.Exists(rl)) logJanela = ReadShared(rl); } catch { }
+                    bool registrado = JanelaForcada.Registrado(logJanela);
+                    yield return new CheckResult(16, "Forçar janela (swapchain_override do ReShade 6)",
+                        !addonNaPasta ? CheckStatus.Fail : registrado ? CheckStatus.Pass : CheckStatus.Manual,
+                        !addonNaPasta
+                            ? $"ReShade.ini tem [APP] ForceWindowed=1, mas o {JanelaForcada.Addon32} não está na pasta do jogo — o ReShade 6 " +
+                              "não lê essa chave sozinho (saiu do núcleo no 6.0), então a opção não faz nada."
+                            : registrado
+                                ? $"{JanelaForcada.Addon32} na pasta e registrado no ReShade.log (\"{JanelaForcada.NomeRegistrado}\"): o pedido " +
+                                  "de tela cheia exclusiva do jogo é bloqueado e o swapchain nasce em janela."
+                                : $"{JanelaForcada.Addon32} na pasta; o ReShade.log ainda não mostra \"{JanelaForcada.NomeRegistrado}\" — abra o jogo uma vez.",
+                        !addonNaPasta
+                            ? "Baixe o pacote novo do kit (traz o addon compilado) e clique em Instalar de novo com a opção marcada."
+                            : null);
+                }
+            }
+
+            // 26b — o device D3D12 do host morreu: o host sai e o addon do jogo respawna outro, que
+            // pode morrer igual. O código DXGI diz o tipo; o dlss5-feed.log diz quantas vezes.
+            if (HostLog.DeviceRemovido(hostLogTexto) is { } removido)
+            {
+                int perdidos = HostLog.HostsPerdidos(text);
+                bool reinicioPeloPainel = removido.Codigo == "0x887A0001";
+                yield return new CheckResult(26, "Device D3D12 do host64 removido", CheckStatus.Fail,
+                    $"host64\\dlss5-feed-host.log: \"the D3D12 device was removed ({removido.Codigo})\" — {removido.Explicacao}" +
+                    (perdidos > 0 ? $" O addon do jogo viu o host morrer {perdidos} vez(es) nesta sessão (\"host lost\")." : ""),
+                    reinicioPeloPainel
+                        ? "Feche o jogo e abra de novo em vez de usar \"Restart\"/\"Apply to the DLSS 5 host\" no painel (com o " +
+                          "ShortFuse no host, a seção \"neural-rendering settings (on the host)\" é do Krish e não faz nada). Se o " +
+                          "host morrer já na primeira abertura, baixe as passadas ou o \"Work resolution\", ou troque o consumidor."
+                        : "Baixe o \"Work resolution\" do painel do Feeder ou as passadas; se repetir, troque o consumidor (Krish, " +
+                          "OptiScaler) para isolar. O \"Testar o host64\" reproduz sem abrir o jogo.");
+            }
+
+            // 25 — consumidor alternativo do host64: arquivos, configuração e passadas.
+            if (consumidor == NeuralEngine.OptiScalerNr)
+            {
+                var host = Path.Combine(exeFolder, "host64");
+                var proxy = Path.Combine(host, OptiScalerNr.Proxy);
+                var shim = Path.Combine(host, OptiScalerNr.Shim);
+                var ini = Path.Combine(host, OptiScalerNr.Ini);
+                string iniTexto = "";
+                try { if (File.Exists(ini)) iniTexto = ReadShared(ini); } catch { }
+                bool proxyOk = File.Exists(proxy) && Propriedade.ContemTexto(proxy, OptiScalerNr.Marca);
+                bool ligado = OptiScalerNr.Ligado(iniTexto);
+                var passadas = OptiScalerNr.LerPassadas(iniTexto);
+                bool logou = File.Exists(Path.Combine(host, OptiScalerNr.Log));
+                bool tudo = proxyOk && File.Exists(shim) && ligado && passadas == passes;
+                yield return new CheckResult(25, "OptiScaler DLSS-NR no host64",
+                    tudo ? (logou ? CheckStatus.Pass : CheckStatus.Warning) : CheckStatus.Fail,
+                    !proxyOk ? $"host64\\{OptiScalerNr.Proxy} não é o OptiScaler (ou não existe)."
+                    : !File.Exists(shim) ? $"host64\\{OptiScalerNr.Shim} não existe: o modelo recusa o chamador sem ele."
+                    : !ligado ? "host64\\OptiScaler.ini está com [DlssNr] Enabled diferente de true: o OptiScaler só faz upscaling, sem passada neural."
+                    : passadas != passes ? $"host64\\OptiScaler.ini pede {passadas?.ToString() ?? "(sem Passes)"} passada(s); a detecção pede {passes}."
+                    : logou ? $"winmm.dll é o OptiScaler, encaminhador presente, [DlssNr] Enabled=true, Passes={passes}, e o host64\\OptiScaler.log já existe."
+                    : $"Arquivos e ini certos (Passes={passes}); o host64\\OptiScaler.log ainda não existe — o host ainda não rodou com ele.",
+                    tudo ? (logou ? null : "Abra o jogo, jogue alguns segundos e verifique de novo.")
+                         : "Instale de novo (Atualizar) com o motor OptiScaler DLSS-NR escolhido, ou ajuste no menu do OptiScaler (Insert, na janela do host).");
+
+                // 25b — as passadas ACONTECERAM? O painel do Feeder ecoa o ini; quem diz o que rodou é
+                // o OptiScaler.log ("model WxH xN pass(es)"). E o build importa: o fork v0.2.0-patch1
+                // não tem código de passadas — o SH2 abriu em x1 com o painel dizendo Passes=2.
+                if (proxyOk)
+                {
+                    bool buildComPassadas = Propriedade.ContemTexto(proxy, OptiScalerNr.MarcaPassadas);
+                    string logTexto = "";
+                    try { var lp = Path.Combine(host, OptiScalerNr.Log); if (File.Exists(lp)) logTexto = ReadShared(lp); } catch { }
+                    var rodou = OptiScalerNr.PassadasNoLog(logTexto);
+                    var motivo = OptiScalerNr.MotivoDePassadaPerdida(logTexto);
+                    CheckStatus st; string detalhe; string? acao;
+                    if (!buildComPassadas && passes > 1)
+                    {
+                        st = CheckStatus.Fail;
+                        detalhe = $"host64\\{OptiScalerNr.Proxy} é um build de UMA passada (o fork v0.2.0-patch1: não tem a chave Passes nem o código); Passes={passes} no ini não muda nada.";
+                        acao = "Aponte o kit novo (pasta \"OptiScaler-DLSSNR-v10.0.0-pre1 ...\") e clique em Instalar de novo: o winmm.dll do host64 é trocado pelo build com passadas.";
+                    }
+                    else if (rodou is null)
+                    {
+                        st = CheckStatus.Warning;
+                        detalhe = logTexto.Length == 0
+                            ? "host64\\OptiScaler.log ainda não existe: o host não avaliou nenhum quadro com o OptiScaler."
+                            : "O OptiScaler.log ainda não tem a linha \"DLSS-NR composition: ... xN pass(es)\": a passada neural não chegou a rodar.";
+                        acao = motivo is not null ? "O log explica: " + motivo : "Abra o jogo, jogue alguns segundos e verifique de novo.";
+                    }
+                    else if (rodou.Value != passes)
+                    {
+                        st = CheckStatus.Fail;
+                        detalhe = $"O OptiScaler.log diz que rodou x{rodou.Value} pass(es); o pedido era {passes}." + (motivo is not null ? " Motivo no log: " + motivo : "");
+                        acao = motivo is not null && motivo.Contains("memory", StringComparison.OrdinalIgnoreCase)
+                            ? "Cada passada é um modelo próprio na VRAM: baixe a resolução ou o \"Work resolution\" do painel do Feeder, ou peça menos passadas."
+                            : "Abra o menu do OptiScaler (Insert na janela do host) e confira Passes; se estiver certo lá, feche o jogo e Instale de novo.";
+                    }
+                    else
+                    {
+                        st = CheckStatus.Pass;
+                        detalhe = $"O OptiScaler.log confirma: model x{rodou.Value} pass(es) — as {passes} passada(s) rodaram.";
+                        acao = null;
+                    }
+                    yield return new CheckResult(25, "Passadas do OptiScaler (o que rodou, pelo log)", st, detalhe, acao);
+                }
+            }
+            else if (consumidor == NeuralEngine.RenodxDlssShortFuse && route is InstallRoute.B or InstallRoute.C)
+            {
+                // EXPERIMENTAL: o ShortFuse dentro do host64. Arquivo + ini + o ReShade.log do host.
+                var host = Path.Combine(exeFolder, "host64");
+                var addon = Path.Combine(host, ShortFuseDlss.Addon);
+                string iniTexto = "", logTexto = "";
+                try { var ip = Path.Combine(host, ShortFuseNoHost64.Ini); if (File.Exists(ip)) iniTexto = ReadShared(ip); } catch { }
+                try { var lp = Path.Combine(host, "ReShade.log"); if (File.Exists(lp)) logTexto = ReadShared(lp); } catch { }
+                bool cedo = ShortFuseNoHost64.CarregaCedo(iniTexto);
+                var pedidas = ShortFuseNoHost64.LerPassadas(iniTexto);
+                bool arquivos = File.Exists(addon) && cedo && pedidas == passes;
+                yield return new CheckResult(25, "RenoDX DLSS (ShortFuse) no host64: arquivos e ini",
+                    arquivos ? CheckStatus.Pass : CheckStatus.Fail,
+                    !File.Exists(addon) ? $"host64\\{ShortFuseDlss.Addon} não existe."
+                    : !cedo ? "host64\\ReShade.ini sem [ADDON] LoadFromDllMain=renodx-dlss.addon64: o addon pede carga cedo."
+                    : pedidas != passes ? $"host64\\ReShade.ini pede {pedidas?.ToString() ?? "(sem chave)"} passada(s); a detecção pede {passes}."
+                    : $"Addon no host64, LoadFromDllMain gravado, {passes} passada(s) no ini.",
+                    arquivos ? null : "Instale de novo (Atualizar) com o motor ShortFuse escolhido.");
+                if (logTexto.Length == 0)
+                    yield return new CheckResult(25, "RenoDX DLSS (ShortFuse) no host64: o que rodou, pelo host64\\ReShade.log", CheckStatus.Warning,
+                        "host64\\ReShade.log ainda não existe: ou o host não rodou, ou o ReShade x64 não carregou nele (o host64\\dlss5-feed-host.log diz).",
+                        "Abra o jogo, jogue alguns segundos e verifique de novo.");
+                else
+                {
+                    var c14 = ShortFuseLog.Ler(logTexto).Checkpoint14(passes, false);
+                    yield return new CheckResult(25, "RenoDX DLSS (ShortFuse) no host64: " + c14.Title, c14.State, c14.Detail, c14.FixHint);
+                }
+            }
+            else if (consumidor == NeuralEngine.DeepFriedChicken)
+            {
+                var host = Path.Combine(exeFolder, "host64");
+                var addon = Path.Combine(host, DeepFriedChicken.Addon);
+                var cfg = Path.Combine(host, DeepFriedChicken.Cfg);
+                string cfgTexto = "";
+                try { if (File.Exists(cfg)) cfgTexto = ReadShared(cfg); } catch { }
+                var passadas = DeepFriedChicken.LerPassadas(cfgTexto);
+                bool armado = DeepFriedChicken.Armado(cfgTexto);
+                bool tudo = File.Exists(addon) && File.Exists(Path.Combine(host, DeepFriedChicken.Nvngx)) && armado && passadas == passes;
+                yield return new CheckResult(25, "Deep Fried Chicken no host64",
+                    tudo ? CheckStatus.Pass : CheckStatus.Fail,
+                    !File.Exists(addon) ? $"host64\\{DeepFriedChicken.Addon} não existe — o Windows Defender costuma apagá-lo logo depois da cópia."
+                    : !armado ? "host64\\deep-fried-chicken.cfg está com arm=0: o Chicken não instala gancho nenhum."
+                    : passadas != passes ? $"host64\\deep-fried-chicken.cfg pede layers={passadas?.ToString() ?? "(sem layers)"}; a detecção pede {passes}."
+                    : $"Addon e ponte NGX no host64, arm=1, layers={passes}.",
+                    tudo ? null : File.Exists(addon) ? "Instale de novo (Atualizar) com o motor Deep Fried Chicken escolhido."
+                        : "Segurança do Windows → Histórico de proteção → restaurar, e adicione a pasta do jogo às exclusões; depois Instalar de novo.");
+            }
+
             // 22 — o NR está LIGADO dentro do host? Max Payne 3: o feed entregava 30 mil quadros,
             // o host avaliava o DLSS, e o addon do host estava com NeuralUplift=0 ("NR toggled
             // OFF") desde uma troca de configuração. Em jogo 32-bit o F6 do jogo não chega ao
@@ -1118,7 +1412,7 @@ public static class CheckpointVerifier
             RenodxStatus? renodxHost = null;
             try { if (File.Exists(hostIni)) uplift = RenodxIni.Ler(ReadShared(hostIni), RenodxIni.ChaveNeuralUplift); } catch { }
             try { if (File.Exists(hostReShadeLog)) renodxHost = RenodxLog.Ler(ReadShared(hostReShadeLog)); } catch { }
-            if (uplift is not null || renodxHost is not null)
+            if (consumidor == NeuralEngine.RenodxDlss5Feeder && (uplift is not null || renodxHost is not null))
             {
                 bool desligado = uplift == 0 || (renodxHost?.NrDesligadoPorToggle ?? false);
                 yield return new CheckResult(22, "Neural Rendering ligado dentro do host64",

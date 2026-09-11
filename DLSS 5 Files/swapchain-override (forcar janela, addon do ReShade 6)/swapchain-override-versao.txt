@@ -1,0 +1,5 @@
+# Gravado pelo workflow compilar-addons.yml. Não edite: mude swapchain-override-desejado.txt.
+fonte=https://github.com/crosire/reshade/tree/358c345ca2fe64f86e67c694f8379c356627adcb/examples/16-swapchain_override
+commit=358c345ca2fe64f86e67c694f8379c356627adcb
+swapchain_override.addon32=4d1f4c660747b7b8250b30e19183477493b698885da7fa1e6d659d7fe53f3b33
+swapchain_override.addon64=8c92691ed557ec6856d1cd15726cb14e5edcfbbd4a4096d471d271f43e3fe7c1

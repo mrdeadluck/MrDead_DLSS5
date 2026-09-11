@@ -1,0 +1,139 @@
+name: Compilar addons do ReShade (swapchain_override)
+
+# Compila, a partir da fonte oficial do ReShade (crosire/reshade, commit fixado em
+# "DLSS 5 Files/swapchain-override-desejado.txt"), o exemplo 16-swapchain_override — o addon
+# que, no ReShade 6, lê [APP] ForceWindowed/ForceFullscreen/ForceResolution do ReShade.ini
+# (no 5.x isso era do núcleo; no 6.0 virou este exemplo). É o "forçar janela" do instalador:
+# em tela cheia exclusiva o host64 congela no aperto de mão (Enslaved, 10/09/2026).
+# Gera x86 (.addon32, para o jogo 32-bit) e x64 (.addon64) com CRT estático e commita no LFS.
+on:
+  push:
+    branches: ['claude/renodx-updates-e5mjc7', 'claude/upload-large-files-02562q', 'claude/executable-fixes-xytsgm', 'main']
+    paths:
+      - 'DLSS 5 Files/swapchain-override-desejado.txt'
+      - '.github/workflows/compilar-addons.yml'
+  workflow_dispatch:
+
+# Os workflows que commitam no kit rodam um de cada vez.
+concurrency:
+  group: trocar-kit-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  compilar:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout (só os ponteiros do LFS)
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - name: Ler o commit desejado do ReShade
+        id: pedido
+        shell: pwsh
+        run: |
+          $linha = Get-Content "DLSS 5 Files\swapchain-override-desejado.txt" | Where-Object { $_ -match '^\s*commit\s*=' } | Select-Object -First 1
+          if (-not $linha) { throw "swapchain-override-desejado.txt sem a linha commit=" }
+          $sha = ($linha -split '=', 2)[1].Trim()
+          if ($sha -notmatch '^[0-9a-f]{40}$') { throw "commit inválido: '$sha'" }
+          "sha=$sha" >> $env:GITHUB_OUTPUT
+          Write-Host "ReShade em $sha"
+
+      - name: Baixar a fonte do ReShade nesse commit
+        shell: pwsh
+        run: |
+          git init reshade
+          git -C reshade remote add origin https://github.com/crosire/reshade.git
+          git -C reshade fetch --depth 1 origin ${{ steps.pedido.outputs.sha }}
+          git -C reshade checkout --detach FETCH_HEAD
+          if (-not (Test-Path "reshade\examples\16-swapchain_override\swapchain_override_addon.cpp")) { throw "o exemplo 16-swapchain_override não existe nesse commit" }
+          Get-Content "reshade\include\reshade.hpp" | Select-String "RESHADE_API_VERSION" | Select-Object -First 1
+
+      - name: Compilar (MSVC, x86 e x64, CRT estático)
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw "MSVC não encontrado no runner" }
+          $vcvars = Join-Path $vs "VC\Auxiliary\Build\vcvarsall.bat"
+          $src = "$PWD\reshade\examples\16-swapchain_override\swapchain_override_addon.cpp"
+          $inc = "$PWD\reshade\include"
+          $saida = "$PWD\saida"
+          New-Item -ItemType Directory -Path $saida -Force | Out-Null
+          foreach ($par in @(@('x86','addon32'), @('x64','addon64'))) {
+            $arch = $par[0]; $ext = $par[1]
+            $obj = "$saida\obj-$arch\"
+            New-Item -ItemType Directory -Path $obj -Force | Out-Null
+            # /Fo vai SEM aspas: a barra final antes da aspa (\") vira aspa escapada para o cl.exe
+            # e engole o resto da linha ("D8003: missing source filename"). O caminho do runner
+            # (D:\a\<repo>\<repo>\saida\obj-x86\) não tem espaço; se um dia tiver, o teste abaixo avisa.
+            if ($obj -match '\s') { throw "caminho de saída com espaço: $obj" }
+            $cmd = "call `"$vcvars`" $arch && cl /nologo /O2 /MT /EHsc /std:c++17 /DNDEBUG /DWIN32_LEAN_AND_MEAN /DNOMINMAX /I `"$inc`" /Fo$obj /LD `"$src`" /Fe`"$saida\swapchain_override.$ext`" /link /INCREMENTAL:NO"
+            Write-Host "== $arch =="
+            cmd /c $cmd
+            if ($LASTEXITCODE -ne 0) { throw "cl.exe falhou para $arch" }
+            $bin = "$saida\swapchain_override.$ext"
+            if (-not (Test-Path $bin) -or (Get-Item $bin).Length -lt 4096) { throw "saída inválida: $bin" }
+            $exports = cmd /c "call `"$vcvars`" $arch && dumpbin /nologo /exports `"$bin`""
+            if (($exports -join "`n") -notmatch 'NAME' -or ($exports -join "`n") -notmatch 'DESCRIPTION') { throw "o addon $ext não exporta NAME/DESCRIPTION" }
+            Write-Host ("OK {0} {1} bytes" -f $bin, (Get-Item $bin).Length)
+          }
+
+      - name: Gravar no kit
+        shell: pwsh
+        run: |
+          $pasta = "DLSS 5 Files\swapchain-override (forcar janela, addon do ReShade 6)"
+          New-Item -ItemType Directory -Path $pasta -Force | Out-Null
+          Copy-Item "saida\swapchain_override.addon32" $pasta -Force
+          Copy-Item "saida\swapchain_override.addon64" $pasta -Force
+          Copy-Item "reshade\examples\16-swapchain_override\swapchain_override_addon.cpp" "$pasta\swapchain_override_addon.cpp.txt" -Force
+          $h32 = (Get-FileHash "$pasta\swapchain_override.addon32" -Algorithm SHA256).Hash.ToLowerInvariant()
+          $h64 = (Get-FileHash "$pasta\swapchain_override.addon64" -Algorithm SHA256).Hash.ToLowerInvariant()
+          $registro = @(
+            "# Gravado pelo workflow compilar-addons.yml. Não edite: mude swapchain-override-desejado.txt.",
+            "fonte=https://github.com/crosire/reshade/tree/${{ steps.pedido.outputs.sha }}/examples/16-swapchain_override",
+            "commit=${{ steps.pedido.outputs.sha }}",
+            "swapchain_override.addon32=$h32",
+            "swapchain_override.addon64=$h64"
+          )
+          [IO.File]::WriteAllLines("$pasta\swapchain-override-versao.txt", $registro, (New-Object Text.UTF8Encoding $false))
+          $leiame = @(
+            "swapchain_override — o 'forçar janela' do instalador (addon do ReShade 6)",
+            "",
+            "É o exemplo oficial 16-swapchain_override do ReShade (crosire/reshade, BSD-3/MIT),",
+            "compilado pelo workflow compilar-addons.yml no commit registrado em",
+            "swapchain-override-versao.txt. A fonte está ao lado (swapchain_override_addon.cpp.txt).",
+            "",
+            "Por que existe: o ReShade 5.x lia [APP] ForceWindowed=1 do ReShade.ini sozinho; o",
+            "ReShade 6 tirou isso do núcleo e transformou neste addon. Sem ele a chave não faz nada.",
+            "Com ele na pasta do jogo (o instalador copia quando 'Forçar o jogo em janela sem borda'",
+            "está marcado), o swapchain nasce em janela e o pedido de tela cheia exclusiva do jogo",
+            "(SetFullscreenState) é bloqueado — o jogo acha que está em tela cheia, e o host64 não",
+            'congela mais no aperto de mão. Prova: ReShade.log com Registered add-on "Swap chain override".',
+            "",
+            "Chaves que ele lê no ReShade.ini do jogo, seção [APP]: ForceVsync, ForceWindowed,",
+            "ForceFullscreen, Force10BitFormat, ForceDefaultRefreshRate, ForceResolution=largura,altura."
+          )
+          [IO.File]::WriteAllLines("$pasta\LEIA-ME.txt", $leiame, (New-Object Text.UTF8Encoding $false))
+          Get-ChildItem $pasta | Format-Table Name, Length
+
+      - name: Commitar no LFS
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git lfs install --local
+          git add "DLSS 5 Files"
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "Kit: swapchain_override.addon32/64 compilado da fonte do ReShade (forçar janela)" -m "Exemplo 16-swapchain_override do crosire/reshade no commit ${{ steps.pedido.outputs.sha }}, compilado no runner com MSVC (CRT estatico). E o addon que le [APP] ForceWindowed no ReShade 6. Hashes em swapchain-override-versao.txt."
+            $env:GIT_LFS_SKIP_SMUDGE = "1"
+            git pull --rebase origin ${{ github.ref_name }}
+            git push origin HEAD:${{ github.ref_name }}
+            Write-Host "Commitado."
+          } else {
+            Write-Host "Nada a commitar: o kit já tem esses binários."
+          }

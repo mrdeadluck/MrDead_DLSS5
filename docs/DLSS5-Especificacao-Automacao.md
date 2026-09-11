@@ -37,10 +37,14 @@ Limitações estruturais (não são bugs de configuração):
 | x86 | D3D11 | Sim | B | Tomb Raider 2013 |
 | x86 | D3D9 | Sim, via dgVoodoo2 → D3D11 | C | Castlevania: Lords of Shadow (variante simples), Half-Life 2 (variante Source) |
 | x86 | D3D9 | idem | C | GTA IV (parcial: dgVoodoo ok, ReShade pendente) |
-| **x86** | **Vulkan** | **NÃO** — addon32 recusa: "only Direct3D 11 games are supported" | — | HL2 (confirmado no log) |
-| qualquer | D3D10 | Não | — | — |
+| x86 | D3D8 | Sim, via dgVoodoo2 → D3D11 (D3D9.dll atrás de mod com d3d8to9) | C | Silent Hill 2 Enhanced Edition (OptiScaler x4 no host64) |
+| x64 | OpenGL | Sim (Feeder: em processo; MX Bikes relatado) — ReShade como opengl32.dll | A | — |
+| x86 | OpenGL | Sim (Feeder 0.9+: Worms Ultimate Mayhem, KOTOR, pelo host64) — ReShade como opengl32.dll | B | — |
+| x86 | D3D10 | Sim (Feeder 0.13.1+, nativo) — só o LumeniteFX compila como provedor | B | — |
+| **x86** | **Vulkan** | **NÃO** neste instalador — o Feeder faz via DXVK (`layer-x86\`), fora deste fluxo | — | HL2 (confirmado no log) |
+| x64 | D3D10 | Não | — | — |
 
-Regra derivada: **32 bits obriga D3D11.** Se o jogo x86 oferece Vulkan e D3D9, escolha D3D9 + dgVoodoo.
+Regra derivada: em 32 bits, D3D11/D3D10/OpenGL vão direto ao host64; D3D9/D3D8 passam pelo dgVoodoo. Se o jogo x86 oferece Vulkan e D3D9, escolha D3D9 + dgVoodoo. As passadas múltiplas (OptiScaler no host64) valem para todos os caminhos B e C, porque o host é o mesmo.
 
 ---
 
@@ -69,11 +73,11 @@ Regra derivada: **32 bits obriga D3D11.** Se o jogo x86 oferece Vulkan e D3D9, e
 
 | Arquivo | Tamanho | Arch | Local |
 |---|---|---|---|
-| `dlss5-feed.addon32` | 161.792 B | x86 | pasta do exe (única peça do Feeder fora de `host64\`). 0.13.1: D3D10 nativo. |
-| `dlss5-feed-host64.exe` | 118.784 B | x64 | `host64\` — protocolo v7; **precisa ser do mesmo build do addon32** |
+| `dlss5-feed.addon32` | 176.640 B (0.15.1) | x86 | pasta do exe (única peça do Feeder fora de `host64\`). 0.13.1: D3D10 nativo. |
+| `dlss5-feed-host64.exe` | 146.944 B (0.15.1) | x64 | `host64\` — protocolo v9; **precisa ser do mesmo build do addon32**. `--test` = 300 avaliações sem jogo (botão "Testar o host64…") |
 | `dxgi.dll` (ReShade x86) | 4.398.080 B | x86 | pasta do exe |
 | `dxgi.dll` (ReShade x64) | 5.592.064 B | x64 | `host64\` |
-| `renodx-dlss5.addon64` | | x64 | `host64\` (**não** na raiz) |
+| `renodx-dlss5.addon64` | | x64 | `host64\` (**não** na raiz) — consumidor neural padrão, 1 passada. **Ou, no lugar dele** (nunca dois): `winmm.dll` (= `OptiScaler.dll` v10.0.0-pre1 com DLSS-NR) + `nvngx.dll_dlssnr.dll` + `OptiScaler\D3D12_OptiScaler\D3D12Core.dll` + `OptiScaler.ini` gerado (1–5 passadas), ou `deep-fried-chicken.addon64` + `-nvngx.dll` + `.cfg` gerado (1–30). Ver 6.5. |
 | `nvngx_dlssnr.dll` | | x64 | `host64\` (**não** na raiz) |
 | `nvngx_dlss.dll` | | x64 | `host64\` (**não** na raiz) |
 
@@ -332,6 +336,60 @@ Krish (`DLSS5 Generic`, `feature 18 evaluation succeeded`) não existe neste mot
 Não validado em jogo por este projeto: o motor entrou pelo que o binário declara e pelo que a
 comunidade mostra. Se um jogo cair, o primeiro teste é Pass Count 1; o segundo é voltar ao Krish.
 
+### 6.5 Passadas múltiplas em 32-bit: consumidor neural dentro de `host64\`
+
+O addon do ShortFuse é 64-bit e vive no processo do jogo, logo não existe em caminho B/C. Em
+32-bit o Neural Rendering acontece no `host64\dlss5-feed-host64.exe`, e o Feeder 0.15.0+
+reconhece **três consumidores** ali (README: "OptiScaler is 64-bit only, so a 32-bit game runs
+it inside host64\"; "exactly one may be present, or one of them goes inert while every check
+still looks fine"). O perfil guarda `Engine` + `PassCount`; `MotorEfetivo` ignora ShortFuse em
+x86 e OptiScaler/DFC em x64 (cai no Krish).
+
+| Motor (`NeuralEngine`) | Arquivos em `host64\` | Passadas | Config gerada |
+|---|---|---|---|
+| `RenodxDlss5Feeder` (Krish) | `renodx-dlss5.addon64` | 1 | — |
+| `OptiScalerNr` (OptiScaler v10.0.0-pre1 de 04/09/2026, do 7z do Discord: o build com `Passes`; o fork Dagherbou v0.2.0-patch1 não tem a chave e faz uma passada — `OptiScalerNr.SuportaPassadas` lê o ini do kit e o plano bloqueia 2+ passadas com ele) | `winmm.dll` (cópia de `OptiScaler.dll`: proxy que o host já importa), `nvngx.dll_dlssnr.dll` (shim que o OptiScaler carrega para a passada neural), `OptiScaler\D3D12_OptiScaler\D3D12Core.dll` (Agility SDK próprio), `OptiScaler.ini` | 1–5 | a partir do ini do kit: `[Upscalers] Dx12Upscaler=dlss` (o host é D3D12), `[DlssNr] Enabled=true`, `ScanExposure=false`, `Passes=N`, `[Log] LogToFile=true`. Menu do OptiScaler na tecla Insert (janela do host) |
+| `DeepFriedChicken` 1.4.8 | `deep-fried-chicken.addon64`, `deep-fried-chicken-nvngx.dll`, `deep-fried-chicken.cfg` | 1–30 | a partir do cfg do kit: `enabled=1`, `arm=1`, `layers=N` |
+| `RenodxDlssShortFuse` em x86 (`UsesShortFuseNoHost64`) — **validado** (SH2 EE, 09/09/2026: o único motor com x2+ visível; o OptiScaler construía passadas sem diferença na tela) | `renodx-dlss.addon64` + `ReShade.ini` do host mesclado (`ShortFuseNoHost64.GerarIni`: `[ADDON] LoadFromDllMain`, `[RENODX-DLSS] DirectNeuralRenderingPassCount=N`) | 1–10 | o addon intercepta o `NVSDK_NGX_D3D12_EvaluateFeature` do host; o Feeder não o reconhece (host: "renodx-dlss5*.addon64 not found", segue servindo DLAA); verificação item 25 lê `host64\ReShade.log` com `ShortFuseLog` |
+
+Plano (32-bit): o bloco `host64\` copia o consumidor escolhido e agenda `DeleteForbiddenFile`
+(com backup) para os arquivos dos outros dois — inclusive `renodx-dlss5-*.addon64` de qualquer
+nome, que o Feeder também carregaria. O `KitResolver` acha `OptiScaler.dll` pelo marcador
+`OptiScaler.ini` na mesma pasta (o `winmm.dll` de um jogo pode ser outra coisa; a remoção só
+apaga o `winmm.dll` que contém o texto `OptiScaler.ini`) e os três do DFC pelo nome exato. Kit
+sem o OptiScaler → bloqueio "Falta no kit: OptiScaler.dll…"; sem o DFC → bloqueio apontando o
+Discord. Em 64-bit nenhum dos dois é oferecido (lá o x2+ é o ShortFuse).
+
+Verificação: item 25 lê `host64\OptiScaler.log` (`min GPU architecture 0x0` = o OptiScaler
+respondeu à sondagem do DLSS, `nvngx.dll_dlssnr.dll` carregado após o primeiro evaluate =
+passada neural rodou) ou o log do DFC; item 26 lê `host64\dlss5-feed-host.log` à procura de
+`evaluate raised 0xC0000005 in D3D12Core.dll` — o defeito **driver 616.64+ × renodx-dlss5
+4.6/4.7** medido pelo autor do Feeder (0/300; 4.55, DFC e OptiScaler 300/300). Item 25b: as
+passadas que rodaram = maior entre `composition ... xN pass(es)` (sai uma vez, no 1º quadro) e
+`pass N built at` (as extras chegam depois; SH2 EE: x4 com DLSS do host a 6,77 ms/quadro). O
+OptiScaler como `winmm.dll` carrega o `dxgi.dll` do System32 antes do host e o ReShade de
+`host64\dxgi.dll` fica de fora; o ini gerado leva `[Plugins] LoadReshade=true` e o plano copia o
+ReShade x64 como `host64\ReShade64.dll`. O botão
+"Testar o host64…" roda `dlss5-feed-host64.exe --test` (DLAA sintético + NR, 300 avaliações,
+~15 s, sem jogo) e interpreta `--test finished: N/300 evaluates succeeded`.
+
+**Validado em 09/09/2026 (RTX 4070 Ti, driver 616.64) — ShortFuse dentro do host64:**
+
+- **Silent Hill 2 Enhanced Edition** (D3D8 → mod d3d8to9 → dgVoodoo D3D9 → host64): `host64\ReShade.log`
+  mostra `Registered add-on "RenoDX DLSS"`, `RenoDX DLSS attached`, `DLSS-NR direct: attached snippet
+  host64\nvngx_dlssnr.dll`, `CreateFeature(Reserved18) succeeded ... size=1920x1080` (uma feature por
+  passada; recriadas ao mudar Pass Count ou escala — 45 creates numa sessão de 7 min) e `EvaluateFeature
+  succeeded: evaluation=N` até N=2859+ (1717 linhas). A primeira avaliação foi no swapchain do próprio
+  host (`source=3`, 900x1064 = a janela do painel), as seguintes na saída do DLSS do host. **É o único
+  motor em que o x2+ apareceu na tela**; o OptiScaler construía as passadas sem diferença visível.
+- **Enslaved: Odyssey to the West** (32-bit, D3D9 via dgVoodoo → host64): `source=1` a 2560x1440
+  (`replace_source=true`), 4 features Reserved18 (4 passadas), 101 avaliações registradas.
+
+O host segue dizendo `renodx-dlss5*.addon64 not found next to the host` e "serving plain DLAA" — ele não
+sabe que o ShortFuse está lá, e mesmo assim as passadas saem, porque o addon intercepta o
+`NVSDK_NGX_D3D12_EvaluateFeature` do host (hooks `loaded-module hooks active 3/4` em `_nvngx.dll` e em
+`host64\nvngx_dlss.dll`). `ShortFuseLog.Ler` conta avaliações, features e o snippet para o item 25.
+
 ## 7. O que fizemos em cada jogo
 
 ### RE2 Remake — x64, D3D12, sem DLSS nativo
@@ -367,6 +425,14 @@ Estado final HL2: dgVoodoo em `bin\`, ReShade `dxgi.dll` na raiz, overlays desli
 - Launcher separado: `PlayGTAIV.exe`. ReShade e dgVoodoo apontam para `GTAIV.exe`.
 - Atingido: watermark do dgVoodoo visível. Pendente: reinstalar ReShade em D3D10/11/12, provedor MV.
 - Aviso: medidor de VRAM do menu do jogo lê o valor virtual do dgVoodoo (1 GB).
+
+### Silent Hill 2 Enhanced Edition — x86, D3D8 atrás da mod (d3d8to9)
+- O `d3d8.dll` da pasta é o módulo **Silent Hill 2 Enhancements** — a própria mod (60 fps, widescreen, texturas), não um wrapper sobrando. Com `d3d8to9 = 1` (padrão, exigido pelos shaders dela) ele converte o jogo para DirectX 9 e, ao criar o Direct3D 9, tenta nesta ordem: 9On12 (se ligado no ini), o **`d3d9.dll` da própria pasta** (`GetLocalDirect3DCreate9`) e só então o do System32.
+- Logo o dgVoodoo **não** entra como `D3D8.dll` (sobrescrever tira a mod; foi o que a instalação antiga fazia, e a checagem de ocupante passou a recusar): entra como **`D3D9.dll`** ao lado (`GameProfile.D3d8ViaD3D9`, decidido pelo marcador `Silent Hill 2 Enhancements` ou `d3d8to9` no `D3D8.dll`; ver `D3d8to9Wrapper`). O `dgVoodoo.conf` sai no perfil padrão, não no "Legado": a mod quer a resolução do monitor. O resto é a rota C normal: dgVoodoo → D3D11 → `dxgi.dll` (ReShade x86) → Feeder addon32 + `host64\`.
+- O manifesto guarda a decisão; verificação (item 5), isolamento (só desliga o `D3D8.dll`/`D3D9.dll` que tenha o marcador `dgVoodoo`) e desinstalação olham o `D3D9.dll`.
+
+### Enslaved: Odyssey to the West — x86, D3D9 (Unreal Engine 3)
+- Caminho C (dgVoodoo D3D9 em `Binaries\Win32\`), ShortFuse dentro do host64 com 4 passadas a 2560x1440: `source=1`, 4 features Reserved18, avaliando. Validado em 09/09/2026, segundo jogo do arranjo depois do SH2 EE.
 
 ### Castlevania: Lords of Shadow Ultimate Edition — x86, D3D9
 - Caminho C, **variante simples**: exe, dgVoodoo e ReShade na mesma pasta. Funcionou de primeira seguindo a sequência padrão — primeira validação limpa do Caminho C do início ao fim.
@@ -423,6 +489,8 @@ Estado final HL2: dgVoodoo em `bin\`, ReShade `dxgi.dll` na raiz, overlays desli
 - `VRAM=256MB` de fábrica causa crash de memória.
 - Watermark é o único teste confiável de que está ativo.
 - Versão 1.x é outro produto (Glide). Teste: o zip tem pasta `MS`?
+- Tela cheia exclusiva: o host64 (janela atrás do jogo, D3D12) e o painel projetado (thumbnail do compositor) brigam com o swapchain do jogo. Enslaved (10/09/2026): `SetFullscreenState(TRUE)` no `ReShade.log`, 1,2 s depois o addon32 lança o host, o host vê o jogo conectar, e o jogo congela antes de mandar o build (`host spawned` sem `host connected`). Opção `ForcarJanela` (`InstallOptions`), para QUALQUER jogo que sobe o host64 (rotas B e C), tenha ou não opção de janela: como o feed é addon do ReShade dentro do jogo, o `ReShade.ini` do jogo recebe `[APP] ForceWindowed=1` (+`ForceFullscreen=0`) **e** a pasta do jogo recebe `swapchain_override.addon32`. **O ReShade 6 não lê mais essa chave sozinho** — conferido na fonte (`crosire/reshade`, commit 358c345, 03/09/2026): `ForceWindowed` existe no 5.9.2 (`dxgi.cpp`, `modify_swapchain_desc`) e some no 6.x; a mesma função virou o exemplo oficial `examples/16-swapchain_override`, um addon que lê as chaves `[APP]`, zera `desc.fullscreen_state` no `create_swapchain` e devolve `true` no `set_fullscreen_state` quando o jogo pede tela cheia — o `SetFullscreenState(TRUE)` do log do Enslaved é exatamente essa chamada. O kit compila o exemplo no Actions (`compilar-addons.yml`, commit fixado em `swapchain-override-desejado.txt`) e o plano o copia (`JanelaForcada`); com o addon carregado, a linha `SetFullscreenState(TRUE)` do log passa a ser um pedido bloqueado (o ReShade loga antes de consultar os addons), e a prova é `Registered add-on "Swap chain override"`. Sem o addon a chave é letra morta — foi por isso que "já havia marcado" e nada mudou. Atenção ao ler o log do jogo: o `ReShade.log` 32-bit mostra `D3D11CreateDevice` e um swapchain DXGI tanto num jogo D3D11 nativo (rota B) quanto num jogo D3D9 atrás do dgVoodoo (rota C) — o dgVoodoo é o `d3d9.dll` LOCAL, o ReShade só engancha o `d3d9.dll` do System32, então o dgVoodoo nunca aparece no log e o D3D11 que aparece é o dele. O Enslaved (UE3, `LaunchUnrealUWindowsClient`) é tido como D3D9 na internet; o instalador foi testado nas duas rotas (10/09/2026, 13:05) e o congelamento foi idêntico nas duas. Por isso a opção `ForcarJanela` puxa as DUAS alavancas de uma vez, e a rota certa fica sendo um detalhe. Na rota C (jogo antigo por trás do dgVoodoo) o `dgVoodoo.conf` também sai com `FullScreenMode=false`, `ScalingMode=stretched_ar`, `WindowedAttributes=borderless, fullscreensize` — as duas alavancas juntas. Item 16b da verificação reconhece a assinatura e lê o `dgVoodoo.conf` do renderizador: com `FullScreenMode=true` diz que a opção NÃO está valendo (o quarto log do Enslaved, 01:46, ainda tinha `SetFullscreenState(TRUE)`) e dá a edição manual das três chaves; com `false` propõe o isolamento (motor Krish). O host da sessão que funcionou (09/09, 13:16) também tinha janela 900x1332 — a área de trabalho não é a diferença. O README do Feeder: "windowed is smoother"; painel via "Show as texture" (`cast_mode=1`) em tela cheia.
+- Nome ocupado: `D3D9.dll` do DxWrapper → encadeia por `RealDllPath` (6.x, Dead Space 2); `D3D8.dll` de uma mod com d3d8to9 (SH2 Enhanced Edition) → o dgVoodoo entra como `D3D9.dll` atrás dela; qualquer outro wrapper com o nome → o plano recusa, porque sobrescrever é apostar com o jogo.
 
 ### 8.8 Overlays
 - Injetam na criação do processo: `gameoverlayrenderer.dll` (Steam), `nvspcap.dll` (NVIDIA ShadowPlay), `NvCamera32.dll` (Ansel), `DiscordHook`, `RTSSHooks`.
@@ -476,6 +544,9 @@ Estado final HL2: dgVoodoo em `bin\`, ReShade `dxgi.dll` na raiz, overlays desli
 | 14 | Painel Feed: `Feed: built`, `Host: running`, `Motion vectors → <nome>` | aba Add-ons | Ver diagnóstico |
 | 15 | `dlss5-feed.log`: `feature ready … DLAA`, `frame N delivered` | arquivo | — |
 | 16 | (x64) `NGX hooks: creates 1`, `Successful NR frames` > 0 | painel RenoDX | STANDBY: esperar 10 s (warm-up frame 180) |
+| 24 | (ShortFuse) Pass Count do `ReShade.ini` = o do perfil | `[RENODX-DLSS] DirectNeuralRenderingPassCount` | Instalar de novo |
+| 25 | (32-bit, OptiScaler/DFC) consumidor alternativo rodou em `host64\` | `host64\OptiScaler.log`: `min GPU architecture 0x0` + `nvngx.dll_dlssnr.dll`; DFC: log próprio | dois consumidores na pasta / `Enabled=false` / Defender apagou o DFC |
+| 26 | (32-bit) nenhuma falha dentro do NGX do driver | `host64\dlss5-feed-host.log` sem `evaluate raised 0xC0000005 in D3D12Core.dll` | driver 616.64+ com addon 4.6/4.7: usar 4.55, DFC ou OptiScaler; ou driver 616.56. "Testar o host64…" reproduz em 15 s |
 
 ---
 
@@ -492,6 +563,10 @@ Estado final HL2: dgVoodoo em `bin\`, ReShade `dxgi.dll` na raiz, overlays desli
 | `provider … installed but DISABLED` | provedor não marcado | marcar acima do Feed, Re-enable |
 | `no known texMotionVectors provider found` | idem, ou provedor com erro de compilação | ver log por `error X` |
 | `Feed: disabled`, `Host: not running` | consequência de MV ausente | resolver MV |
+| Caixa "Engine Error: failed to lock vertex buffer in CMeshDX8::LockVertexBuffer" ao abrir (engine Source: Black Mesa, 11/09/2026) | **O DXVK do próprio jogo**: o Black Mesa traz o DXVK em `bin\thirdparty\dxvk-windows-x86` e a Steam abre por padrão nele ("Play Default"): o D3D9 vira Vulkan, o dgVoodoo e o feed ficam fora (e no log os dois carregaram juntos). Prova: `bms_d3d9.log` ao lado do exe com `info:  DXVK: v2.6.2`. É o mesmo erro do Black Mesa no Linux/Proton. (O `bms.exe` já é LAA — a memória de 2 GB NÃO era a causa.) | Item 5c da verificação (`Dxvk.Ativo`) e nota na detecção (`Dxvk.EmbutidoNaSource`): abrir pela opção "Play Direct3D 9 Fallback" da Steam. O item LAA (`Patch4Gb`) continua valendo para exe 32-bit sem a flag |
+| Jogo congela ao ligar o DLSS 5; `dlss5-feed.log` termina em `host spawned` sem `host connected`; host log tem `game pid connected` e nenhum `build:` | Tela cheia exclusiva: o jogo trava no aperto de mão quando o host sobe (Enslaved, 10/09/2026) | Jogo em janela/sem borda; rota C: opção "dgVoodoo em janela sem borda" + Instalar de novo (ou `FullScreenMode = false`, `ScalingMode = stretched_ar`, `WindowedAttributes = borderless, fullscreensize` à mão no dgVoodoo.conf); conferir no `ReShade.log` do jogo que não há mais `Fullscreen = TRUE`; painel via "Show as texture" |
+| `Stopped: the 64-bit host went away` repetido; `host64\dlss5-feed-host.log` diz `the D3D12 device was removed (0x887A0001) during an evaluate` logo após `feature ready` | Host REINICIADO pelo painel ("Restart"/"Apply to the DLSS 5 host") com o ShortFuse dentro dele: o primeiro host roda, cada host reiniciado morre no primeiro quadro (Silent Hill Homecoming, 10/09/2026). A seção "neural-rendering settings (on the host)" do painel é do Krish e o ShortFuse a ignora — mexer ali só reinicia o host | Fechar e abrir o jogo; nunca o botão de restart com o ShortFuse no host. Item 26b da verificação decodifica o código DXGI |
+| `device was removed (0x887A0006 DEVICE_HUNG)` depois de minutos | GPU hang na avaliação (Feeder issue #57) | baixar `work_resolution`/passadas; trocar consumidor para isolar |
 | `only Direct3D 11 games are supported by the 32-bit add-on` | jogo x86 em Vulkan | D3D9 + dgVoodoo |
 | `WAITING FOR NGX MODULES` (x64) | Feed não entregou frame válido | MV / depth |
 | `0xBAD00007` | NGX nunca recebeu evaluate válido, ou override/reboot faltando | itens 1–2 + MV |
@@ -616,6 +691,7 @@ AddonPath=.\
 ```ini
 Techniques=DRME@MotionEstimation.fx,DLSS5_Feed@DLSS5_Feed.fx
 TechniqueSorting=DRME@MotionEstimation.fx,DLSS5_Feed@DLSS5_Feed.fx
+- Tecla liga/desliga (`InstallOptions.TeclaLigaDesliga`, F6 por padrão): o preset ganha `KeyDLSS5_Feed@DLSS5_Feed.fx=tecla,0,0,0` (a alternância de technique do ReShade, lida na raiz do preset). O addon só trabalha depois de a technique rodar, então a tecla desliga o DLSS 5 inteiro — comparação antes/depois sem abrir o painel. O ShortFuse não tem tecla; o F6 do Krish não chega ao host64 em 32-bit.
 ```
 
 ### 12.7 Patch do dgVoodoo.conf
@@ -649,9 +725,9 @@ Get-FileHash $dll -Algorithm SHA256
 
 ---
 
-## 14. Chaves úteis do `dlss5-feed.cfg` (Feeder 0.13.1-beta.1)
+## 14. Chaves úteis do `dlss5-feed.cfg` (Feeder 0.15.1)
 
-O kit traz o **dlss5-feed 0.13.1-beta.1** (desde 04/09; antes 0.12.0, guardado em `versoes-anteriores/feeder-0.12.0/`) (`DLSS 5 Files/feeder-versao.txt` registra a release e os
+O kit traz o **dlss5-feed 0.15.1** (desde 09/09; 0.13.1-beta.1 de 04/09 a 09/09; antes 0.12.0, guardado em `versoes-anteriores/feeder-0.12.0/`) (`DLSS 5 Files/feeder-versao.txt` registra a release e os
 hashes; `feeder-desejado.txt` é o que se muda para trocar). Até 02/09 o kit trazia o 0.5.0,
 que derrubava a sessão inteira quando o jogo recriava a swapchain — trocar resolução, tela
 cheia ou qualidade dentro do jogo — e criava a feature de novo bem quando o addon do RenoDX
@@ -679,6 +755,7 @@ pré-processador **por efeito** — na seção `[DLSS5_Feed.fx]` do `ReShadePres
 | `host_window` | 0 | jogos 32-bit: 0 esconde a janela do auxiliar (o painel é projetado no jogo); 1 dá janela própria |
 | `async_home` | 1 | 32-bit: handoff em pipeline (tira o teto de ~35 fps); 0 = mesmo frame |
 | `enabled` | 1 | 0.13.0+: 0 desliga tudo de verdade (antes só parava o trabalho neural) |
+| `hdr_bridge` | -1 | 0.15.1: em swapchain HDR10 (R10G10B10A2 PQ) decodifica para linear FP16 antes do consumidor e volta a PQ depois (os brilhos estouravam); 0 desliga, 1 força |
 
 ---
 

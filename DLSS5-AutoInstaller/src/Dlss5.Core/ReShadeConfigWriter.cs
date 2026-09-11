@@ -11,6 +11,10 @@ public static class ReShadeConfigWriter
     /// <summary>Home = 36, Insert = 45 (spec 8.3: alternativa quando o jogo captura Home).</summary>
     public const int KeyHome = 36;
     public const int KeyInsert = 45;
+    /// <summary>F6 (VK_F6): a tecla de liga/desliga do DLSS 5 no jogo (mesma do NR do Krish).</summary>
+    public const int KeyF6 = 117;
+    /// <summary>Nome único da technique do Feeder no preset ("nome@arquivo").</summary>
+    public const string TechniqueDoFeed = "DLSS5_Feed@DLSS5_Feed.fx";
 
     /// <summary>
     /// Teclas oferecidas para o overlay. O ReShade aceita qualquer Virtual-Key Code no
@@ -157,7 +161,8 @@ public static class ReShadeConfigWriter
         string? baseDir = null,
         string? basePath = null,
         bool shortFuse = false,
-        int passCount = ShortFuseDlss.PassesPadrao)
+        int passCount = ShortFuseDlss.PassesPadrao,
+        bool forceWindowed = false)
     {
         // Sem baseDir tudo continua relativo, como sempre foi.
         string Raiz(string relativo) => baseDir is null
@@ -190,6 +195,17 @@ public static class ReShadeConfigWriter
         sb.AppendLine("[INPUT]");
         sb.AppendLine($"KeyOverlay={overlayKey},{Bit(ctrl)},{Bit(shift)},{Bit(alt)}");
         sb.AppendLine();
+        if (forceWindowed)
+        {
+            // Lido pelo addon swapchain_override (exemplo 16 do ReShade 6, que o kit compila e o
+            // plano copia para a pasta do jogo — ver JanelaForcada). O ReShade 6 em si NÃO lê
+            // mais estas chaves: elas saíram do núcleo no 6.0. Com o addon, o swapchain nasce em
+            // janela e o SetFullscreenState(TRUE) do jogo é bloqueado, em qualquer API.
+            sb.AppendLine("[APP]");
+            sb.AppendLine("ForceWindowed=1");
+            sb.AppendLine("ForceFullscreen=0");
+            sb.AppendLine();
+        }
         sb.AppendLine("[ADDON]");
         sb.AppendLine($"AddonPath={(baseDir is null ? @".\" : baseDir)}");
         // O addon do ShortFuse pede para ser carregado no DllMain (ganchos cedo no NGX e no
@@ -234,7 +250,7 @@ public static class ReShadeConfigWriter
     /// DLSS que o jogo já faz, e nenhum efeito do ReShade participa — por isso o preset
     /// sai vazio, em vez de ligar shaders que não teriam função.
     /// </summary>
-    public static string BuildPresetIni(MvProvider provider, bool feederUsed = true)
+    public static string BuildPresetIni(MvProvider provider, bool feederUsed = true, int teclaLigaDesliga = 0)
     {
         var sb = new StringBuilder();
         if (!feederUsed)
@@ -254,6 +270,11 @@ public static class ReShadeConfigWriter
 
         sb.AppendLine($"Techniques={list}");
         sb.AppendLine($"TechniqueSorting={list}");
+        // Tecla de alternância da technique do Feeder (o ReShade lê "Key<nome@arquivo>" na raiz
+        // do preset, no mesmo formato tecla,ctrl,shift,alt do KeyOverlay). Desligar a technique
+        // desliga o DLSS 5 inteiro: o addon só trabalha logo depois de ela rodar.
+        if (teclaLigaDesliga > 0)
+            sb.AppendLine($"Key{feed}={teclaLigaDesliga},0,0,0");
 
         // O DLSS5_Feed.fx (0.12.0) escolhe de QUEM lê os vetores de movimento por uma
         // definição de pré-processador — e o ReShade guarda essa definição POR EFEITO, na

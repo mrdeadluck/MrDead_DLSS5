@@ -14,4 +14,34 @@
 # verdade, dumps de crash, Smooth Motion em D3D11/12, interop com o Deep Fried Chicken e
 # suporte às gerações 4.5/4.6/4.7 do addon do RenoDX (o kit traz o 4.70). O 0.12.0 fica em
 # versoes-anteriores/feeder-0.12.0/ com os nomes trocados.
-versao=v0.13.1-beta.1
+#
+# Por que 0.15.1 (09/09/2026): o host64 reconhece consumidores neurais alternativos dentro de
+# host64\ (OptiScaler DLSS-NR como winmm.dll, Deep Fried Chicken) — é o que dá x2+ em jogo 32-bit —,
+# ganhou "dlss5-feed-host64.exe --test" (300 avaliações sem abrir jogo, prova driver × runtimes ×
+# consumidor) e o aviso do driver 616.64+ (o addon 4.6/4.7 do Krish cai dentro do D3D12Core.dll do
+# NGX; o 4.55 passa). O 0.13.1-beta.1 fica em versoes-anteriores/DLSS5-Feeder-0.13.1-beta.1/.
+#
+# Nota: o trocar-extras.yml não refaz o pacote (por desenho). Quando os extras mudam e o
+# pacote da Release precisa acompanhar, basta alterar este arquivo (um comentário serve): o
+# job "trocar" vê que o Feeder já é o pedido e o job "pacote" refaz o zip com o kit atual.
+# 09/09/2026: pacote refeito com o OptiScaler DLSS-NR, o SF 0.54 e o 4.55 em versoes-anteriores;
+# depois, de novo, com o instalador que aceita o SH2 Enhanced Edition (dgVoodoo como D3D9.dll);
+# e de novo com o OptiScaler v10.0.0-pre1 (o build com Passes 1 a 5) no lugar do fork de 1 passada.
+# 09/09/2026 (2): pacote refeito com a verificacao que le as passadas no OptiScaler.log (item 25b).
+# 09/09/2026 (3): pacote refeito com a verificacao das passadas corrigida, LoadReshade no host e o ShortFuse-no-host64 experimental.
+# 09/09/2026 (4): pacote refeito com OpenGL e D3D10 em 32-bit (caminho B).
+# 09/09/2026 (5): pacote refeito com o ShortFuse-no-host64 como motor recomendado para x2+ em 32-bit.
+# 09/09/2026 (6): pacote refeito com a verificacao que le as avaliacoes do ShortFuse no host64.
+# 10/09/2026: pacote refeito com o passo manual sobre frame generation.
+# 10/09/2026 (2): pacote refeito com o item 26b (device D3D12 do host removido).
+# 10/09/2026 (3): pacote refeito com a opcao 'dgVoodoo em janela sem borda' e o item 16b.
+# 10/09/2026 (4): pacote refeito com o item 5 'tela cheia ou janela'.
+# 10/09/2026 04:50 — pacote refeito: item 16b le o dgVoodoo.conf e o ReShade.log do jogo (Enslaved 01:46)
+# 10/09/2026 05:15 — pacote refeito: opção "Forçar janela" grava [APP] ForceWindowed=1 no ReShade.ini do jogo (rota B e C)
+# 10/09/2026 05:45 — pacote refeito: "forçar janela" ja vem marcado em instalacao nova de jogo 32-bit (rota B/C)
+# 10/09/2026 16:30 — pacote refeito: entra o swapchain_override.addon32/64 (forçar janela no ReShade 6)
+# 10/09/2026 17:05 — pacote refeito: opção "Tecla liga/desliga do DLSS 5" (F6) gravada no preset
+# 11/09/2026 — pacote refeito: verificação lê a flag LAA do exe 32-bit (Black Mesa: failed to lock vertex buffer)
+# 11/09/2026 — pacote refeito: botão "Aplicar 4 GB (LAA) no exe" na verificação
+# 11/09/2026 — pacote refeito: Black Mesa = DXVK do próprio jogo (item 5c + nota na detecção)
+versao=v0.15.1

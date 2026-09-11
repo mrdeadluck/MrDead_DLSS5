@@ -60,6 +60,10 @@ public enum NeuralEngine
     RenodxDlss5Feeder,
     /// <summary>renodx-dlss (ShortFuse): fabrica a chamada de DLSS sozinho, 64-bit D3D9/11/12, 1 a 10 passadas.</summary>
     RenodxDlssShortFuse,
+    /// <summary>OptiScaler DLSS-NR (v10.0.0-pre1, o build com a chave Passes) como consumidor do Feeder, dentro do host64\ em jogo 32-bit: 1 a 5 passadas.</summary>
+    OptiScalerNr,
+    /// <summary>Deep Fried Chicken como consumidor do Feeder, dentro do host64\ em jogo 32-bit: 1 a 30 passadas. Arquivos só no Discord.</summary>
+    DeepFriedChicken,
 }
 
 /// <summary>Perfil do jogo: detecção automática + ajustes do usuário (spec 11.4).</summary>
@@ -124,9 +128,11 @@ public sealed class GameProfile
             {
                 // D3D8 e D3D9 caem os dois no dgVoodoo2, que traduz para D3D11: muda só
                 // qual wrapper é copiado (D3D8.dll ou D3D9.dll).
+                // OpenGL 32-bit: o Feeder verificou (Worms Ultimate Mayhem, KOTOR) pelo mesmo host64,
+                // só trocando o nome do ReShade (opengl32.dll). D3D10 nativo em 32-bit desde o 0.13.1.
                 return Api switch
                 {
-                    GraphicsApi.D3D11 => InstallRoute.B,
+                    GraphicsApi.D3D11 or GraphicsApi.OpenGL or GraphicsApi.D3D10 => InstallRoute.B,
                     GraphicsApi.D3D9 or GraphicsApi.D3D8 => InstallRoute.C,
                     _ => InstallRoute.Unsupported,
                 };
@@ -157,6 +163,32 @@ public sealed class GameProfile
     /// tem versão x86 e o NGX também não, então em 32-bit a escolha é ignorada.
     /// </summary>
     public bool UsesShortFuse => Engine == NeuralEngine.RenodxDlssShortFuse && Architecture == PeArchitecture.X64;
+
+    /// <summary>
+    /// OptiScaler DLSS-NR como consumidor neural do Feeder, dentro do host64\ (jogo 32-bit).
+    /// É o caminho das passadas múltiplas em x86: o Feeder 0.15 aceita o OptiScaler DLSS-NR como
+    /// terceiro consumidor, e o OptiScaler é 64-bit, então mora no processo auxiliar. Só o build
+    /// v10.0.0-pre1 tem a chave Passes; o fork v0.2.0-patch1 faz uma passada (o plano bloqueia).
+    /// </summary>
+    public bool UsesOptiScalerNr => Engine == NeuralEngine.OptiScalerNr && Architecture == PeArchitecture.X86;
+
+    /// <summary>Deep Fried Chicken dentro do host64\ (jogo 32-bit). Até 30 passadas; arquivos do Discord.</summary>
+    public bool UsesDeepFriedChicken => Engine == NeuralEngine.DeepFriedChicken && Architecture == PeArchitecture.X86;
+
+    /// <summary>
+    /// O renodx-dlss do ShortFuse DENTRO do host64 (jogo 32-bit): validado no SH2 EE. Ver <see cref="ShortFuseNoHost64"/>.
+    /// </summary>
+    public bool UsesShortFuseNoHost64 => Engine == NeuralEngine.RenodxDlssShortFuse && Architecture == PeArchitecture.X86;
+
+    /// <summary>O consumidor neural do host64\ não é o addon do Krish.</summary>
+    public bool ConsumidorAlternativoNoHost64 => UsesOptiScalerNr || UsesDeepFriedChicken || UsesShortFuseNoHost64;
+
+    /// <summary>O motor depois das regras de arquitetura (o pedido pode não valer para esta).</summary>
+    public NeuralEngine MotorEfetivo =>
+        UsesShortFuse || UsesShortFuseNoHost64 ? NeuralEngine.RenodxDlssShortFuse
+        : UsesOptiScalerNr ? NeuralEngine.OptiScalerNr
+        : UsesDeepFriedChicken ? NeuralEngine.DeepFriedChicken
+        : NeuralEngine.RenodxDlss5Feeder;
 
     /// <summary>
     /// O RenoDX se pendura direto nas chamadas de DLSS que o jogo já faz, mas só enxerga
@@ -284,7 +316,25 @@ public sealed class GameProfile
     /// Wrapper do dgVoodoo2 correspondente à API do jogo (rota C). O dgVoodoo traz um
     /// arquivo por API, e o jogo só carrega o que tem o nome certo.
     /// </summary>
-    public string DgVoodooWrapperName => Api == GraphicsApi.D3D8 ? "D3D8.dll" : "D3D9.dll";
+    public string DgVoodooWrapperName => Api == GraphicsApi.D3D8 && !D3d8ViaD3D9 ? "D3D8.dll" : "D3D9.dll";
+
+    /// <summary>
+    /// Jogo DirectX 8 cujo D3D8.dll é uma mod com d3d8to9 (Silent Hill 2 Enhanced Edition):
+    /// ela converte para DirectX 9 e carrega um d3d9.dll local de preferência, então o
+    /// dgVoodoo entra como D3D9.dll ao lado, e o D3D8.dll dela fica. Ver <see cref="D3d8to9Wrapper"/>.
+    /// Decidido pela pasta (<see cref="AtualizarD3d8ViaD3D9"/>) e guardado no manifesto.
+    /// </summary>
+    public bool D3d8ViaD3D9 { get; set; }
+
+    /// <summary>Olha a pasta do renderizador e decide <see cref="D3d8ViaD3D9"/>. Devolve o marcador achado.</summary>
+    public string? AtualizarD3d8ViaD3D9()
+    {
+        string? marca = null;
+        if (Api == GraphicsApi.D3D8 && RealExePath is not null)
+            marca = D3d8to9Wrapper.Qual(RendererFolder ?? ExeFolder);
+        D3d8ViaD3D9 = marca is not null;
+        return marca;
+    }
 
     /// <summary>
     /// Nome do dgVoodoo quando o nome original já é de outro wrapper (DxWrapper) e os

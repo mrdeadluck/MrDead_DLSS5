@@ -58,7 +58,7 @@ public static class InstallPlanBuilder
             return plan;
         }
 
-        var missing = kit.MissingFor(route, profile.UsesRenodxDirectPath, profile.Api, profile.UsesShortFuse);
+        var missing = kit.MissingFor(route, profile.UsesRenodxDirectPath, profile.Api, profile.UsesShortFuse, profile.MotorEfetivo);
         if (missing.Count > 0)
         {
             foreach (var m in missing)
@@ -347,12 +347,165 @@ public static class InstallPlanBuilder
         else
         {
             // 32-bit (B/C): addon32 na raiz; o resto do Feeder dentro de host64\.
+            // A opção "forçar janela" grava [APP] ForceWindowed=1 no ReShade.ini do jogo (ver
+            // ConteudoGerado) E põe na pasta o addon que lê essa chave: no ReShade 6 a chave
+            // sozinha é letra morta (ver JanelaForcada). Vale para QUALQUER jogo, tenha ou não
+            // opção de janela — em tela cheia exclusiva o host64 congela no aperto de mão (Enslaved).
+            // Jogo que traz o próprio DXVK (Black Mesa): no "Play Default" da Steam o D3D9 é Vulkan e
+            // nada disto entra. Só o "Play Direct3D 9 Fallback" serve.
+            if (profile.IsSourceEngine && Dxvk.EmbutidoNaSource(profile.RendererFolder))
+                plan.Warnings.Add(
+                    "Este jogo traz o próprio DXVK (bin\\thirdparty\\dxvk-windows-x86). Na Steam, abra pela opção \"Play Direct3D 9 " +
+                    "Fallback\" — no \"Play Default\" o Direct3D 9 é traduzido para Vulkan pelo DXVK, o dgVoodoo e o feed ficam de " +
+                    "fora e o jogo cai com \"failed to lock vertex buffer\" (Black Mesa). A verificação detecta o log do DXVK.");
+            // Exe 32-bit sem LAA: 2 GB para tudo (jogo + dgVoodoo + ReShade + feed + driver).
+            if (PeFile.IsLargeAddressAware(profile.RealExePath) == false)
+                plan.Warnings.Add(
+                    $"{Path.GetFileName(profile.RealExePath ?? "o exe")} não é LAA (4 GB aware): o processo 32-bit fica em 2 GB, e o " +
+                    "dgVoodoo/ReShade/feed moram lá dentro. Jogo pesado pode cair com erro de memória (na engine Source: " +
+                    "\"failed to lock vertex buffer in CMeshDX8::LockVertexBuffer\", visto no Black Mesa). Se acontecer, aplique " +
+                    "o 4GB Patch (NTCore) no exe. A verificação confere a flag.");
+            var addonJanela = Path.Combine(exe, JanelaForcada.Addon32);
+            if (options.ForcarJanela)
+            {
+                if (kit.SwapchainOverride32 is not null)
+                {
+                    Copy(kit.SwapchainOverride32, exe, JanelaForcada.Addon32);
+                    plan.Warnings.Add(
+                        $"Forçar janela: {JanelaForcada.Addon32} (o exemplo swapchain_override do próprio ReShade 6) vai para a " +
+                        "pasta do jogo e lê [APP] ForceWindowed=1 do ReShade.ini: o swapchain nasce em janela e o pedido de tela " +
+                        "cheia exclusiva (SetFullscreenState) é bloqueado — o jogo acha que está em tela cheia. É o que impede o " +
+                        "host64 de congelar. Prova: o ReShade.log do jogo passa a ter Registered add-on \"Swap chain override\".");
+                }
+                else
+                {
+                    plan.Warnings.Add(
+                        $"Forçar janela: o kit ainda NÃO tem o {JanelaForcada.Addon32}. O ReShade 6 sozinho ignora a chave " +
+                        "[APP] ForceWindowed (ela saiu do núcleo no 6.0 e virou o exemplo swapchain_override). Sem o addon, a " +
+                        "opção não muda nada — baixe o pacote novo (o workflow 'Compilar addons do ReShade' o gera) e Instale de novo.");
+                }
+            }
+            else if (File.Exists(addonJanela))
+            {
+                plan.Actions.Add(new PlanAction(PlanActionKind.DeleteForbiddenFile,
+                    $"Remover {Rel(profile, addonJanela)} (forçar janela desmarcado; vai para backup)", null, addonJanela));
+            }
             Copy(kit.FeedAddon32, exe, "dlss5-feed.addon32");
             Copy(kit.FeedHost64Exe, host64, "dlss5-feed-host64.exe");
             Copy(kit.DxgiX64, host64, "dxgi.dll");
-            Copy(kit.RenodxAddon64, host64, "renodx-dlss5.addon64");
             Copy(kit.NvngxDlssnr, host64, "nvngx_dlssnr.dll");
             CopySemSobrescreverDoJogo(kit.NvngxDlss, host64, "nvngx_dlss.dll");
+
+            // O consumidor neural do host64\: exatamente um. Os outros saem, com backup — dois
+            // consumidores no mesmo processo disputam o NGX (o OptiScaler captura toda carga de
+            // nvngx; o Chicken fica inerte se acha o RenoDX; o Krish e o OptiScaler dobram a passada).
+            void RemoverDoHost(string nome, string porque, string? prova = null)
+            {
+                var caminho = Path.Combine(host64, nome);
+                if (!File.Exists(caminho)) return;
+                if (prova is not null && !Propriedade.ContemTexto(caminho, prova)) return;
+                plan.Actions.Add(new PlanAction(PlanActionKind.DeleteForbiddenFile,
+                    $"Remover {Rel(profile, caminho)} ({porque}; vai para backup)", null, caminho));
+            }
+            void RemoverOptiScalerDoHost(string porque)
+            {
+                foreach (var proxy in new[] { OptiScalerNr.Proxy, "version.dll", "dbghelp.dll", "winhttp.dll", "wininet.dll", OptiScalerNr.Dll })
+                    RemoverDoHost(proxy, porque, OptiScalerNr.Marca);
+                RemoverDoHost(OptiScalerNr.Ini, porque);
+                RemoverDoHost(OptiScalerNr.Shim, porque);
+                RemoverDoHost(OptiScalerNr.ReShade64, porque, "ReShade");
+            }
+            void RemoverShortFuseDoHost(string porque) => RemoverDoHost(ShortFuseDlss.Addon, porque);
+            void RemoverChickenDoHost(string porque)
+            {
+                foreach (var f in new[] { DeepFriedChicken.Addon, DeepFriedChicken.Nvngx, DeepFriedChicken.Cfg })
+                    RemoverDoHost(f, porque);
+            }
+            void RemoverKrishDoHost(string porque)
+            {
+                try
+                {
+                    if (Directory.Exists(host64))
+                        foreach (var f in Directory.EnumerateFiles(host64, "renodx-dlss5*.addon64"))
+                            RemoverDoHost(Path.GetFileName(f), porque);
+                }
+                catch { }
+            }
+
+            if (profile.UsesOptiScalerNr)
+            {
+                // OptiScaler DLSS-NR entra como winmm.dll (o host importa winmm.dll e version.dll ao
+                // iniciar; com outro nome ele não está no processo quando a primeira chamada de NGX
+                // acontece). O ini vem do kit com [DlssNr] ligada e as passadas; o encaminhador
+                // nvngx.dll_dlssnr.dll é o que o modelo exige do chamador; o Agility SDK vai junto
+                // porque o host é D3D12.
+                if (profile.PassCount > 1 && !OptiScalerNr.SuportaPassadas(LerTexto(kit.OptiScalerNrIni)))
+                {
+                    plan.Blockers.Add(
+                        $"O OptiScaler do kit ({kit.OptiScalerNrIni}) não tem a chave Passes em [DlssNr]: é um build de UMA " +
+                        "passada (o fork v0.2.0-patch1 do GitHub), e a passada extra pedida não aconteceria — o painel do " +
+                        "Feeder até mostraria \"Passes=2\", lendo o ini, mas o modelo rodaria uma vez. Use o kit com o " +
+                        "OptiScaler v10.0.0-pre1 (pasta \"OptiScaler-DLSSNR-v10.0.0-pre1 ...\", do 7z do Discord) ou peça 1 passada.");
+                    return plan;
+                }
+                Copy(kit.OptiScalerNrDll, host64, OptiScalerNr.Proxy);
+                Copy(kit.OptiScalerNrShim, host64, OptiScalerNr.Shim);
+                // O OptiScaler toma o dxgi.dll do System32 antes do host carregar o seu; o ReShade
+                // do host entra por ele (LoadReshade=true no ini gerado) com este nome.
+                Copy(kit.DxgiX64, host64, OptiScalerNr.ReShade64);
+                if (kit.OptiScalerNrAgility is not null)
+                    Copy(kit.OptiScalerNrAgility, Path.Combine(host64, OptiScalerNr.AgilityRel), OptiScalerNr.AgilityDll);
+                plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
+                    $"Gerar host64\\{OptiScalerNr.Ini} ([DlssNr] Enabled=true, Passes={profile.PassCount}, Dx12Upscaler=dlss, spoof desligado, LoadReshade=true)",
+                    kit.OptiScalerNrIni, Path.Combine(host64, OptiScalerNr.Ini)));
+                RemoverKrishDoHost("o consumidor escolhido é o OptiScaler DLSS-NR");
+                RemoverChickenDoHost("o consumidor escolhido é o OptiScaler DLSS-NR");
+                RemoverShortFuseDoHost("o consumidor escolhido é o OptiScaler DLSS-NR");
+                plan.Warnings.Add(
+                    $"Motor OptiScaler DLSS-NR no host64 ({profile.PassCount} passada(s)): o OptiScaler toma a chamada de DLSS que o " +
+                    "Feeder faz, faz o upscaling (DLSS) e roda o Neural Rendering N vezes. É o suporte novo do Feeder 0.15 — " +
+                    "checado pelo projeto dele, não por este. O menu do OptiScaler abre com Insert na janela do host. " +
+                    "O kit traz o OptiScaler v10.0.0-pre1 (04/09/2026), o build que tem a chave Passes; o modelo original pede RTX 50 e com o nvngx_dlssnr.dll SF-v2 do kit roda em RTX 20/30/40. " +
+                    "Se travar, volte a 1 passada antes de trocar de motor. No Silent Hill 2 EE (09/09/2026) o log mostrou as passadas construídas, " +
+                    "mas na tela não houve diferença de x1 para x4 — quem entregou o x2+ visível foi o RenoDX DLSS (ShortFuse) dentro do host64.");
+            }
+            else if (profile.UsesDeepFriedChicken)
+            {
+                Copy(kit.DfcAddon64, host64, DeepFriedChicken.Addon);
+                Copy(kit.DfcNvngx, host64, DeepFriedChicken.Nvngx);
+                plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
+                    $"Gerar host64\\{DeepFriedChicken.Cfg} (layers={profile.PassCount}, enabled=1, arm=1)",
+                    kit.DfcCfg, Path.Combine(host64, DeepFriedChicken.Cfg)));
+                RemoverKrishDoHost("o consumidor escolhido é o Deep Fried Chicken (ele fica inerte se acha o RenoDX)");
+                RemoverOptiScalerDoHost("o consumidor escolhido é o Deep Fried Chicken");
+                RemoverShortFuseDoHost("o consumidor escolhido é o Deep Fried Chicken");
+                plan.Warnings.Add(
+                    $"Motor Deep Fried Chicken no host64 ({profile.PassCount} passada(s)): " + DeepFriedChicken.PassoManual(profile.PassCount));
+            }
+            else if (profile.UsesShortFuseNoHost64)
+            {
+                // EXPERIMENTAL: o addon do ShortFuse dentro do host64. Ver ShortFuseNoHost64.
+                Copy(kit.RenodxDlssShortFuse, host64, ShortFuseDlss.Addon);
+                var iniHost = Path.Combine(host64, ShortFuseNoHost64.Ini);
+                plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
+                    $"Gerar host64\\ReShade.ini ([ADDON] LoadFromDllMain={ShortFuseDlss.Addon}, [{ShortFuseDlss.Secao}] {ShortFuseDlss.ChavePassadas}={profile.PassCount}; o resto do ini fica)",
+                    null, iniHost));
+                RemoverKrishDoHost("o consumidor escolhido é o RenoDX DLSS do ShortFuse (dois addons de NR no host dobrariam a passada)");
+                RemoverOptiScalerDoHost("o consumidor escolhido é o RenoDX DLSS do ShortFuse");
+                RemoverChickenDoHost("o consumidor escolhido é o RenoDX DLSS do ShortFuse");
+                plan.Warnings.Add(
+                    $"Motor RenoDX DLSS (ShortFuse) DENTRO do host64 ({profile.PassCount} passada(s)): validado no Silent Hill 2 EE " +
+                    "(09/09/2026) — foi o motor em que o x2+ apareceu na tela. O addon intercepta a chamada de DLSS que o host faz; o Feeder não o reconhece como consumidor " +
+                    "(o host loga \"renodx-dlss5*.addon64 not found\" e segue servindo DLAA). A prova de que rodou é o " +
+                    "host64\\ReShade.log (item 25 da verificação). Se o host cair, teste menos passadas.");
+            }
+            else
+            {
+                Copy(kit.RenodxAddon64, host64, "renodx-dlss5.addon64");
+                RemoverOptiScalerDoHost("o consumidor escolhido é o addon do Krish");
+                RemoverChickenDoHost("o consumidor escolhido é o addon do Krish");
+                RemoverShortFuseDoHost("o consumidor escolhido é o addon do Krish");
+            }
         }
 
         // d3dcompiler_47.dll do jogo velho demais para cs_5_1 (Spider-Man Remastered traz o
@@ -385,7 +538,22 @@ public static class InstallPlanBuilder
         if (route == InstallRoute.C)
         {
             var renderer = profile.RendererFolder ?? exe;
-            var wrapperSrc = profile.Api == GraphicsApi.D3D8 ? kit.DgVoodooD3D8X86 : kit.DgVoodooD3D9X86;
+
+            // DirectX 8 com o D3D8.dll ocupado por uma mod que converte para DirectX 9 e
+            // prefere um d3d9.dll local (Silent Hill 2 Enhanced Edition): a mod fica, e o
+            // dgVoodoo entra como D3D9.dll ao lado dela. Ver D3d8to9Wrapper.
+            var marcaD3d8to9 = profile.AtualizarD3d8ViaD3D9();
+            if (marcaD3d8to9 is not null)
+            {
+                plan.Warnings.Add(
+                    $"O D3D8.dll desta pasta é {D3d8to9Wrapper.Descrever(marcaD3d8to9)}. Ele FICA: converte o " +
+                    "jogo para DirectX 9 (d3d8to9) e carrega de preferência um d3d9.dll da própria pasta, " +
+                    "então o dgVoodoo entra como D3D9.dll ao lado dele — a mod continua inteira e o dgVoodoo " +
+                    "traduz o DirectX 9 dela para D3D11, onde o ReShade e o Feeder entram. Se a mod estiver " +
+                    "com d3d8to9 = 0 no d3d8.ini, volte para 1 (é o padrão): sem isso o D3D9.dll não é usado.");
+            }
+            var wrapperSrc = profile.DgVoodooWrapperName.Equals("D3D8.dll", StringComparison.OrdinalIgnoreCase)
+                ? kit.DgVoodooD3D8X86 : kit.DgVoodooD3D9X86;
 
             // O dgVoodoo só funciona com ESTE nome de arquivo — e ele pode já estar ocupado
             // por outro wrapper que o usuário pôs ali de propósito. Foi o Dead Space 2: o
@@ -427,6 +595,13 @@ public static class InstallPlanBuilder
                     break;
             }
             Copy(kit.DgVoodooCpl, renderer, "dgVoodooCpl.exe");
+            if (options.ForcarJanela)
+                plan.Warnings.Add(
+                    "Forçar janela (rota C): além do ForceWindowed do ReShade, o dgVoodoo.conf sai com FullScreenMode=false, " +
+                    "ScalingMode=stretched_ar e WindowedAttributes=borderless, fullscreensize — o jogo pede tela cheia exclusiva " +
+                    "e recebe uma janela do tamanho da tela. É para jogo que só tem tela cheia: em exclusiva o host64 e o painel " +
+                    "brigam com o swapchain do jogo (o Enslaved congelou no aperto de mão, 10/09/2026). Desmarque se o jogo tiver " +
+                    "opção de janela própria.");
             if (kit.DgVoodooConf is not null)
                 plan.Actions.Add(new PlanAction(PlanActionKind.PatchDgVoodooConf,
                     $"Copiar e ajustar dgVoodoo.conf → {Rel(profile, Path.Combine(renderer, "dgVoodoo.conf"))}",
@@ -468,13 +643,23 @@ public static class InstallPlanBuilder
 
         if (profile.Api == GraphicsApi.OpenGL)
         {
+            plan.Warnings.Add(profile.Architecture == PeArchitecture.X86
+                ? "OpenGL 32-bit: o projeto do Feeder validou este caminho (Worms Ultimate Mayhem e KOTOR) — o addon32 " +
+                  "manda o quadro para o mesmo host64 dos jogos D3D11, e o ReShade entra como opengl32.dll. Ninguém " +
+                  "deste projeto rodou um jogo GL ainda. Provedor de vetores: só o LumeniteFX Kernel foi confirmado " +
+                  "compilando no OpenGL (VORT e Launchpad não foram testados lá); se o item 13 reclamar, troque o provedor."
+                : "OpenGL 64-bit: o Feeder faz o caminho em processo (relatado funcionando no MX Bikes pelo projeto dele; " +
+                  "ninguém deste projeto rodou). O ReShade entra como opengl32.dll. O addon do Krish precisa armar " +
+                  "num processo onde o ReShade é opengl32.dll — o autor do Feeder registra isso como não medido. " +
+                  "Se o jogo tiver opção de renderizador DirectX, PREFIRA ela. Depois de abrir o jogo uma vez, " +
+                  "clique em Verificar: o log dirá se o addon foi aceito.");
+        }
+        if (profile.Api == GraphicsApi.D3D10)
+        {
             plan.Warnings.Add(
-                "OpenGL está FORA da matriz validada da especificação (seção 2), e o addon do Feeder " +
-                "anuncia suporte a D3D11/D3D12/Vulkan. O ReShade é instalado com o nome certo " +
-                "(opengl32.dll) e deve carregar e abrir o overlay, mas o DLSS 5 pode não engatar. " +
-                "Se o jogo tiver opção de renderizador DirectX nas configurações, PREFIRA ela — " +
-                "aí o caminho é o validado. Depois de abrir o jogo uma vez, volte e clique em " +
-                "Verificar: o log dirá se o addon foi aceito.");
+                "Direct3D 10 (32-bit): o Feeder 0.13.1+ aceita nativo, sem dgVoodoo. O único provedor de vetores que " +
+                "compila em shader model 4 é o LumeniteFX Kernel (não vem no kit — licença proíbe redistribuir; ver " +
+                "VERSOES.md). Com VORT ou Launchpad o DLSS roda sem vetores (nítido parado, borrado em movimento).");
         }
 
         if (profile.Api == GraphicsApi.D3D8)
@@ -576,6 +761,12 @@ public static class InstallPlanBuilder
     /// <summary>Quem está com o nome que o dgVoodoo precisa.</summary>
     private enum Ocupante { Ninguem, DxWrapper, Outro }
 
+    private static string? LerTexto(string? caminho)
+    {
+        try { return caminho is not null && File.Exists(caminho) ? File.ReadAllText(caminho) : null; }
+        catch { return null; }
+    }
+
     /// <summary>
     /// Um dgVoodoo já instalado (nosso ou não) conta como ninguém: é o mesmo programa,
     /// pode ser sobrescrito como sempre, e há backup.
@@ -600,10 +791,8 @@ public static class InstallPlanBuilder
             return "Jogo 32-bit em Vulkan não é suportado (o addon32 exige Direct3D 11). " +
                    "Se o jogo também oferecer D3D9, troque a API para D3D9 (rota C).";
         if (p.Api == GraphicsApi.D3D10)
-            return "Direct3D 10 não é suportado por este fluxo.";
-        if (p.Api == GraphicsApi.OpenGL && p.Architecture == PeArchitecture.X86)
-            return "Jogo 32-bit em OpenGL não é suportado: o addon32 do Feeder só aceita Direct3D 11. " +
-                   "Se o jogo oferecer um renderizador DirectX nas configurações, troque para ele.";
+            return "Direct3D 10 em executável 64-bit não tem caminho no Feeder (em 32-bit tem, pelo host64). " +
+                   "Se o jogo oferecer D3D11 ou D3D9 nas configurações, troque para ele.";
         if (p.Api == GraphicsApi.D3D8 && p.Architecture == PeArchitecture.X64)
             return "DirectX 8 em executável 64-bit não existe na prática, e o dgVoodoo2 só traz o " +
                    "wrapper x86. Confira a arquitetura e a API detectadas.";
