@@ -162,6 +162,15 @@ igual instalado como D3D11 e como D3D9 (10/09/2026, 13:05); o `ReShade.log` do j
 nos dois casos porque o dgVoodoo, quando está, é o `d3d9.dll` local e nunca aparece no log — o
 D3D11 que aparece é o que ele cria. A rota é detalhe; o que trava é a tela cheia exclusiva.
 
+## "failed to lock vertex buffer" (engine Source: Black Mesa)
+
+É a engine Source dizendo que a memória do processo acabou. Um exe 32-bit sem a flag LAA
+(Large Address Aware) enxerga 2 GB, e dentro deles moram o jogo, o dgVoodoo, o ReShade, as
+texturas compartilhadas do feed e o driver. A verificação (item 5) lê a flag no exe que sobe
+(no Source é o stub da raiz, `bms.exe`/`hl2.exe`) e, se faltar, manda aplicar o 4GB Patch
+(NTCore). Se o erro continuar com a flag, "Isolar a causa" sem o Feeder diz se são as texturas
+do feed.
+
 ## Tecla para ligar e desligar o DLSS 5 sem abrir o painel
 
 O instalador grava no preset do ReShade a tecla de alternância da technique "DLSS 5 Feed"

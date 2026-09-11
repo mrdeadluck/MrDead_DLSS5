@@ -38,6 +38,35 @@ public static class PeFile
     }
 
     /// <summary>
+    /// IMAGE_FILE_LARGE_ADDRESS_AWARE (0x0020) no Characteristics do cabeçalho COFF: um exe
+    /// 32-bit com a flag enxerga 4 GB de espaço de endereço num Windows 64-bit; sem ela, 2 GB.
+    /// Importa em jogo 32-bit pesado atrás do dgVoodoo + ReShade + feed: o wrapper e o driver
+    /// moderno consomem o espaço do processo, e quando ele acaba a engine Source responde com
+    /// "failed to lock vertex buffer in CMeshDX8::LockVertexBuffer" (Black Mesa, 11/09/2026).
+    /// Numa engine tipo Source a flag fica no exe-stub (bms.exe/hl2.exe), não em bin\.
+    /// Nunca lança; null quando não dá para ler.
+    /// </summary>
+    public static bool? IsLargeAddressAware(string? path)
+    {
+        try
+        {
+            if (path is null || !File.Exists(path)) return null;
+            using var fs = File.OpenRead(path);
+            using var br = new BinaryReader(fs);
+            if (fs.Length < 0x40 || br.ReadUInt16() != 0x5A4D) return null;
+            fs.Position = 0x3C;
+            uint peOffset = br.ReadUInt32();
+            if (peOffset + 24 > fs.Length) return null;
+            fs.Position = peOffset;
+            if (br.ReadUInt32() != 0x00004550) return null;
+            fs.Position = peOffset + 22; // Machine(2) Sections(2) Stamp(4) Symbols(4) NumSymbols(4) OptSize(2) -> Characteristics
+            ushort characteristics = br.ReadUInt16();
+            return (characteristics & 0x0020) != 0;
+        }
+        catch { return null; }
+    }
+
+    /// <summary>
     /// Lê os nomes das DLLs importadas estaticamente pelo PE (minúsculas).
     /// Serve como dica de API gráfica; muitos jogos carregam D3D dinamicamente,
     /// então lista vazia não prova nada. Nunca lança.

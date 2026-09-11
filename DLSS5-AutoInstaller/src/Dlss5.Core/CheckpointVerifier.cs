@@ -552,6 +552,30 @@ public static class CheckpointVerifier
         }
 
         // 5 — dgVoodoo (rota C)
+        // 5b — jogo 32-bit: o espaço de endereço do processo. Sem a flag LAA são 2 GB para o jogo
+        // + dgVoodoo + ReShade + feed (texturas compartilhadas 2560x1440) + driver; quando acaba, a
+        // engine Source mostra "failed to lock vertex buffer in CMeshDX8::LockVertexBuffer"
+        // (Black Mesa, 11/09/2026). A flag fica no exe que sobe (no Source, o stub da raiz).
+        if (profile.Architecture == PeArchitecture.X86 && route is InstallRoute.B or InstallRoute.C)
+        {
+            var laa = PeFile.IsLargeAddressAware(profile.RealExePath);
+            var nomeExe = Path.GetFileName(profile.RealExePath ?? "");
+            r.Add(new CheckResult(5, "Exe 32-bit com 4 GB de endereço (LAA)",
+                laa == true ? CheckStatus.Pass : laa == false ? CheckStatus.Warning : CheckStatus.Manual,
+                laa == true
+                    ? $"{nomeExe} tem IMAGE_FILE_LARGE_ADDRESS_AWARE: o processo enxerga 4 GB."
+                    : laa == false
+                        ? $"{nomeExe} NÃO tem a flag LAA: o processo fica em 2 GB, e o dgVoodoo + ReShade + feed + driver moderno " +
+                          "moram dentro desses 2 GB. Quando acabam, o jogo cai com erro de memória — na engine Source, " +
+                          "\"failed to lock vertex buffer in CMeshDX8::LockVertexBuffer\" (Black Mesa)."
+                        : "Não deu para ler o cabeçalho do exe.",
+                laa == false
+                    ? "Aplique o 4GB Patch (Large Address Aware) no exe — ferramenta \"4GB Patch\" da NTCore ou \"Large Address " +
+                      "Aware\" (ele faz backup; a Steam repõe o original se você verificar a integridade). Depois abra o jogo de novo. " +
+                      "Se o erro continuar, teste \"Isolar a causa\" sem o Feeder: se some, é a memória das texturas do feed."
+                    : null));
+        }
+
         if (route == InstallRoute.C)
         {
             var renderer = profile.RendererFolder ?? exe;

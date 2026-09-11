@@ -1325,6 +1325,37 @@ public class KitResolverTests
     }
 }
 
+public class PeFileLaaTests
+{
+    private static string Pe(ushort characteristics)
+    {
+        // MZ, e_lfanew=0x40, "PE\0\0", Machine x86, ..., Characteristics no offset PE+22.
+        var b = new byte[0x60];
+        b[0] = (byte)'M'; b[1] = (byte)'Z';
+        BitConverter.GetBytes(0x40u).CopyTo(b, 0x3C);
+        b[0x40] = (byte)'P'; b[0x41] = (byte)'E';
+        BitConverter.GetBytes((ushort)0x014C).CopyTo(b, 0x44);
+        BitConverter.GetBytes(characteristics).CopyTo(b, 0x40 + 22);
+        var p = Path.Combine(Path.GetTempPath(), "dlss5laa_" + Guid.NewGuid().ToString("N") + ".exe");
+        File.WriteAllBytes(p, b);
+        return p;
+    }
+
+    [Fact]
+    public void LeAFlagLargeAddressAwareDoCabecalhoCoff()
+    {
+        var com = Pe(0x0102 | 0x0020); var sem = Pe(0x0102);
+        try
+        {
+            Assert.True(PeFile.IsLargeAddressAware(com));
+            Assert.False(PeFile.IsLargeAddressAware(sem));
+            Assert.Null(PeFile.IsLargeAddressAware(Path.Combine(Path.GetTempPath(), "nao-existe-" + Guid.NewGuid().ToString("N") + ".exe")));
+            Assert.Null(PeFile.IsLargeAddressAware(null));
+        }
+        finally { File.Delete(com); File.Delete(sem); }
+    }
+}
+
 public class GameDetectorTests
 {
     /// <summary>PE mínimo: só o que o GetArchitecture lê (MZ, offset em 0x3C, "PE\0\0", machine).</summary>

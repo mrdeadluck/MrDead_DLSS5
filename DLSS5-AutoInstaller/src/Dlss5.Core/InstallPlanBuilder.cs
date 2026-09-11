@@ -351,6 +351,14 @@ public static class InstallPlanBuilder
             // ConteudoGerado) E põe na pasta o addon que lê essa chave: no ReShade 6 a chave
             // sozinha é letra morta (ver JanelaForcada). Vale para QUALQUER jogo, tenha ou não
             // opção de janela — em tela cheia exclusiva o host64 congela no aperto de mão (Enslaved).
+            // Exe 32-bit sem LAA: 2 GB para tudo (jogo + dgVoodoo + ReShade + feed + driver). Black
+            // Mesa (11/09/2026): "failed to lock vertex buffer in CMeshDX8::LockVertexBuffer".
+            if (PeFile.IsLargeAddressAware(profile.RealExePath) == false)
+                plan.Warnings.Add(
+                    $"{Path.GetFileName(profile.RealExePath ?? "o exe")} não é LAA (4 GB aware): o processo 32-bit fica em 2 GB, e o " +
+                    "dgVoodoo/ReShade/feed moram lá dentro. Jogo pesado pode cair com erro de memória (na engine Source: " +
+                    "\"failed to lock vertex buffer in CMeshDX8::LockVertexBuffer\", visto no Black Mesa). Se acontecer, aplique " +
+                    "o 4GB Patch (NTCore) no exe. A verificação confere a flag.");
             var addonJanela = Path.Combine(exe, JanelaForcada.Addon32);
             if (options.ForcarJanela)
             {

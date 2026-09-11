@@ -41,4 +41,5 @@
 # 10/09/2026 05:45 — pacote refeito: "forçar janela" ja vem marcado em instalacao nova de jogo 32-bit (rota B/C)
 # 10/09/2026 16:30 — pacote refeito: entra o swapchain_override.addon32/64 (forçar janela no ReShade 6)
 # 10/09/2026 17:05 — pacote refeito: opção "Tecla liga/desliga do DLSS 5" (F6) gravada no preset
+# 11/09/2026 — pacote refeito: verificação lê a flag LAA do exe 32-bit (Black Mesa: failed to lock vertex buffer)
 versao=v0.15.1
