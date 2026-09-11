@@ -1342,6 +1342,44 @@ public class PeFileLaaTests
     }
 
     [Fact]
+    public void Patch4Gb_LigaAFlagComBackupEEhIdempotente()
+    {
+        var exe = Pe(0x0102);
+        try
+        {
+            Assert.True(Patch4Gb.Cabe(exe));
+            var logs = new List<string>();
+            Patch4Gb.Aplicar(exe, logs.Add);
+            Assert.True(PeFile.IsLargeAddressAware(exe));
+            Assert.True(File.Exists(Patch4Gb.CaminhoDoBackup(exe)));
+            Assert.False(PeFile.IsLargeAddressAware(Patch4Gb.CaminhoDoBackup(exe)));
+            Assert.False(Patch4Gb.Cabe(exe));
+            Patch4Gb.Aplicar(exe, logs.Add);
+            Assert.Contains(logs, l => l.Contains("já tem a flag", StringComparison.Ordinal));
+            Assert.True(Patch4Gb.Reverter(exe));
+            Assert.False(PeFile.IsLargeAddressAware(exe));
+            Assert.False(File.Exists(Patch4Gb.CaminhoDoBackup(exe)));
+        }
+        finally { File.Delete(exe); var b = Patch4Gb.CaminhoDoBackup(exe); if (File.Exists(b)) File.Delete(b); }
+    }
+
+    [Fact]
+    public void Patch4Gb_RecusaExe64Bit()
+    {
+        var b = new byte[0x60];
+        b[0] = (byte)'M'; b[1] = (byte)'Z'; BitConverter.GetBytes(0x40u).CopyTo(b, 0x3C);
+        b[0x40] = (byte)'P'; b[0x41] = (byte)'E'; BitConverter.GetBytes((ushort)0x8664).CopyTo(b, 0x44);
+        var exe = Path.Combine(Path.GetTempPath(), "dlss5laa64_" + Guid.NewGuid().ToString("N") + ".exe");
+        File.WriteAllBytes(exe, b);
+        try
+        {
+            Assert.False(Patch4Gb.Cabe(exe));
+            Assert.Throws<InvalidOperationException>(() => Patch4Gb.Aplicar(exe));
+        }
+        finally { File.Delete(exe); }
+    }
+
+    [Fact]
     public void LeAFlagLargeAddressAwareDoCabecalhoCoff()
     {
         var com = Pe(0x0102 | 0x0020); var sem = Pe(0x0102);

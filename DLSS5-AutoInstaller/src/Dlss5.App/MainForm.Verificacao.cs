@@ -20,6 +20,7 @@ public sealed partial class MainForm
     private readonly ComboBox _cboPlaca = new();
     private readonly CheckBox _chkTnL = new();
     private readonly Button _btnRenodx = Ui.Secondary("Testar sem o RenoDX");
+    private readonly Button _btnLaa = new();
     private readonly Button _btnFeeder = Ui.Secondary("Testar sem o Feeder");
     private readonly Button _btnSoReShade = Ui.Secondary("Testar só o ReShade");
     // O runtime do DLSS 5 pelo hash: quando o do kit é remendo/original-só-RTX-50, este

@@ -42,4 +42,5 @@
 # 10/09/2026 16:30 — pacote refeito: entra o swapchain_override.addon32/64 (forçar janela no ReShade 6)
 # 10/09/2026 17:05 — pacote refeito: opção "Tecla liga/desliga do DLSS 5" (F6) gravada no preset
 # 11/09/2026 — pacote refeito: verificação lê a flag LAA do exe 32-bit (Black Mesa: failed to lock vertex buffer)
+# 11/09/2026 — pacote refeito: botão "Aplicar 4 GB (LAA) no exe" na verificação
 versao=v0.15.1

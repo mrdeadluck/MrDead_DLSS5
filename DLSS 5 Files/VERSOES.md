@@ -167,9 +167,12 @@ D3D11 que aparece é o que ele cria. A rota é detalhe; o que trava é a tela ch
 É a engine Source dizendo que a memória do processo acabou. Um exe 32-bit sem a flag LAA
 (Large Address Aware) enxerga 2 GB, e dentro deles moram o jogo, o dgVoodoo, o ReShade, as
 texturas compartilhadas do feed e o driver. A verificação (item 5) lê a flag no exe que sobe
-(no Source é o stub da raiz, `bms.exe`/`hl2.exe`) e, se faltar, manda aplicar o 4GB Patch
-(NTCore). Se o erro continuar com a flag, "Isolar a causa" sem o Feeder diz se são as texturas
-do feed.
+(no Source é o stub da raiz, `bms.exe`/`hl2.exe`) e, se faltar, mostra o botão **"Aplicar 4 GB
+(LAA) no exe"** na tela de verificação: o instalador liga o bit (`Patch4Gb`, o mesmo 1 bit que a
+ferramenta "4GB Patch" da NTCore liga) e guarda o original ao lado como `<exe>.4gb-original`. A
+desinstalação não desfaz (o jogo abre normalmente com a flag); a Steam repõe o original ao
+verificar a integridade. Se o erro continuar com a flag, "Testar sem o Feeder" diz se são as
+texturas do feed.
 
 ## Tecla para ligar e desligar o DLSS 5 sem abrir o painel
 
