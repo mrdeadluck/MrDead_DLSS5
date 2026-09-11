@@ -351,8 +351,14 @@ public static class InstallPlanBuilder
             // ConteudoGerado) E põe na pasta o addon que lê essa chave: no ReShade 6 a chave
             // sozinha é letra morta (ver JanelaForcada). Vale para QUALQUER jogo, tenha ou não
             // opção de janela — em tela cheia exclusiva o host64 congela no aperto de mão (Enslaved).
-            // Exe 32-bit sem LAA: 2 GB para tudo (jogo + dgVoodoo + ReShade + feed + driver). Black
-            // Mesa (11/09/2026): "failed to lock vertex buffer in CMeshDX8::LockVertexBuffer".
+            // Jogo que traz o próprio DXVK (Black Mesa): no "Play Default" da Steam o D3D9 é Vulkan e
+            // nada disto entra. Só o "Play Direct3D 9 Fallback" serve.
+            if (profile.IsSourceEngine && Dxvk.EmbutidoNaSource(profile.RendererFolder))
+                plan.Warnings.Add(
+                    "Este jogo traz o próprio DXVK (bin\\thirdparty\\dxvk-windows-x86). Na Steam, abra pela opção \"Play Direct3D 9 " +
+                    "Fallback\" — no \"Play Default\" o Direct3D 9 é traduzido para Vulkan pelo DXVK, o dgVoodoo e o feed ficam de " +
+                    "fora e o jogo cai com \"failed to lock vertex buffer\" (Black Mesa). A verificação detecta o log do DXVK.");
+            // Exe 32-bit sem LAA: 2 GB para tudo (jogo + dgVoodoo + ReShade + feed + driver).
             if (PeFile.IsLargeAddressAware(profile.RealExePath) == false)
                 plan.Warnings.Add(
                     $"{Path.GetFileName(profile.RealExePath ?? "o exe")} não é LAA (4 GB aware): o processo 32-bit fica em 2 GB, e o " +

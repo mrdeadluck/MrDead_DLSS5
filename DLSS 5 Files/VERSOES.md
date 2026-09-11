@@ -164,7 +164,15 @@ D3D11 que aparece é o que ele cria. A rota é detalhe; o que trava é a tela ch
 
 ## "failed to lock vertex buffer" (engine Source: Black Mesa)
 
-É a engine Source dizendo que a memória do processo acabou. Um exe 32-bit sem a flag LAA
+**No Black Mesa a causa foi outra: o DXVK do próprio jogo.** Ele traz o DXVK em
+`bin\thirdparty\dxvk-windows-x86\` e a Steam abre por padrão nele ("Play Default"): o Direct3D 9
+vira Vulkan, o dgVoodoo e o feed 32-bit ficam de fora, e a engine cai com esse erro (é o mesmo do
+Black Mesa no Linux/Proton, onde o D3D9 também é o DXVK). Prova: `bms_d3d9.log` ao lado do exe,
+começando por `info:  DXVK: v2.6.2`. Solução: abrir pela opção **"Play Direct3D 9 Fallback"** da
+Steam. A detecção avisa quando o jogo traz o DXVK, e a verificação (item 5c) acusa quando o log do
+DXVK existe. O `bms.exe` já tinha a flag LAA — o que segue abaixo vale para exe 32-bit sem ela.
+
+Fora isso, o mesmo erro também é a engine Source dizendo que a memória do processo acabou. Um exe 32-bit sem a flag LAA
 (Large Address Aware) enxerga 2 GB, e dentro deles moram o jogo, o dgVoodoo, o ReShade, as
 texturas compartilhadas do feed e o driver. A verificação (item 5) lê a flag no exe que sobe
 (no Source é o stub da raiz, `bms.exe`/`hl2.exe`) e, se faltar, mostra o botão **"Aplicar 4 GB

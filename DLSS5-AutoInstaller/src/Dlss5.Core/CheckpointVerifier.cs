@@ -552,6 +552,18 @@ public static class CheckpointVerifier
         }
 
         // 5 — dgVoodoo (rota C)
+        // 5c — o DXVK do próprio jogo rodou (Black Mesa, "Play Default"): o D3D9 virou Vulkan, o
+        // dgVoodoo e o feed ficaram fora, e a engine Source cai com "failed to lock vertex buffer".
+        if (route is InstallRoute.B or InstallRoute.C && Dxvk.Ativo(profile.RealExePath) is { } dxvk)
+        {
+            r.Add(new CheckResult(5, "DXVK do próprio jogo ativo (Direct3D 9 virou Vulkan)", CheckStatus.Fail,
+                $"{Path.GetFileName(dxvk.Log)} existe ao lado do exe e se anuncia como DXVK {dxvk.Versao}: o jogo abriu com o DXVK " +
+                "dele como Direct3D 9 (Vulkan). Nesse modo o dgVoodoo e o feed 32-bit não participam (Vulkan 32-bit não tem " +
+                "caminho), e a engine Source responde com \"failed to lock vertex buffer in CMeshDX8::LockVertexBuffer\".",
+                "Na Steam, abra o jogo pela opção \"Play Direct3D 9 Fallback\" (a janela que aparece ao clicar em Jogar), não pelo " +
+                "\"Play Default\". Depois apague esse log do DXVK e clique em Verificar de novo: ele não pode voltar a nascer."));
+        }
+
         // 5b — jogo 32-bit: o espaço de endereço do processo. Sem a flag LAA são 2 GB para o jogo
         // + dgVoodoo + ReShade + feed (texturas compartilhadas 2560x1440) + driver; quando acaba, a
         // engine Source mostra "failed to lock vertex buffer in CMeshDX8::LockVertexBuffer"

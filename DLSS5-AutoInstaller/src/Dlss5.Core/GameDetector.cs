@@ -216,6 +216,10 @@ public static class GameDetector
             profile.RendererFolder = binDir;
             profile.Api = GraphicsApi.D3D9;
             notes.Add("Engine Source detectada (bin\\shaderapi*.dll): D3D9 forçado com -dxlevel 95; dgVoodoo vai em bin\\.");
+            if (Dxvk.EmbutidoNaSource(binDir))
+                notes.Add("Este jogo traz o PRÓPRIO DXVK (bin\\thirdparty\\dxvk-windows-x86): na Steam, abra SEMPRE pela opção " +
+                          "\"Play Direct3D 9 Fallback\". No \"Play Default\" o Direct3D 9 vira Vulkan pelo DXVK, o dgVoodoo e o feed " +
+                          "ficam fora e a engine cai com \"failed to lock vertex buffer\" (Black Mesa, 11/09/2026).");
             return;
         }
 

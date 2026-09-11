@@ -1325,6 +1325,39 @@ public class KitResolverTests
     }
 }
 
+public class DxvkTests
+{
+    [Fact]
+    public void ReconheceOLogDoDxvkAoLadoDoExe()
+    {
+        var pasta = Path.Combine(Path.GetTempPath(), "dlss5dxvk_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(pasta);
+        try
+        {
+            var exe = Path.Combine(pasta, "bms.exe");
+            File.WriteAllText(exe, "x");
+            Assert.Null(Dxvk.Ativo(exe));
+            // Black Mesa (11/09/2026): bms_d3d9.log começa assim.
+            File.WriteAllText(Path.Combine(pasta, "bms_d3d9.log"),
+                "info:  Game: bms.exe\r\ninfo:  DXVK: v2.6.2\r\ninfo:  Build: x86 gcc 15.1.0\r\n");
+            var ativo = Dxvk.Ativo(exe);
+            Assert.NotNull(ativo);
+            Assert.Equal("v2.6.2", ativo!.Value.Versao);
+            Assert.EndsWith("bms_d3d9.log", ativo.Value.Log);
+            // Um log qualquer com esse nome, sem a assinatura, não conta.
+            File.WriteAllText(Path.Combine(pasta, "bms_d3d9.log"), "algo que nao e o dxvk");
+            Assert.Null(Dxvk.Ativo(exe));
+            // DXVK embutido na Source: bin\thirdparty\dxvk-windows-x86\d3d9.dll.
+            var bin = Path.Combine(pasta, "bin");
+            Assert.False(Dxvk.EmbutidoNaSource(bin));
+            Directory.CreateDirectory(Path.Combine(bin, "thirdparty", "dxvk-windows-x86"));
+            File.WriteAllText(Path.Combine(bin, "thirdparty", "dxvk-windows-x86", "d3d9.dll"), "dxvk");
+            Assert.True(Dxvk.EmbutidoNaSource(bin));
+        }
+        finally { Directory.Delete(pasta, true); }
+    }
+}
+
 public class PeFileLaaTests
 {
     private static string Pe(ushort characteristics)
