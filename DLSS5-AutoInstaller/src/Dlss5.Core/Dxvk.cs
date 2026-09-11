@@ -14,7 +14,7 @@ namespace Dlss5.Core;
 public static class Dxvk
 {
     /// <summary>Pasta relativa ao renderizador onde o Black Mesa guarda o DXVK dele.</summary>
-    public const string PastaEmbutidaSource = @"thirdparty\dxvk-windows-x86";
+    public static readonly string PastaEmbutidaSource = Path.Combine("thirdparty", "dxvk-windows-x86");
 
     /// <summary>O jogo traz o próprio DXVK (Source: bin\thirdparty\dxvk-windows-x86\d3d9.dll).</summary>
     public static bool EmbutidoNaSource(string? rendererFolder)
