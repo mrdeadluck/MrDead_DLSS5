@@ -168,6 +168,13 @@ public sealed partial class MainForm
         // Jogo 32-bit: o próprio host do Feeder prova a combinação driver × runtimes × consumidor
         // em 15 s, sem abrir jogo (é como o projeto do Feeder mediu o defeito do driver 616.64).
         bar.Controls.Add(Botao("Testar o host64…", async (_, _) => await TestarHost64Async()));
+        // Exe 32-bit sem a flag LAA: 2 GB para jogo + dgVoodoo + ReShade + feed + driver. Black Mesa
+        // caiu com "failed to lock vertex buffer". O botão liga o bit com backup ao lado.
+        _btnLaa.Text = "Aplicar 4 GB (LAA) no exe";
+        _btnLaa.Margin = new Padding(0, 4, 8, 4);
+        _btnLaa.Visible = false;
+        _btnLaa.Click += (_, _) => AplicarLaa();
+        bar.Controls.Add(_btnLaa);
         _btnRenodx.Margin = new Padding(0, 4, 8, 4);
         _btnRenodx.Click += (_, _) => TestarSemRenodx();
         bar.Controls.Add(_btnRenodx);
@@ -640,6 +647,36 @@ public sealed partial class MainForm
     /// original de volta e o travamento continuou, o que tira o arquivo da lista de
     /// suspeitos e deixa a interceptação dentro do processo. O mesmo botão religa.
     /// </summary>
+    private void AplicarLaa()
+    {
+        if (_profile is null) { Aviso("Faça a detecção primeiro."); return; }
+        if (_ocupado) { Status(Textos.OperacaoEmAndamento); return; }
+        var exe = _profile.RealExePath;
+        if (!Patch4Gb.Cabe(exe)) { _btnLaa.Visible = false; Status("O exe já tem a flag LAA (ou não é 32-bit)."); return; }
+        var rodando = Preflight.JogoRodando(exe);
+        if (rodando is not null) { Aviso("O jogo está aberto", $"Feche o jogo ({rodando}.exe) antes: o exe em uso não pode ser gravado."); return; }
+        var nome = Path.GetFileName(exe);
+        var ok = MessageBox.Show(this,
+            $"Ligar a flag Large Address Aware (4 GB) em {nome}?\n\n" +
+            "É 1 bit no cabeçalho do exe, o mesmo que a ferramenta \"4GB Patch\" da NTCore faz. O original fica ao lado como " +
+            $"{nome}{Patch4Gb.SufixoDoBackup}. A Steam repõe o exe original se você verificar a integridade dos arquivos — aí é só " +
+            "clicar aqui de novo.",
+            "Aplicar 4 GB (LAA) no exe", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+        if (ok != DialogResult.Yes) return;
+        try
+        {
+            using var etapa = _diario.Etapa("Aplicar 4 GB (LAA) no exe");
+            Patch4Gb.Aplicar(exe!, _diario.Info);
+            _btnLaa.Visible = false;
+            Status($"Flag LAA ligada em {nome}. Abra o jogo de novo e depois clique em Verificar.");
+            Dialogos.Informar(this, "Aplicar 4 GB (LAA) no exe", "Flag ligada",
+                $"{nome} agora enxerga 4 GB de espaço de endereço. Backup: {nome}{Patch4Gb.SufixoDoBackup}.\n\n" +
+                "Abra o jogo. Se o erro de memória (\"failed to lock vertex buffer\") sumir, era isso. Se continuar, use " +
+                "\"Testar sem o Feeder\" para ver se são as texturas do feed.");
+        }
+        catch (Exception ex) { Erro("Não consegui alterar o exe", ex); }
+    }
+
     private void TestarSemRenodx()
     {
         if (_profile is null) { Aviso("Faça a detecção primeiro."); return; }
@@ -828,6 +865,7 @@ public sealed partial class MainForm
         _btnFeeder.Text = _isolamento == EstadoIsolamento.SemFeeder ? "Religar o Feeder" : "Testar sem o Feeder";
         // Sem Feeder instalado (caminho direto) o teste não existe.
         _btnFeeder.Visible = _profile?.NeedsFeeder ?? false;
+        _btnLaa.Visible = _profile is not null && _profile.Architecture == PeArchitecture.X86 && Patch4Gb.Cabe(_profile.RealExePath);
         _btnSoReShade.Text = _isolamento == EstadoIsolamento.SoOReShade
             ? "Religar os addons"
             : "Testar só o ReShade";

@@ -570,9 +570,9 @@ public static class CheckpointVerifier
                           "\"failed to lock vertex buffer in CMeshDX8::LockVertexBuffer\" (Black Mesa)."
                         : "Não deu para ler o cabeçalho do exe.",
                 laa == false
-                    ? "Aplique o 4GB Patch (Large Address Aware) no exe — ferramenta \"4GB Patch\" da NTCore ou \"Large Address " +
-                      "Aware\" (ele faz backup; a Steam repõe o original se você verificar a integridade). Depois abra o jogo de novo. " +
-                      "Se o erro continuar, teste \"Isolar a causa\" sem o Feeder: se some, é a memória das texturas do feed."
+                    ? "Clique em \"Aplicar 4 GB (LAA) no exe\" aqui nesta tela: o instalador liga a flag (1 bit) e guarda o original " +
+                      $"ao lado como {nomeExe}{Patch4Gb.SufixoDoBackup}. É o mesmo que a ferramenta \"4GB Patch\" da NTCore faz. Depois abra o " +
+                      "jogo de novo. Se o erro continuar, teste \"Isolar a causa\" sem o Feeder: se some, é a memória das texturas do feed."
                     : null));
         }
 
