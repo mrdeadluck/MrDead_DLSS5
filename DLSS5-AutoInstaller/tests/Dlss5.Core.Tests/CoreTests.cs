@@ -6336,3 +6336,55 @@ public class UnrealNaoEhOpenGLTests
         finally { Directory.Delete(dir, true); }
     }
 }
+
+/// <summary>
+/// Outlast tem o mesmo OLGame.exe em Binaries\Win32 e Binaries\Win64; a Steam abre um só.
+/// Instalado no outro, o jogo abre como se não houvesse nada e não nasce log nenhum.
+/// </summary>
+public class GemeoDaOutraArquiteturaTests
+{
+    [Fact]
+    public void SemLogEComGemeoOItem7ApontaAOutraPasta()
+    {
+        var raiz = Path.Combine(Path.GetTempPath(), "dlss5-gemeo-" + Guid.NewGuid().ToString("N"));
+        var win64 = Path.Combine(raiz, "Binaries", "Win64");
+        var win32 = Path.Combine(raiz, "Binaries", "Win32");
+        Directory.CreateDirectory(win64);
+        Directory.CreateDirectory(win32);
+        try
+        {
+            var exe64 = Path.Combine(win64, "OLGame.exe");
+            File.WriteAllBytes(exe64, ApiNoGearsReloadedTests.PeComExport("Nada"));
+            Assert.Null(ApiDetector.GemeoDaOutraArquitetura(exe64));          // ainda sem o gêmeo
+            Assert.Null(ApiDetector.GemeoDaOutraArquitetura(@"C:\Jogos\Bin64\Game.exe"));
+            Assert.Null(ApiDetector.GemeoDaOutraArquitetura(null));
+
+            var perfil = new GameProfile
+            {
+                GameFolder = raiz,
+                RealExePath = exe64,
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D9,
+                RendererFolder = win64,
+            };
+            var c7 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 7);
+            Assert.Equal(CheckStatus.Manual, c7.State);
+            Assert.DoesNotContain("gêmeo", c7.Detail);
+
+            File.WriteAllBytes(Path.Combine(win32, "OLGame.exe"), new byte[1024]);
+            Assert.EndsWith(Path.Combine("Win32", "OLGame.exe"), ApiDetector.GemeoDaOutraArquitetura(exe64)!);
+            c7 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 7);
+            Assert.Equal(CheckStatus.Manual, c7.State);
+            Assert.Contains("gêmeo", c7.Detail);
+            Assert.Contains("Win32", c7.Detail);
+            Assert.Contains("Outro...", c7.FixHint!);
+            Assert.Contains("Gerenciador de Tarefas", c7.FixHint!);
+
+            // Com log, o gêmeo não interessa.
+            File.WriteAllText(Path.Combine(win64, "ReShade.log"), "INFO | Initializing crosire's ReShade version '6.8.0'\n");
+            c7 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 7);
+            Assert.DoesNotContain("gêmeo", c7.Detail);
+        }
+        finally { Directory.Delete(raiz, true); }
+    }
+}

@@ -329,6 +329,34 @@ public static class ApiDetector
         "Unreal Engine: as strings de OpenGL e Vulkan dentro do exe são dos RHIs embutidos e não contam — " +
         "no Windows o jogo abre em D3D11/D3D12 (o ReShade entra como dxgi.dll).";
 
+    /// <summary>
+    /// Unreal 3 costuma trazer o MESMO exe em Binaries\Win32 e Binaries\Win64 (Outlast), e a
+    /// Steam abre só um deles. Instalar no outro é instalar em pasta que o processo nunca
+    /// olha: nada carrega, nada gera log, e o jogo abre como se não houvesse instalação.
+    /// Devolve o caminho do gêmeo na outra arquitetura, se existir.
+    /// </summary>
+    public static string? GemeoDaOutraArquitetura(string? exePath)
+    {
+        if (string.IsNullOrWhiteSpace(exePath)) return null;
+        var partes = exePath.Replace('/', '\\').Split('\\');
+        if (partes.Length < 3) return null;
+        var pasta = partes[^2];
+        var binaries = partes[^3];
+        if (!binaries.Equals("Binaries", StringComparison.OrdinalIgnoreCase)) return null;
+        string? outra = pasta.Equals("Win64", StringComparison.OrdinalIgnoreCase) ? "Win32"
+            : pasta.Equals("Win32", StringComparison.OrdinalIgnoreCase) ? "Win64" : null;
+        if (outra is null) return null;
+        var gemeo = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(exePath)) ?? "", outra, partes[^1]);
+        try { return File.Exists(gemeo) ? gemeo : null; }
+        catch { return null; }
+    }
+
+    public const string DicaDoGemeo =
+        "Este jogo tem o mesmo exe em Binaries\\Win32 e Binaries\\Win64, e a Steam abre só um deles. Se o " +
+        "instalado não gera log, quem roda é o outro: Detecção → botão \"Outro...\" → aponte o exe da outra " +
+        "pasta e instale de novo (o 32-bit em D3D9 é a rota C, a validada). Para ter certeza de qual roda: " +
+        "com o jogo aberto, Gerenciador de Tarefas → Detalhes → o exe do jogo → clique direito → Abrir local do arquivo.";
+
     /// <summary>Exe da Unreal Engine: …-Shipping.exe, ou dentro de Binaries\Win64 / Binaries\Win32.</summary>
     public static bool EhUnreal(string? exePath)
     {

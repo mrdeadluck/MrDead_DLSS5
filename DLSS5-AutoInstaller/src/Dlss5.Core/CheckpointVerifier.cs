@@ -758,6 +758,18 @@ public static class CheckpointVerifier
                 GraphicsApi.D3D12 => nomeDoReShade.Equals("dxgi.dll", StringComparison.OrdinalIgnoreCase) ? "d3d12.dll" : "dxgi.dll",
                 _ => null,
             };
+            // Unreal 3 com Binaries\Win32 E Binaries\Win64 (Outlast): a Steam abre um só, e
+            // instalar no outro não deixa rastro nenhum. É a primeira coisa a conferir.
+            var gemeo = ApiDetector.GemeoDaOutraArquitetura(exePath);
+            if (gemeo is not null)
+            {
+                yield return new CheckResult(7, "ReShade carregou", CheckStatus.Manual,
+                    $"ReShade.log ainda não existe — e há um gêmeo deste exe em {Path.GetFileName(Path.GetDirectoryName(gemeo))}\\.",
+                    ApiDetector.DicaDoGemeo + " Se o log continuar não nascendo no exe certo, aí valem as " +
+                    "sobreposições (Steam, NVIDIA App, Discord, RivaTuner) e o outro nome de DLL.");
+                yield break;
+            }
+
             yield return new CheckResult(7, "ReShade carregou", CheckStatus.Manual,
                 "ReShade.log ainda não existe — abra o jogo uma vez.",
                 "Depois de abrir o jogo, volte aqui e clique em Verificar de novo. Se você JÁ abriu " +

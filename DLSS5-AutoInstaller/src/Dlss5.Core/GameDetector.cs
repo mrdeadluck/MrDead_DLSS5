@@ -74,6 +74,8 @@ public static class GameDetector
         if (bestRel.Contains("\\Binaries\\Win", StringComparison.OrdinalIgnoreCase))
             result.Notes.Add($"Unreal Engine detectada: o alvo é {bestRel}, não o exe da raiz " +
                              "(esse é só um atalho). Tudo vai para a pasta do binário real.");
+        if (ApiDetector.GemeoDaOutraArquitetura(best.Path) is { } gemeo)
+            result.Notes.Add($"Há um gêmeo deste exe em {Path.GetRelativePath(gameFolder, gemeo)}. " + ApiDetector.DicaDoGemeo);
 
         DetectApiAndRenderer(profile, result.Notes);
         DetectNativeDlss(profile, result.Notes);
