@@ -475,7 +475,9 @@ public sealed partial class MainForm
         _lblRoute.ForeColor = route == InstallRoute.Unsupported ? Ui.Bad : Ui.Ok;
         _lblRoute.Text = route switch
         {
-            InstallRoute.A => $"✔ Caminho A — 64-bit: ReShade ({_profile.ReShadeHookName}) + addons direto na pasta do executável.",
+            InstallRoute.A => _profile.NeedsDgVoodoo
+                ? $"✔ Caminho A + dgVoodoo2 — 64-bit D3D9: o D3D9.dll x64 do dgVoodoo2 traduz para D3D11; ReShade ({_profile.ReShadeHookName}) + addons na pasta do executável."
+                : $"✔ Caminho A — 64-bit: ReShade ({_profile.ReShadeHookName}) + addons direto na pasta do executável.",
             InstallRoute.B => "✔ Caminho B — 32-bit D3D11: addon32 na raiz e o resto do Feeder dentro de host64\\.",
             InstallRoute.C => $"✔ Caminho C — 32-bit {_profile.Api}: dgVoodoo2 ({_profile.DgVoodooWrapperName}) traduz para D3D11, mais o layout do caminho B.",
             _ => "✖ Sem caminho suportado para esta combinação. " +

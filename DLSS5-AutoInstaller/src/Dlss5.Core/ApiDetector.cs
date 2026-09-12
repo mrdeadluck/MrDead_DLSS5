@@ -20,6 +20,9 @@ public sealed class ApiDetection
     /// </summary>
     public bool ExeOpaco { get; init; }
 
+    /// <summary>Observações da detecção que não são pistas (o que foi ignorado e por quê).</summary>
+    public IReadOnlyList<string> Notas { get; init; } = Array.Empty<string>();
+
     /// <summary>
     /// Confiante quando há pista forte E folga sobre a segunda colocada. Um jogo que
     /// menciona duas APIs (comum: D3D11 e D3D12 no mesmo binário) cai fora daqui de
@@ -195,6 +198,7 @@ public static class ApiDetector
     {
         var scores = new Dictionary<GraphicsApi, int>();
         var evidence = new List<ApiEvidence>();
+        var notas = new List<string>();
         bool exeDeuPista = false;
 
         void Add(GraphicsApi api, int weight, string source)
@@ -233,10 +237,31 @@ public static class ApiDetector
         // 2. Texto dentro do exe: pega o que é carregado dinamicamente.
         if (exePath is not null)
         {
-            foreach (var m in MarkersFoundIn(exePath, ExeScanBudget))
+            var achados = MarkersFoundIn(exePath, ExeScanBudget).ToList();
+            bool unreal = EhUnreal(exePath);
+            bool x64 = PeFile.GetArchitecture(exePath) == PeArchitecture.X64;
+            bool falaDirect3D = achados.Any(m => m.Api is GraphicsApi.D3D11 or GraphicsApi.D3D12);
+            foreach (var m in achados)
             {
-                Add(m.Api, m.Weight, $"\"{m.Text}\" no exe");
                 exeDeuPista = true;
+                if (unreal && m.Api is GraphicsApi.OpenGL or GraphicsApi.Vulkan)
+                {
+                    // A Unreal embute os RHIs de OpenGL e Vulkan no exe, mas no Windows o
+                    // jogo abre em D3D11/D3D12. O Vampyr saía como "OpenGL" e o ReShade
+                    // entrava como opengl32.dll — nome que o jogo nunca carrega.
+                    if (!notas.Contains(NotaUnreal)) notas.Add(NotaUnreal);
+                    continue;
+                }
+                int peso = m.Weight;
+                string fonte = $"\"{m.Text}\" no exe";
+                if (x64 && falaDirect3D && m.Api == GraphicsApi.OpenGL)
+                {
+                    // Jogo 64-bit que cita OpenGL E Direct3D roda em Direct3D no Windows; o
+                    // OpenGL costuma ser o caminho alternativo (ou de outra plataforma).
+                    peso = Math.Max(1, m.Weight / 2);
+                    fonte += " (vale metade: o exe também fala D3D11/D3D12, e em Windows 64-bit o Direct3D é o padrão)";
+                }
+                Add(m.Api, peso, fonte);
             }
         }
 
@@ -296,7 +321,23 @@ public static class ApiDetector
             RunnerScore = ranked.Count > 1 ? second.Value : 0,
             Evidence = evidence,
             ExeOpaco = exePath is not null && File.Exists(exePath) && !exeDeuPista,
+            Notas = notas,
         };
+    }
+
+    public const string NotaUnreal =
+        "Unreal Engine: as strings de OpenGL e Vulkan dentro do exe são dos RHIs embutidos e não contam — " +
+        "no Windows o jogo abre em D3D11/D3D12 (o ReShade entra como dxgi.dll).";
+
+    /// <summary>Exe da Unreal Engine: …-Shipping.exe, ou dentro de Binaries\Win64 / Binaries\Win32.</summary>
+    public static bool EhUnreal(string? exePath)
+    {
+        if (string.IsNullOrWhiteSpace(exePath)) return false;
+        var norm = "\\" + exePath.Replace('/', '\\').ToLowerInvariant();
+        var nome = norm.Split('\\').Last();
+        if (nome.EndsWith(".exe", StringComparison.Ordinal)) nome = nome[..^4];
+        return nome.EndsWith("-shipping", StringComparison.Ordinal)
+               || norm.Contains("\\binaries\\win64\\") || norm.Contains("\\binaries\\win32\\");
     }
 
     /// <summary>O D3D12Core.dll do Agility SDK, na pasta D3D12\ ou solto ao lado do exe.</summary>

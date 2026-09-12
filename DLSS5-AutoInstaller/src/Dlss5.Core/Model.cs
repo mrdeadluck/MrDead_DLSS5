@@ -98,6 +98,10 @@ public sealed class GameProfile
                 {
                     GraphicsApi.D3D11 or GraphicsApi.D3D12 or GraphicsApi.Vulkan => InstallRoute.A,
                     GraphicsApi.OpenGL => InstallRoute.A,
+                    // D3D9 em 64-bit (Outlast, Unreal 3 x64): o dgVoodoo2 traz o D3D9.dll x64,
+                    // que traduz para D3D11 — daí em diante é o layout da rota A. D3D8 x64
+                    // não existe na prática e o kit não traz wrapper para ele.
+                    GraphicsApi.D3D9 => InstallRoute.A,
                     _ => InstallRoute.Unsupported,
                 };
             }
@@ -159,7 +163,8 @@ public sealed class GameProfile
     public bool NeedsFeeder => !UsesRenodxDirectPath;
 
     /// <summary>Precisa do dgVoodoo2 (rota C).</summary>
-    public bool NeedsDgVoodoo => Route == InstallRoute.C;
+    public bool NeedsDgVoodoo => Route == InstallRoute.C
+                                 || (Route == InstallRoute.A && Api == GraphicsApi.D3D9);
 
     /// <summary>
     /// Hospedar o ReShade dentro do REFramework em vez de injetá-lo como dxgi.dll.

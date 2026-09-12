@@ -521,23 +521,25 @@ public static class CheckpointVerifier
                 "Preset não encontrado.", "Rode a instalação."));
         }
 
-        // 5 — dgVoodoo (rota C)
-        if (route == InstallRoute.C)
+        // 5 — dgVoodoo (rota C, e o 64-bit em D3D9 da rota A)
+        if (profile.NeedsDgVoodoo)
         {
             var renderer = profile.RendererFolder ?? exe;
             var wrapper = profile.DgVoodooWrapperName;
+            var archDg = profile.Architecture == PeArchitecture.X64 ? PeArchitecture.X64 : PeArchitecture.X86;
+            var rotuloDg = archDg == PeArchitecture.X64 ? "x64" : "x86";
             // Encadeado atrás do DxWrapper, o dgVoodoo tem outro nome — e o D3D9.dll da
             // pasta é o DxWrapper, que passaria neste teste sem ser o que interessa.
             bool encadeado = DxWrapperChain.Encadeado(renderer, wrapper);
             var nomeDg = encadeado ? profile.DgVoodooChainedName : wrapper;
             var d3d9 = Path.Combine(renderer, nomeDg);
             var conf = Path.Combine(renderer, "dgVoodoo.conf");
-            bool d3d9Ok = File.Exists(d3d9) && PeFile.GetArchitecture(d3d9) == PeArchitecture.X86;
+            bool d3d9Ok = File.Exists(d3d9) && PeFile.GetArchitecture(d3d9) == archDg;
             r.Add(new CheckResult(5, "dgVoodoo2 na pasta do renderizador",
                 d3d9Ok ? CheckStatus.Pass : CheckStatus.Fail,
                 d3d9Ok
-                    ? $"{nomeDg} (x86) em {renderer}" + (encadeado ? " — encadeado atrás do DxWrapper." : "")
-                    : $"{nomeDg} x86 ausente em {renderer}",
+                    ? $"{nomeDg} ({rotuloDg}) em {renderer}" + (encadeado ? " — encadeado atrás do DxWrapper." : "")
+                    : $"{nomeDg} {rotuloDg} ausente em {renderer}",
                 d3d9Ok ? null : $"No Source o {wrapper} vai em bin\\, não na raiz."));
 
             if (encadeado)

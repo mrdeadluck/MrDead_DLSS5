@@ -367,6 +367,8 @@ Estado final HL2: dgVoodoo em `bin\`, ReShade `dxgi.dll` na raiz, overlays desli
 - `ReShade.log` de 982 bytes = placeholder "não fui carregado".
 - Tecla Home pode ser engolida por captura de teclado (Source/SDL). Alternativa: `[INPUT] KeyOverlay=45,0,0,0` (Insert), rodar em janela.
 - ReShade compila **todos** os `.fx` da pasta. Compilar ≠ ativar. Só técnicas marcadas rodam.
+- **Unreal Engine** (`…-Shipping.exe`, `Binaries\\Win64`): o exe embute os RHIs de OpenGL e Vulkan e as strings deles somavam mais que as de D3D11 (Vampyr saía como "OpenGL", o ReShade entrava como `opengl32.dll` e nunca carregava). O detector ignora OpenGL/Vulkan em exe da Unreal; fora dela, em 64-bit, OpenGL vale metade quando o exe também fala D3D11/D3D12.
+
 
 ### 8.4 Ordem de efeitos
 - Provedor de motion vectors **acima** do DLSS 5 Feed, sempre.
@@ -390,6 +392,8 @@ Estado final HL2: dgVoodoo em `bin\`, ReShade `dxgi.dll` na raiz, overlays desli
 - `VRAM=256MB` de fábrica causa crash de memória.
 - Watermark é o único teste confiável de que está ativo.
 - Versão 1.x é outro produto (Glide). Teste: o zip tem pasta `MS`?
+- **Jogo 64-bit em D3D9** (Outlast, Unreal 3 x64): o pacote traz `MS\\x64\\D3D9.dll`. Rota A + dgVoodoo — o wrapper x64 vai na pasta do renderizador, o ReShade entra como `dxgi.dll` e o Feeder/addons ficam na pasta do exe (sem host64). O item 5 confere o wrapper com a arquitetura do jogo. D3D8 x64 segue sem caminho (não há wrapper).
+
 
 ### 8.8 Overlays
 - Injetam na criação do processo: `gameoverlayrenderer.dll` (Steam), `nvspcap.dll` (NVIDIA ShadowPlay), `NvCamera32.dll` (Ansel), `DiscordHook`, `RTSSHooks`.

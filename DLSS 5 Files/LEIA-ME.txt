@@ -60,6 +60,9 @@ O QUE ESPERAR — leia antes, evita decepção
      kit novo e clique em Instalar de novo — o programa troca só o que
      mudou. A verificação (item 15) diz qual versão rodou.
 
+   - Jogo 64-bit em DirectX 9 (Outlast) usa o D3D9.dll x64 do dgVoodoo2,
+     que traduz para D3D11; o resto é igual aos jogos 64-bit.
+
 AVISOS
    - NÃO use em jogos online com anti-cheat (EAC, BattlEye, Vanguard).
      A liberação de assinatura vale para o sistema inteiro e pode ser

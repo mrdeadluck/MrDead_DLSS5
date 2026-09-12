@@ -31,6 +31,8 @@ public sealed class KitInventory
     // dgVoodoo2 (spec 3.5)
     public string? DgVoodooD3D9X86 { get; set; }
     public string? DgVoodooD3D8X86 { get; set; }
+    /// <summary>D3D9.dll x64 do dgVoodoo2 (MS\x64): jogo 64-bit em D3D9, como o Outlast.</summary>
+    public string? DgVoodooD3D9X64 { get; set; }
     public string? DgVoodooConf { get; set; }
     public string? DgVoodooCpl { get; set; }
 
@@ -95,6 +97,11 @@ public sealed class KitInventory
                 Need(DgVoodooD3D8X86, "dgVoodoo2: MS\\x86\\D3D8.dll");
             else
                 Need(DgVoodooD3D9X86, "dgVoodoo2: MS\\x86\\D3D9.dll");
+            Need(DgVoodooConf, "dgVoodoo2: dgVoodoo.conf");
+        }
+        else if (route == InstallRoute.A && api == GraphicsApi.D3D9)
+        {
+            Need(DgVoodooD3D9X64, "dgVoodoo2: MS\\x64\\D3D9.dll");
             Need(DgVoodooConf, "dgVoodoo2: dgVoodoo.conf");
         }
 
@@ -234,22 +241,24 @@ public static class KitResolver
         // dgVoodoo2: o wrapper da API dentro de MS\x86 (nunca 3Dfx, nunca arm) e com
         // arch x86 real. O pacote traz um arquivo por API — D3D8.dll atende os jogos de
         // DirectX 8, que são maioria entre 2001 e 2003.
-        string? WrapperDgVoodoo(string nome) => Named(nome)
+        string? WrapperDgVoodoo(string nome, string pastaArch, PeArchitecture arch) => Named(nome)
             .Where(Ok)
             .Where(p => !LooksArm(p))
             .Where(p =>
             {
                 var dir = Path.GetDirectoryName(p) ?? "";
                 var parent = Path.GetDirectoryName(dir) ?? "";
-                return string.Equals(Path.GetFileName(dir), "x86", StringComparison.OrdinalIgnoreCase)
+                return string.Equals(Path.GetFileName(dir), pastaArch, StringComparison.OrdinalIgnoreCase)
                     && string.Equals(Path.GetFileName(parent), "MS", StringComparison.OrdinalIgnoreCase);
             })
-            .FirstOrDefault(p => PeFile.GetArchitecture(p) == PeArchitecture.X86);
+            .FirstOrDefault(p => PeFile.GetArchitecture(p) == arch);
 
-        inv.DgVoodooD3D9X86 = WrapperDgVoodoo("D3D9.dll");
-        inv.DgVoodooD3D8X86 = WrapperDgVoodoo("D3D8.dll");
+        inv.DgVoodooD3D9X86 = WrapperDgVoodoo("D3D9.dll", "x86", PeArchitecture.X86);
+        inv.DgVoodooD3D8X86 = WrapperDgVoodoo("D3D8.dll", "x86", PeArchitecture.X86);
+        // O pacote também traz MS\x64\D3D9.dll: é o que atende jogo 64-bit em D3D9 (Outlast).
+        inv.DgVoodooD3D9X64 = WrapperDgVoodoo("D3D9.dll", "x64", PeArchitecture.X64);
 
-        var wrapperParaRaiz = inv.DgVoodooD3D9X86 ?? inv.DgVoodooD3D8X86;
+        var wrapperParaRaiz = inv.DgVoodooD3D9X86 ?? inv.DgVoodooD3D8X86 ?? inv.DgVoodooD3D9X64;
         if (wrapperParaRaiz is not null)
         {
             // conf e Cpl ficam na raiz do pacote dgVoodoo (dois níveis acima de MS\x86).

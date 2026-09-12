@@ -237,6 +237,7 @@ public static class GameDetector
         var detection = ApiDetector.Detect(profile.RealExePath, exeDir);
         profile.ApiDetection = detection;
 
+        notes.AddRange(detection.Notas);
         if (detection.ExeOpaco)
             notes.Add("O executável não mostra pista nenhuma de API (nem import, nem string, nem NGX): é a cara de " +
                       "exe cifrado ou empacotado (Arxan, Denuvo, stub da Steam). A detecção fica com o que há ao " +

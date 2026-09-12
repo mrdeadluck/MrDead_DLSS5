@@ -342,11 +342,14 @@ public static class InstallPlanBuilder
             }
         }
 
-        // Rota C: dgVoodoo na pasta do renderizador (exe ou bin\ no Source).
-        if (route == InstallRoute.C)
+        // dgVoodoo na pasta do renderizador (exe ou bin\ no Source): rota C (32-bit) e o
+        // jogo 64-bit em D3D9 (Outlast), que usa o D3D9.dll x64 do pacote.
+        if (profile.NeedsDgVoodoo)
         {
             var renderer = profile.RendererFolder ?? exe;
-            var wrapperSrc = profile.Api == GraphicsApi.D3D8 ? kit.DgVoodooD3D8X86 : kit.DgVoodooD3D9X86;
+            var wrapperSrc = profile.Api == GraphicsApi.D3D8 ? kit.DgVoodooD3D8X86
+                : profile.Architecture == PeArchitecture.X64 ? kit.DgVoodooD3D9X64
+                : kit.DgVoodooD3D9X86;
 
             // O dgVoodoo só funciona com ESTE nome de arquivo — e ele pode já estar ocupado
             // por outro wrapper que o usuário pôs ali de propósito. Foi o Dead Space 2: o

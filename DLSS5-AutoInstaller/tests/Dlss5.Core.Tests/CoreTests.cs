@@ -369,6 +369,9 @@ public class RouteTests
     [InlineData(PeArchitecture.X86, GraphicsApi.D3D9, InstallRoute.C)]
     // DirectX 8 é o mesmo caminho do D3D9: quem traduz é o dgVoodoo2.
     [InlineData(PeArchitecture.X86, GraphicsApi.D3D8, InstallRoute.C)]
+    // D3D9 em 64-bit (Outlast): dgVoodoo x64 traduz para D3D11 e o layout é o da rota A.
+    [InlineData(PeArchitecture.X64, GraphicsApi.D3D9, InstallRoute.A)]
+    [InlineData(PeArchitecture.X64, GraphicsApi.D3D8, InstallRoute.Unsupported)]
     // OpenGL em 64-bit segue a rota A; muda só o nome com que o ReShade é instalado.
     [InlineData(PeArchitecture.X64, GraphicsApi.OpenGL, InstallRoute.A)]
     // Regra derivada da spec: 32-bit fora do D3D11 depende do dgVoodoo, e o addon32 só
@@ -400,6 +403,7 @@ public class RouteTests
     {
         Assert.True(Profile(PeArchitecture.X86, GraphicsApi.D3D8).NeedsDgVoodoo);
         Assert.True(Profile(PeArchitecture.X86, GraphicsApi.D3D9).NeedsDgVoodoo);
+        Assert.True(Profile(PeArchitecture.X64, GraphicsApi.D3D9).NeedsDgVoodoo);
         Assert.False(Profile(PeArchitecture.X86, GraphicsApi.D3D11).NeedsDgVoodoo);
         Assert.False(Profile(PeArchitecture.X64, GraphicsApi.D3D12).NeedsDgVoodoo);
     }
@@ -435,6 +439,7 @@ public class PlanBuilderTests
         ShadersDir = @"C:\kit\reshade-shaders",
         DgVoodooD3D9X86 = @"C:\kit\MS\x86\D3D9.dll",
         DgVoodooD3D8X86 = @"C:\kit\MS\x86\D3D8.dll",
+        DgVoodooD3D9X64 = @"C:\kit\MS\x64\D3D9.dll",
         DgVoodooConf = @"C:\kit\dgVoodoo.conf",
         DgVoodooCpl = @"C:\kit\dgVoodooCpl.exe",
         HasLaunchpad = true,
@@ -6154,6 +6159,179 @@ public class ApiNoGearsReloadedTests
             // Com o Feeder na pasta o D3D12CreateDevice pode ser o device privado dele.
             File.WriteAllBytes(Path.Combine(dir, FeederKit.Addon64), new byte[16]);
             Assert.DoesNotContain(ApiDetector.LogEvidence(dir), p => p.Api == GraphicsApi.D3D12);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}
+
+/// <summary>
+/// Outlast: Unreal 3 em 64-bit, D3D9. A combinação era "sem caminho suportado"; o pacote do
+/// dgVoodoo2 traz MS\x64\D3D9.dll, que traduz para D3D11 e deixa o resto igual à rota A.
+/// </summary>
+public class OutlastX64D3D9Tests
+{
+    private static string Pasta()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-outlast-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    private static void PeX86(string path)
+    {
+        var img = new byte[0x200];
+        img[0] = (byte)'M'; img[1] = (byte)'Z';
+        BitConverter.GetBytes(0x80u).CopyTo(img, 0x3C);
+        img[0x80] = (byte)'P'; img[0x81] = (byte)'E';
+        BitConverter.GetBytes((ushort)0x014C).CopyTo(img, 0x84);
+        File.WriteAllBytes(path, img);
+    }
+
+    [Fact]
+    public void PlanoCopiaODgVoodooX64EOLayoutDaRotaA()
+    {
+        var raiz = Pasta();
+        try
+        {
+            var bin = Path.Combine(raiz, "Binaries", "Win64");
+            Directory.CreateDirectory(bin);
+            var perfil = new GameProfile
+            {
+                GameFolder = raiz,
+                RealExePath = Path.Combine(bin, "OLGame.exe"),
+                Architecture = PeArchitecture.X64,
+                Api = GraphicsApi.D3D9,
+                RendererFolder = bin,
+            };
+            Assert.Equal(InstallRoute.A, perfil.Route);
+            Assert.True(perfil.NeedsDgVoodoo);
+            Assert.Equal("dxgi.dll", perfil.ReShadeHookName);
+
+            var kit = PlanBuilderTests.KitCompleto();
+            Assert.Empty(kit.MissingFor(InstallRoute.A, nativeDlss: false, GraphicsApi.D3D9));
+
+            var plan = InstallPlanBuilder.Build(perfil, kit, new InstallOptions());
+            Assert.True(plan.CanRun);
+            string N(string? p) => (p ?? "").Replace('/', '\\');
+            var dg = plan.Actions.Single(a => N(a.TargetPath).EndsWith("\\Win64\\D3D9.dll", StringComparison.OrdinalIgnoreCase));
+            Assert.EndsWith("\\MS\\x64\\D3D9.dll", N(dg.SourcePath), StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(plan.Actions, a => N(a.TargetPath).EndsWith("\\Win64\\dxgi.dll", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(plan.Actions, a => N(a.TargetPath).EndsWith("\\Win64\\dlss5-feed.addon64", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(plan.Actions, a => a.Kind == PlanActionKind.PatchDgVoodooConf);
+            Assert.DoesNotContain(plan.Actions, a => N(a.TargetPath).Contains("\\host64\\", StringComparison.OrdinalIgnoreCase));
+
+            // Sem o wrapper x64 no kit, o plano diz exatamente o que falta.
+            kit.DgVoodooD3D9X64 = null;
+            Assert.Contains(kit.MissingFor(InstallRoute.A, false, GraphicsApi.D3D9), m => m.Contains("MS\\x64\\D3D9.dll"));
+
+            // Item 5 confere o wrapper com a arquitetura do jogo (x64), não x86.
+            PeX86(Path.Combine(bin, "D3D9.dll"));
+            var c5 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 5 && c.Title.Contains("dgVoodoo2"));
+            Assert.Equal(CheckStatus.Fail, c5.State);
+            Assert.Contains("x64", c5.Detail);
+            File.WriteAllBytes(Path.Combine(bin, "D3D9.dll"), ApiNoGearsReloadedTests.PeComExport("Direct3DCreate9"));
+            c5 = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 5 && c.Title.Contains("dgVoodoo2"));
+            Assert.Equal(CheckStatus.Pass, c5.State);
+        }
+        finally { Directory.Delete(raiz, true); }
+    }
+
+    [Fact]
+    public void ResolverAchaOWrapperX64DoPacote()
+    {
+        var kit = Pasta();
+        try
+        {
+            var x86 = Path.Combine(kit, "dgVoodoo2", "MS", "x86");
+            var x64 = Path.Combine(kit, "dgVoodoo2", "MS", "x64");
+            Directory.CreateDirectory(x86);
+            Directory.CreateDirectory(x64);
+            PeX86(Path.Combine(x86, "D3D9.dll"));
+            PeX86(Path.Combine(x86, "D3D8.dll"));
+            File.WriteAllBytes(Path.Combine(x64, "D3D9.dll"), ApiNoGearsReloadedTests.PeComExport("Direct3DCreate9"));
+            File.WriteAllText(Path.Combine(kit, "dgVoodoo2", "dgVoodoo.conf"), "[DirectX]\nVRAM = 256\n");
+
+            var inv = KitResolver.Resolve(kit);
+            Assert.EndsWith(Path.Combine("x86", "D3D9.dll"), inv.DgVoodooD3D9X86!);
+            Assert.EndsWith(Path.Combine("x86", "D3D8.dll"), inv.DgVoodooD3D8X86!);
+            Assert.EndsWith(Path.Combine("x64", "D3D9.dll"), inv.DgVoodooD3D9X64!);
+            Assert.NotNull(inv.DgVoodooConf);
+        }
+        finally { Directory.Delete(kit, true); }
+    }
+}
+
+/// <summary>
+/// Vampyr (Unreal 4, D3D11) saía como "OpenGL": o exe da Unreal embute os RHIs de OpenGL e
+/// Vulkan, e as três strings de OpenGL somavam mais que as duas de D3D11. O ReShade era
+/// instalado como opengl32.dll — nome que o jogo nunca carrega — e o log nem nascia.
+/// </summary>
+public class UnrealNaoEhOpenGLTests
+{
+    private static string Pasta()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5-ue-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    private static byte[] ExeX64Com(params string[] textos)
+    {
+        var pe = ApiNoGearsReloadedTests.PeComExport("NadaDeMais");
+        var buffer = new byte[pe.Length + 64 * 1024];
+        pe.CopyTo(buffer, 0);
+        int offset = pe.Length + 1024;
+        foreach (var t in textos)
+        {
+            var bytes = System.Text.Encoding.ASCII.GetBytes(t);
+            Array.Copy(bytes, 0, buffer, offset, bytes.Length);
+            offset += 4096;
+        }
+        return buffer;
+    }
+
+    [Fact]
+    public void ExeDaUnrealIgnoraOpenGLEVulkanEFicaEmD3D11()
+    {
+        var raiz = Pasta();
+        try
+        {
+            var bin = Path.Combine(raiz, "AVGame", "Binaries", "Win64");
+            Directory.CreateDirectory(bin);
+            var exe = Path.Combine(bin, "AVGame-Win64-Shipping.exe");
+            File.WriteAllBytes(exe, ExeX64Com("wglCreateContext", "wglMakeCurrent", "opengl32.dll",
+                "vkCreateInstance", "vulkan-1.dll", "D3D11CreateDevice", "d3d11.dll"));
+
+            Assert.True(ApiDetector.EhUnreal(exe));
+            Assert.True(ApiDetector.EhUnreal(@"C:\Jogos\Outlast\Binaries\Win64\OLGame.exe"));
+            Assert.False(ApiDetector.EhUnreal(@"C:\Jogos\Crysis Remastered\Bin64\CrysisRemastered.exe"));
+
+            var r = ApiDetector.Detect(exe, bin);
+            Assert.Equal(GraphicsApi.D3D11, r.Api);
+            Assert.DoesNotContain(r.Evidence, e => e.Api is GraphicsApi.OpenGL or GraphicsApi.Vulkan);
+            Assert.Contains(r.Notas, n => n.Contains("Unreal"));
+            Assert.False(r.ExeOpaco);
+        }
+        finally { Directory.Delete(raiz, true); }
+    }
+
+    [Fact]
+    public void Em64BitOpenGLValeMetadeQuandoOExeTambemFalaDirect3D()
+    {
+        var dir = Pasta();
+        try
+        {
+            // Fora da Unreal: as três strings de OpenGL (76) contra duas de D3D11 (52).
+            var exe = Path.Combine(dir, "game.exe");
+            File.WriteAllBytes(exe, ExeX64Com("wglCreateContext", "wglMakeCurrent", "opengl32.dll",
+                "D3D11CreateDevice", "d3d11.dll"));
+            var r = ApiDetector.Detect(exe, dir);
+            Assert.Equal(GraphicsApi.D3D11, r.Api);
+            Assert.Contains(r.Evidence, e => e.Api == GraphicsApi.OpenGL && e.Source.Contains("metade"));
+
+            // Só OpenGL: continua OpenGL.
+            File.WriteAllBytes(exe, ExeX64Com("wglCreateContext", "wglMakeCurrent", "opengl32.dll"));
+            Assert.Equal(GraphicsApi.OpenGL, ApiDetector.Detect(exe, dir).Api);
         }
         finally { Directory.Delete(dir, true); }
     }
