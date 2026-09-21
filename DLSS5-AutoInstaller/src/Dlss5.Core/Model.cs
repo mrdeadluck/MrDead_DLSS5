@@ -34,6 +34,17 @@ public enum InstallRoute
     C,
 }
 
+/// <summary>Quem entrega o DLSS 5 num jogo com DLSS nativo: escolha da tela de detecção.</summary>
+public enum CaminhoDoDlss5
+{
+    /// <summary>D3D12 → RenoDX direto; D3D11/Vulkan/OpenGL → Feeder.</summary>
+    Automatico,
+    /// <summary>RenoDX direto (sem Feeder): o addon se pendura no DLSS do jogo; DLSS do jogo LIGADO.</summary>
+    Direto,
+    /// <summary>Feeder (DLAA próprio): DLSS do jogo DESLIGADO.</summary>
+    Feeder,
+}
+
 /// <summary>Provedor de motion vectors.</summary>
 public enum MvProvider
 {
@@ -129,18 +140,38 @@ public sealed class GameProfile
     /// "feature ready", porque o Streamline do jogo já é dono do NGX. O caminho direto,
     /// no mesmo jogo, abriu com DLSS ligado e interceptou (creates 11, NR INJECTED).
     /// </summary>
-    public bool PreferirFeeder { get; set; }
+    public bool PreferirFeeder
+    {
+        get => Caminho == CaminhoDoDlss5.Feeder;
+        set => Caminho = value ? CaminhoDoDlss5.Feeder : CaminhoDoDlss5.Automatico;
+    }
 
     /// <summary>
-    /// O RenoDX se pendura direto nas chamadas de DLSS que o jogo já faz, mas só enxerga
-    /// NGX em D3D12 (spec 1: "só funciona em jogos com DLSS nativo, 64-bit, D3D12").
-    /// Num jogo D3D11 ou Vulkan com DLSS nativo ele instala os hooks e nunca vê um create
-    /// — daí o "HOOKS ARMED / NO DLSS CREATE SEEN". Em D3D12 com DLSS nativo é o padrão;
-    /// o caminho direto foi rebaixado a "experimental" numa época em que o nvngx_dlss.dll
-    /// do jogo estava transplantado e o DLSS do jogo nem funcionava — ele nunca teve
-    /// chance real até o Onimusha.
+    /// A escolha explícita do caminho, para qualquer API. A caixa "Usar o Feeder em vez do
+    /// caminho direto" só existia em D3D12, e num jogo D3D11 com DLSS nativo (Crysis
+    /// Remastered) não havia como pedir o RenoDX direto — o usuário viu o addon novo
+    /// aplicar NR ali por fora e cobrou a opção que a tela tinha perdido. Automático mantém
+    /// o padrão de sempre (D3D12 direto, o resto Feeder); Direto e Feeder mandam.
     /// </summary>
-    public bool UsesRenodxDirectPath => HasNativeDlss && Api == GraphicsApi.D3D12 && !PreferirFeeder;
+    public CaminhoDoDlss5 Caminho { get; set; } = CaminhoDoDlss5.Automatico;
+
+    /// <summary>
+    /// O RenoDX se pendura direto nas chamadas de DLSS que o jogo já faz. Em D3D12 com
+    /// DLSS nativo é o padrão (Onimusha: creates 11, NR INJECTED). Fora do D3D12 a spec
+    /// dizia que ele nunca vê um create ("HOOKS ARMED / NO DLSS CREATE SEEN"), e por isso o
+    /// automático manda o Feeder — mas o addon evoluiu (proxy D3D11→D3D12 no Crysis) e a
+    /// escolha voltou a ser do usuário. Sem DLSS nativo não há chamada para interceptar e o
+    /// caminho direto não existe; em jogo 32-bit também não (o addon é x64 e roda no host).
+    /// </summary>
+    public bool UsesRenodxDirectPath => HasNativeDlss && Architecture == PeArchitecture.X64 && Caminho switch
+    {
+        CaminhoDoDlss5.Direto => true,
+        CaminhoDoDlss5.Feeder => false,
+        _ => Api == GraphicsApi.D3D12,
+    };
+
+    /// <summary>Caminho direto pedido fora do padrão (D3D11/Vulkan/OpenGL): vale aviso.</summary>
+    public bool DiretoForaDoD3D12 => UsesRenodxDirectPath && Api != GraphicsApi.D3D12;
 
     /// <summary>
     /// O jogo entrega o DLSS pelo Streamline da NVIDIA (sl.*.dll ao lado do exe), e não

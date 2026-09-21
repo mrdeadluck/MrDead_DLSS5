@@ -13,7 +13,9 @@ public sealed partial class MainForm
     private readonly ComboBox _cboApi = new();
     private readonly Label _lblNative = new();
     private readonly Label _lblNativeWhy = new();
-    private readonly CheckBox _chkDireto = new();
+    private readonly ComboBox _cboCaminho = new();
+    private readonly Label _lblCaminho = new();
+    private readonly Label _lblCaminhoNota = new();
     private readonly CheckBox _chkReFramework = new();
     private readonly ComboBox _cboReShadeNome = new();
     private readonly Label _lblDicaReShadeNome = new();
@@ -92,12 +94,34 @@ public sealed partial class MainForm
         _lblNativeWhy.Margin = new Padding(0, 0, 0, 6);
         form.Controls.Add(_lblNativeWhy, 1, linha++);
 
-        _chkDireto.Text = "Usar o Feeder em vez do caminho direto — experimental: em jogo com DLSS nativo o Feeder colide com o NGX do jogo";
-        _chkDireto.AutoSize = true;
-        _chkDireto.Visible = false;
-        _chkDireto.Margin = new Padding(0, 0, 0, 6);
-        _chkDireto.CheckedChanged += (_, _) => SyncProfileFromUi();
-        form.Controls.Add(_chkDireto, 1, linha++);
+        // Quem entrega o DLSS 5 num jogo com DLSS nativo. Era uma caixa só em D3D12; num
+        // jogo D3D11 com DLSS (Crysis) não havia como pedir o RenoDX direto. A escolha
+        // aparece em todo jogo x64 com DLSS nativo, e o padrão continua o de sempre.
+        _lblCaminho.Text = "Caminho do DLSS 5";
+        _lblCaminho.AutoSize = true;
+        _lblCaminho.Visible = false;
+        _cboCaminho.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cboCaminho.Width = 620;
+        _cboCaminho.Visible = false;
+        _cboCaminho.Items.AddRange(new object[]
+        {
+            "Automático — D3D12: RenoDX direto; D3D11/Vulkan: Feeder",
+            "RenoDX direto (sem Feeder) — o addon se pendura no DLSS do jogo; DLSS do jogo LIGADO",
+            "Feeder (DLAA próprio) — DLSS do jogo DESLIGADO",
+        });
+        _cboCaminho.SelectedIndex = 0;
+        _cboCaminho.SelectedIndexChanged += (_, _) => SyncProfileFromUi();
+        form.Controls.Add(_lblCaminho, 0, linha);
+        form.Controls.Add(_cboCaminho, 1, linha++);
+        _lblCaminhoNota.AutoSize = true;
+        _lblCaminhoNota.Dock = DockStyle.Fill;
+        _lblCaminhoNota.ForeColor = Ui.Muted;
+        _lblCaminhoNota.Font = Ui.SmallFont;
+        _lblCaminhoNota.Margin = new Padding(0, 0, 0, 6);
+        _lblCaminhoNota.Visible = false;
+        _lblCaminhoNota.Text = "RenoDX direto: só em jogo com DLSS próprio; fora do D3D12 é tentativa (o addon levanta um D3D12 " +
+                               "próprio). Feeder: DLAA do kit, DLSS do jogo desligado. Automático é o que sempre foi.";
+        form.Controls.Add(_lblCaminhoNota, 1, linha++);
 
         // RE Engine com proteção anti-adulteração: o ReShade injetado como dxgi.dll faz o
         // jogo abrir a própria tela de erro antes de criar qualquer DLSS. Hospedado no
@@ -284,7 +308,7 @@ public sealed partial class MainForm
         PopulateCandidates(_profile!.RealExePath);
         _cboArch.SelectedItem = _profile.Architecture;
         _cboApi.SelectedItem = _profile.Api;
-        _chkDireto.Checked = _profile.PreferirFeeder;
+        _cboCaminho.SelectedIndex = (int)_profile.Caminho;
         _chkReFramework.Checked = _profile.UsarReFramework;
         PopularNomesDeReShade();
         _txtRenderer.Text = _profile.RendererFolder ?? _profile.ExeFolder;
@@ -410,7 +434,9 @@ public sealed partial class MainForm
         if (_cboApi.SelectedItem is GraphicsApi g) _profile.Api = g;
         if (!string.IsNullOrWhiteSpace(_txtRenderer.Text)) _profile.RendererFolder = _txtRenderer.Text;
         _profile.MvProvider = _options.MvProvider;
-        _profile.PreferirFeeder = _chkDireto.Visible && _chkDireto.Checked;
+        _profile.Caminho = _cboCaminho.Visible && _cboCaminho.SelectedIndex >= 0
+            ? (CaminhoDoDlss5)_cboCaminho.SelectedIndex
+            : CaminhoDoDlss5.Automatico;
         _profile.UsarReFramework = _chkReFramework.Visible && _chkReFramework.Checked;
         if (_cboReShadeNome.Visible && _cboReShadeNome.SelectedItem is string nomeReShade)
             _profile.NomeDoReShadeEscolhido = nomeReShade;
@@ -427,7 +453,10 @@ public sealed partial class MainForm
         _lblNative.ForeColor = _profile.NativeDlssOverridden ? Ui.Warn : (sim ? Ui.Ok : Ui.Ink);
         var porque = _profile.NativeDlss?.Resumo ?? "sem detecção";
         _lblNativeWhy.Text = porque + Environment.NewLine + ConsequenciaDoNativo();
-        _chkDireto.Visible = _profile.HasNativeDlss && _profile.Api == GraphicsApi.D3D12;
+        bool cabeCaminho = _profile.HasNativeDlss && _profile.Architecture == PeArchitecture.X64;
+        _lblCaminho.Visible = cabeCaminho;
+        _cboCaminho.Visible = cabeCaminho;
+        _lblCaminhoNota.Visible = cabeCaminho;
         PopularNomesDeReShade();
 
         // O REFramework é x64 e só carrega em RE Engine — mas quem decide é o usuário, não
@@ -447,7 +476,9 @@ public sealed partial class MainForm
     {
         if (_profile is null) return string.Empty;
         return _profile.UsesRenodxDirectPath
-            ? "Efeito: caminho direto (padrão em D3D12 com DLSS nativo) — o RenoDX se pendura no DLSS do próprio jogo; deixe o DLSS do jogo LIGADO."
+            ? (_profile.Caminho == CaminhoDoDlss5.Direto
+                ? $"Efeito: caminho direto do RenoDX, escolhido por você{(_profile.DiretoForaDoD3D12 ? $" (em {_profile.Api}: tentativa)" : "")} — sem Feeder; deixe o DLSS do jogo LIGADO."
+                : "Efeito: caminho direto (padrão em D3D12 com DLSS nativo) — o RenoDX se pendura no DLSS do próprio jogo; deixe o DLSS do jogo LIGADO.")
             : _profile.HasNativeDlss
                 ? "Efeito: o Feeder é instalado e roda um NGX próprio; com DLSS nativo, deixe o DLSS do jogo DESLIGADO. Arquivos de DLSS do jogo nunca são apagados."
                 : "Efeito: o Feeder é instalado (é ele quem roda o DLSS 5). Arquivos de DLSS do jogo nunca são apagados.";

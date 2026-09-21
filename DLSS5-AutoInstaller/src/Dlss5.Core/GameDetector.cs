@@ -286,7 +286,8 @@ public static class GameDetector
 
         notes.Add("DLSS nativo do jogo: " + deteccao.Resumo + ".");
         if (deteccao.Present && profile.Api != GraphicsApi.D3D12)
-            notes.Add("Como o jogo não é D3D12, o Feeder entra assim mesmo (o RenoDX só enxerga NGX em D3D12). " +
-                      "Nas opções do jogo, deixe o DLSS/upscaling DESLIGADO.");
+            notes.Add("Como o jogo não é D3D12, no automático o Feeder entra (o RenoDX só via NGX em D3D12). " +
+                      "Nas opções do jogo, deixe o DLSS/upscaling DESLIGADO. Para tentar o RenoDX direto mesmo " +
+                      "assim, escolha em \"Caminho do DLSS 5\".");
     }
 }

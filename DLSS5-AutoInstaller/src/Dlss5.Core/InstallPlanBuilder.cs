@@ -422,11 +422,20 @@ public static class InstallPlanBuilder
         if (profile.UsesRenodxDirectPath)
         {
             plan.Warnings.Add(
-                "Caminho direto (D3D12 + DLSS nativo, o padrão neste caso): o RenoDX processa a chamada " +
+                (profile.Caminho == CaminhoDoDlss5.Direto
+                    ? "Caminho direto (RenoDX, escolhido na detecção): "
+                    : "Caminho direto (D3D12 + DLSS nativo, o padrão neste caso): ") +
+                "o RenoDX processa a chamada " +
                 "de DLSS que o próprio jogo faz, então o DLSS do jogo fica LIGADO no menu, no modo que " +
                 "você quiser. Sem o Feeder não há segundo NGX no processo — foi o que fez o Onimusha abrir " +
                 "e interceptar. Confira o resultado alternando com F6 dentro do jogo; a aba Complementos " +
                 "do ReShade mostra \"ACTIVE - NR INJECTED\" quando está aplicando.");
+            if (profile.DiretoForaDoD3D12)
+                plan.Warnings.Add(
+                    $"Caminho direto em {profile.Api}: fora do D3D12 o addon precisa levantar um device D3D12 " +
+                    "próprio e sincronizar com o do jogo. Se o painel do RenoDX ficar em \"HOOKS ARMED / NO DLSS " +
+                    "CREATE SEEN\" ou o jogo cair ao carregar a cena, volte à detecção e troque o caminho para " +
+                    "Feeder (com o DLSS do jogo desligado).");
         }
 
 

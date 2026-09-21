@@ -157,6 +157,7 @@ public static class EstadoDoMod
                 perfil.RendererFolder = manifesto.RendererFolder ?? perfil.RendererFolder;
             perfil.HasNativeDlss = manifesto.HasNativeDlss;
             perfil.PreferirFeeder = manifesto.PreferirFeeder;
+            if (Enum.TryParse<CaminhoDoDlss5>(manifesto.CaminhoDoDlss5, out var caminho)) perfil.Caminho = caminho;
         }
 
         r.ExeFolder = manifesto?.ExeFolder is { } ef && Directory.Exists(ef) ? ef : perfil?.ExeFolder ?? r.GameFolder;

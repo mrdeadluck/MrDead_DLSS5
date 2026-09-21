@@ -6388,3 +6388,98 @@ public class GemeoDaOutraArquiteturaTests
         finally { Directory.Delete(raiz, true); }
     }
 }
+
+/// <summary>
+/// A escolha do caminho voltou para a tela, e para qualquer API: no Crysis Remastered
+/// (D3D11 com DLSS nativo) não havia como pedir o RenoDX direto. Automático é o padrão de
+/// sempre; Direto e Feeder mandam; sem DLSS nativo ou em 32-bit o direto não existe.
+/// </summary>
+public class CaminhoDoDlss5Tests
+{
+    private static readonly string Raiz = Path.Combine(Path.GetTempPath(), "game");
+
+    private static GameProfile P(GraphicsApi api, bool nativo, CaminhoDoDlss5 caminho, PeArchitecture arch = PeArchitecture.X64) => new()
+    {
+        GameFolder = Raiz,
+        RealExePath = Path.Combine(Raiz, "g.exe"),
+        Architecture = arch,
+        Api = api,
+        HasNativeDlss = nativo,
+        Caminho = caminho,
+    };
+
+    [Theory]
+    [InlineData(GraphicsApi.D3D12, CaminhoDoDlss5.Automatico, true)]
+    [InlineData(GraphicsApi.D3D11, CaminhoDoDlss5.Automatico, false)]
+    [InlineData(GraphicsApi.Vulkan, CaminhoDoDlss5.Automatico, false)]
+    [InlineData(GraphicsApi.D3D12, CaminhoDoDlss5.Feeder, false)]
+    [InlineData(GraphicsApi.D3D11, CaminhoDoDlss5.Direto, true)]
+    [InlineData(GraphicsApi.Vulkan, CaminhoDoDlss5.Direto, true)]
+    [InlineData(GraphicsApi.D3D12, CaminhoDoDlss5.Direto, true)]
+    public void AEscolhaMandaEOAutomaticoEhOPadraoDeSempre(GraphicsApi api, CaminhoDoDlss5 caminho, bool direto)
+    {
+        var p = P(api, nativo: true, caminho);
+        Assert.Equal(direto, p.UsesRenodxDirectPath);
+        Assert.Equal(!direto, p.NeedsFeeder);
+        Assert.Equal(direto && api != GraphicsApi.D3D12, p.DiretoForaDoD3D12);
+    }
+
+    [Fact]
+    public void SemDlssNativoOuEm32BitODiretoNaoExiste()
+    {
+        Assert.False(P(GraphicsApi.D3D12, nativo: false, CaminhoDoDlss5.Direto).UsesRenodxDirectPath);
+        Assert.False(P(GraphicsApi.D3D11, nativo: true, CaminhoDoDlss5.Direto, PeArchitecture.X86).UsesRenodxDirectPath);
+    }
+
+    [Fact]
+    public void PreferirFeederContinuaValendoComoAntes()
+    {
+        var p = P(GraphicsApi.D3D12, nativo: true, CaminhoDoDlss5.Automatico);
+        p.PreferirFeeder = true;
+        Assert.Equal(CaminhoDoDlss5.Feeder, p.Caminho);
+        Assert.False(p.UsesRenodxDirectPath);
+        p.PreferirFeeder = false;
+        Assert.Equal(CaminhoDoDlss5.Automatico, p.Caminho);
+        Assert.True(p.UsesRenodxDirectPath);
+    }
+
+    [Fact]
+    public void DiretoEmD3D11InstalaSemFeederEAvisaQueEhTentativa()
+    {
+        var p = P(GraphicsApi.D3D11, nativo: true, CaminhoDoDlss5.Direto);
+        var plan = InstallPlanBuilder.Build(p, PlanBuilderTests.KitCompleto(), new InstallOptions());
+        Assert.True(plan.CanRun);
+        string N(string? x) => (x ?? "").Replace('/', '\\');
+        Assert.DoesNotContain(plan.Actions, a => N(a.TargetPath).EndsWith("\\dlss5-feed.addon64", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(plan.Actions, a => N(a.TargetPath).EndsWith("\\renodx-dlss5.addon64", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(plan.Warnings, w => w.Contains("escolhido na detecção"));
+        Assert.Contains(plan.Warnings, w => w.Contains("Caminho direto em D3D11"));
+        Assert.Contains(ManualSteps.For(p, new InstallOptions()), s => s.Title.Contains("LIGAR o DLSS"));
+
+        // O contrário: Feeder pedido em D3D12 — sem aviso de tentativa, com o de DLSS desligado.
+        var f = P(GraphicsApi.D3D12, nativo: true, CaminhoDoDlss5.Feeder);
+        var planF = InstallPlanBuilder.Build(f, PlanBuilderTests.KitCompleto(), new InstallOptions());
+        Assert.Contains(planF.Actions, a => N(a.TargetPath).EndsWith("\\dlss5-feed.addon64", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(planF.Warnings, w => w.Contains("Caminho direto em"));
+        Assert.Contains(planF.Warnings, w => w.Contains("DLSS desligado"));
+    }
+
+    [Fact]
+    public void OManifestoGuardaAEscolhaEOsAntigosCaemNoAutomatico()
+    {
+        var p = P(GraphicsApi.D3D11, nativo: true, CaminhoDoDlss5.Direto);
+        var kit = PlanBuilderTests.KitCompleto();
+        var m = InstallManifest.Para(InstallPlanBuilder.Build(p, kit, new InstallOptions()), kit);
+        Assert.Equal("Direto", m.CaminhoDoDlss5);
+        var volta = m.PerfilGravado()!;
+        Assert.Equal(CaminhoDoDlss5.Direto, volta.Caminho);
+        Assert.True(volta.UsesRenodxDirectPath);
+
+        // Manifesto antigo (sem Caminho): só o PreferirFeeder de antes.
+        m.CaminhoDoDlss5 = "";
+        m.PreferirFeeder = true;
+        Assert.Equal(CaminhoDoDlss5.Feeder, m.PerfilGravado()!.Caminho);
+        m.PreferirFeeder = false;
+        Assert.Equal(CaminhoDoDlss5.Automatico, m.PerfilGravado()!.Caminho);
+    }
+}

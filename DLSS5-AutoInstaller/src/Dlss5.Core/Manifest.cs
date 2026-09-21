@@ -61,6 +61,8 @@ public sealed class InstallManifest
     public bool ApplyRegistryOverride { get; set; } = true;
     public bool DgVoodooWatermark { get; set; } = true;
     public bool PreferirFeeder { get; set; }
+    /// <summary>A escolha do caminho do DLSS 5 (Automatico/Direto/Feeder); vazio nos manifestos antigos.</summary>
+    public string CaminhoDoDlss5 { get; set; } = "";
 
     // Registro
     public bool RegistryOverrideApplied { get; set; }
@@ -247,6 +249,7 @@ public sealed class InstallManifest
             IsSourceEngine = IsSourceEngine,
             PreferirFeeder = PreferirFeeder,
         };
+        if (Enum.TryParse<CaminhoDoDlss5>(CaminhoDoDlss5, out var caminho)) p.Caminho = caminho;
         if (Enum.TryParse<PeArchitecture>(Architecture, out var arch)) p.Architecture = arch;
         if (Enum.TryParse<GraphicsApi>(Api, out var api)) p.Api = api;
         if (Enum.TryParse<MvProvider>(MvProvider, out var mv)) p.MvProvider = mv;
@@ -273,6 +276,7 @@ public sealed class InstallManifest
             HasNativeDlss = p.HasNativeDlss,
             IsSourceEngine = p.IsSourceEngine,
             PreferirFeeder = p.PreferirFeeder,
+            CaminhoDoDlss5 = p.Caminho.ToString(),
             KitRoot = kit.KitRoot,
             KitVersion = kit.Fingerprint(),
             MvProvider = o.MvProvider.ToString(),
