@@ -60,11 +60,12 @@ O QUE ESPERAR — leia antes, evita decepção
      kit novo e clique em Instalar de novo — o programa troca só o que
      mudou. A verificação (item 15) diz qual versão rodou.
 
-   - Jogo com DLSS próprio tem a escolha "Caminho do DLSS 5" na detecção:
-     Automático (D3D12 → RenoDX direto; D3D11/Vulkan → Feeder), RenoDX
-     direto (sem Feeder, DLSS do jogo LIGADO) ou Feeder (DLSS do jogo
-     DESLIGADO). Fora do D3D12 o direto é tentativa; se o painel do
-     RenoDX ficar em "NO DLSS CREATE SEEN", volte para o Feeder.
+   - Jogo com DLSS próprio tem na detecção a caixa "Usar o caminho
+     direto do RenoDX (sem Feeder)": marcada, o RenoDX se pendura no
+     DLSS do jogo (DLSS do jogo LIGADO); desmarcada, entra o Feeder
+     (DLSS do jogo DESLIGADO). Em D3D12 ela vem marcada; em D3D11/Vulkan
+     vem desmarcada e marcar é tentativa — se o painel do RenoDX ficar
+     em "NO DLSS CREATE SEEN", desmarque.
    - Jogo 64-bit em DirectX 9 (Outlast) usa o D3D9.dll x64 do dgVoodoo2,
      que traduz para D3D11; o resto é igual aos jogos 64-bit.
 
