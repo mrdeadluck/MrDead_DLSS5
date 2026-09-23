@@ -37,7 +37,7 @@ Limitações estruturais (não são bugs de configuração):
 | x86 | D3D11 | Sim | B | Tomb Raider 2013 |
 | x86 | D3D9 | Sim, via dgVoodoo2 → D3D11 | C | Castlevania: Lords of Shadow (variante simples), Half-Life 2 (variante Source) |
 | x86 | D3D9 | idem | C | GTA IV (parcial: dgVoodoo ok, ReShade pendente) |
-| x86 | D3D8 | Sim, via dgVoodoo2 → D3D11 (D3D9.dll atrás de mod com d3d8to9; d3d8R.dll atrás do carregador do Silent Hill 3 PC Fix) | C | Silent Hill 2 Enhanced Edition (OptiScaler x4 no host64) |
+| x86 | D3D8 | Sim, via dgVoodoo2 → D3D11 (D3D9.dll atrás de mod com d3d8to9; d3d8R.dll atrás do carregador do Silent Hill 3 PC Fix) | C | Silent Hill 2 Enhanced Edition (OptiScaler x4 no host64), Silent Hill 3 + PC Fix |
 | x64 | OpenGL | Sim (Feeder: em processo; MX Bikes relatado) — ReShade como opengl32.dll | A | — |
 | x86 | OpenGL | Sim (Feeder 0.9+: Worms Ultimate Mayhem, KOTOR, pelo host64) — ReShade como opengl32.dll | B | — |
 | x86 | D3D10 | Sim (Feeder 0.13.1+, nativo) — só o LumeniteFX compila como provedor | B | — |
@@ -438,7 +438,7 @@ Estado final HL2: dgVoodoo em `bin\`, ReShade `dxgi.dll` na raiz, overlays desli
 - `d3d8R.dll` já ocupado: se é o dgVoodoo, entra por cima com backup; se é um **d3d8to9**, os dois ficam e o dgVoodoo entra como `D3D9.dll` (o d3d8to9 acha o `d3d9.dll` da pasta do exe antes do System32 — o arranjo do SH2 EE, `D3d8to9Wrapper.MarcaD3d8to9NoCarregador`); qualquer outro wrapper → o plano recusa.
 - `Silent_Hill_3_PC_Fix.dll` na pasta sem o carregador no `D3D8.dll` (`CarregadorD3d8R.FixSemCarregador`): aviso no plano e falha no item 5 ("Silent Hill 3 PC Fix carregado pelo D3D8.dll") com o conserto — devolver o `d3d8.dll` do fix e instalar de novo. Reinstalar por cima de uma instalação antiga (dgVoodoo como `D3D8.dll`) funciona: o manifesto novo não herda o `D3D8.dll` como arquivo nosso, e a desinstalação não encosta no carregador.
 - Isolamento "sem dgVoodoo" desliga só o `d3d8R.dll` (o carregador volta sozinho para o d3d8 do Windows, com o fix de pé); faxina e sobras reconhecem o `d3d8R.dll` só com o marcador `dgVoodoo` e instalação nossa por perto.
-- Não validado em jogo ainda. Ponto a observar se o jogo cair logo ao abrir: o `DllMain` do carregador liga `ProcessStrictHandleCheckPolicy` para o processo inteiro (qualquer uso de handle inválido vira exceção), e esse ambiente nunca tinha rodado com dgVoodoo + ReShade + Feeder juntos.
+- **Validado em 23/09/2026** pelo usuário que relatou o problema: com o `d3d8.dll` do fix de volta e o Reparar do instalador novo, o fix e o DLSS 5 funcionam juntos. Ponto a observar se outro jogo com o mesmo carregador cair logo ao abrir: o `DllMain` do carregador liga `ProcessStrictHandleCheckPolicy` para o processo inteiro (qualquer uso de handle inválido vira exceção), e esse ambiente nunca tinha rodado com dgVoodoo + ReShade + Feeder juntos.
 
 ### Enslaved: Odyssey to the West — x86, D3D9 (Unreal Engine 3)
 - Caminho C (dgVoodoo D3D9 em `Binaries\Win32\`), ShortFuse dentro do host64 com 4 passadas a 2560x1440: `source=1`, 4 features Reserved18, avaliando. Validado em 09/09/2026, segundo jogo do arranjo depois do SH2 EE.
