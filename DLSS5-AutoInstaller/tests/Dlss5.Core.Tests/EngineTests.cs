@@ -1215,3 +1215,89 @@ public class ConsumidoresNoHost64Tests
         Assert.Contains(dfc, s => s.Title.Contains("Deep Fried Chicken", StringComparison.Ordinal) && s.Detail.Contains("Defender", StringComparison.Ordinal));
     }
 }
+
+public class CarregadorDoSh3NoMotorTests
+{
+    private const string DgVoodooD3D8 = "MZ dgVoodoo 2.87.4 - Direct3D8";
+
+    /// <summary>O cenário vira o Silent Hill 3 com o PC Fix, e o kit ganha o dgVoodoo.</summary>
+    private static (GameProfile Perfil, InstallOptions Opcoes) Sh3ComOFix(Cenario c)
+    {
+        var dg = Path.Combine(c.Kit, "D3D8.dll");
+        File.WriteAllText(dg, DgVoodooD3D8);
+        c.Inventario.DgVoodooD3D8X86 = dg;
+        var conf = Path.Combine(c.Kit, "dgVoodoo.conf");
+        File.WriteAllText(conf,
+            "[General]\r\nFullScreenMode = true\r\n\r\n[DirectX]\r\nDisableAndPassThru = true\r\nVRAM = 256\r\n" +
+            "dgVoodooWatermark = true\r\n\r\n[DirectXExt]\r\nAdapterIDType = \r\nMSD3DDeviceNames = false\r\n" +
+            "DefaultEnumeratedResolutions = all\r\n");
+        c.Inventario.DgVoodooConf = conf;
+
+        Cenario.EscreverExeFalso(c.NoJogo("jogo.exe"), x64: false);
+        File.WriteAllBytes(c.NoJogo("D3D8.dll"), Sh3PcFixFalso.Carregador());
+        File.WriteAllText(c.NoJogo(CarregadorD3d8R.ModSh3), "MZ o fix de verdade");
+
+        var o = c.Opcoes();
+        o.MvProvider = MvProvider.Launchpad; // o kit do cenário só tem o Launchpad
+        return (c.Perfil(PeArchitecture.X86, GraphicsApi.D3D8), o);
+    }
+
+    [Fact]
+    public void InstalaAtrasDoCarregadorEDesinstalaSemEncostarNele()
+    {
+        using var c = new Cenario();
+        var (perfil, opcoes) = Sh3ComOFix(c);
+        var plano = InstallPlanBuilder.Build(perfil, c.Inventario, opcoes);
+        Assert.True(plano.CanRun, string.Join("; ", plano.Blockers));
+
+        var engine = new InstallerEngine(_ => { });
+        var r = engine.Execute(plano, c.Inventario);
+        Assert.True(r.Sucesso, r.Erro);
+
+        // O carregador do fix continua sendo o D3D8.dll; o dgVoodoo é o d3d8R.dll.
+        Assert.Equal(Sh3PcFixFalso.Carregador(), File.ReadAllBytes(c.NoJogo("D3D8.dll")));
+        Assert.Equal(DgVoodooD3D8, File.ReadAllText(c.NoJogo("d3d8R.dll")));
+        // Perfil padrão do dgVoodoo: todas as resoluções, não as "classics" do Legado.
+        var conf = File.ReadAllText(c.NoJogo("dgVoodoo.conf"));
+        Assert.Contains("DefaultEnumeratedResolutions = all", conf);
+        Assert.Contains("VRAM = 1024", conf);
+        Assert.Contains("DisableAndPassThru = false", conf);
+        var m = InstallManifest.Load(c.Jogo)!;
+        Assert.True(m.D3d8ViaD3d8R);
+        Assert.Contains(c.NoJogo("d3d8R.dll"), m.AddedFiles);
+
+        var rev = engine.Revert(m, removeRegistryOverride: false);
+        Assert.True(rev.Sucesso, string.Join("; ", rev.Falhas.Concat(rev.Sobras)));
+        Assert.False(File.Exists(c.NoJogo("d3d8R.dll")));
+        Assert.Equal(Sh3PcFixFalso.Carregador(), File.ReadAllBytes(c.NoJogo("D3D8.dll")));
+        Assert.True(File.Exists(c.NoJogo(CarregadorD3d8R.ModSh3)));
+    }
+
+    [Fact]
+    public void QuemTrocouOCarregadorEDevolveuReinstalaSemPerderOFix()
+    {
+        // O caminho de quem já instalou com o dgVoodoo no lugar do d3d8.dll do fix: devolve o
+        // carregador por cima e instala de novo. O D3D8.dll deixa de ser nosso (o manifesto
+        // antigo não é herdado para ele) e a desinstalação não o apaga.
+        using var c = new Cenario();
+        var (perfil, opcoes) = Sh3ComOFix(c);
+        var engine = new InstallerEngine(_ => { });
+
+        File.WriteAllText(c.NoJogo("D3D8.dll"), DgVoodooD3D8);
+        var antes = engine.Execute(InstallPlanBuilder.Build(perfil, c.Inventario, opcoes), c.Inventario);
+        Assert.True(antes.Sucesso, antes.Erro);
+        Assert.Contains(c.NoJogo("D3D8.dll"), InstallManifest.Load(c.Jogo)!.AddedFiles);
+
+        File.WriteAllBytes(c.NoJogo("D3D8.dll"), Sh3PcFixFalso.Carregador());
+        var depois = engine.Execute(InstallPlanBuilder.Build(perfil, c.Inventario, opcoes), c.Inventario);
+        Assert.True(depois.Sucesso, depois.Erro);
+        var m = InstallManifest.Load(c.Jogo)!;
+        Assert.DoesNotContain(c.NoJogo("D3D8.dll"), m.AddedFiles);
+        Assert.Equal(DgVoodooD3D8, File.ReadAllText(c.NoJogo("d3d8R.dll")));
+
+        var rev = engine.Revert(m, removeRegistryOverride: false);
+        Assert.True(rev.Sucesso, string.Join("; ", rev.Falhas.Concat(rev.Sobras)));
+        Assert.Equal(Sh3PcFixFalso.Carregador(), File.ReadAllBytes(c.NoJogo("D3D8.dll")));
+        Assert.False(File.Exists(c.NoJogo("d3d8R.dll")));
+    }
+}

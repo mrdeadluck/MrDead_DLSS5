@@ -82,9 +82,12 @@ public static class DgVoodooConfigurator
     /// Idem, pelo perfil: jogo DirectX 8 atrás de uma mod com d3d8to9 fala DirectX 9 com o
     /// dgVoodoo, e a mod (SH2 Enhanced Edition) quer as resoluções modernas — o perfil
     /// "Legado" (resoluções clássicas, VRAM 256) esconderia a resolução do monitor dela.
+    /// Atrás do carregador do Silent Hill 3 PC Fix vale o mesmo: o fix foi feito rodando no
+    /// d3d8 do Windows, que enumera todas as resoluções, e a resolução personalizada dele
+    /// costuma ser a do monitor — com "classics" ela some da lista.
     /// </summary>
     public static DgVoodooProfile ProfileFor(GameProfile p) =>
-        p.D3d8ViaD3D9 ? DgVoodooProfile.Padrao : ProfileFor(p.Api);
+        p.D3d8ViaD3D9 || p.D3d8ViaD3d8R ? DgVoodooProfile.Padrao : ProfileFor(p.Api);
 
     /// <summary>
     /// Placas que o dgVoodoo sabe fingir, na ordem em que vale a pena tentar. Os nomes

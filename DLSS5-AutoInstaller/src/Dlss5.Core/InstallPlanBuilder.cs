@@ -542,8 +542,16 @@ public static class InstallPlanBuilder
             // DirectX 8 com o D3D8.dll ocupado por uma mod que converte para DirectX 9 e
             // prefere um d3d9.dll local (Silent Hill 2 Enhanced Edition): a mod fica, e o
             // dgVoodoo entra como D3D9.dll ao lado dela. Ver D3d8to9Wrapper.
-            var marcaD3d8to9 = profile.AtualizarD3d8ViaD3D9();
-            if (marcaD3d8to9 is not null)
+            var marcaD3d8to9 = profile.AtualizarArranjoD3d8();
+            if (marcaD3d8to9 == D3d8to9Wrapper.MarcaD3d8to9NoCarregador)
+            {
+                plan.Warnings.Add(
+                    $"O D3D8.dll desta pasta é {D3d8to9Wrapper.Descrever(marcaD3d8to9)}. Os dois FICAM: o " +
+                    "d3d8to9 procura o d3d9.dll na pasta do jogo antes da do Windows, então o dgVoodoo entra " +
+                    "como D3D9.dll — o fix continua inteiro e o dgVoodoo traduz o DirectX 9 para D3D11, onde " +
+                    "o ReShade e o Feeder entram.");
+            }
+            else if (marcaD3d8to9 is not null)
             {
                 plan.Warnings.Add(
                     $"O D3D8.dll desta pasta é {D3d8to9Wrapper.Descrever(marcaD3d8to9)}. Ele FICA: converte o " +
@@ -554,6 +562,18 @@ public static class InstallPlanBuilder
             }
             var wrapperSrc = profile.DgVoodooWrapperName.Equals("D3D8.dll", StringComparison.OrdinalIgnoreCase)
                 ? kit.DgVoodooD3D8X86 : kit.DgVoodooD3D9X86;
+
+            // O Silent Hill 3 PC Fix na pasta, mas sem o carregador dele no D3D8.dll: foi o que
+            // restou a quem trocou o d3d8.dll do fix pelo do dgVoodoo quando o plano recusava o
+            // nome ocupado. O DLSS 5 roda, mas o fix não sobe — resolução mínima e menu de
+            // opções que não abre.
+            if (profile.Api == GraphicsApi.D3D8 && CarregadorD3d8R.FixSemCarregador(renderer))
+                plan.Warnings.Add(
+                    $"A pasta tem o {CarregadorD3d8R.ModSh3}, mas o D3D8.dll não é o carregador do fix, que é " +
+                    "quem sobe o fix. Sem ele o Silent Hill 3 abre na resolução mínima e o menu de opções não " +
+                    "abre. Se você trocou o d3d8.dll do fix pelo do dgVoodoo (ou o renomeou) para conseguir " +
+                    "instalar, devolva o d3d8.dll do fix ao lugar e instale de novo: o instalador mantém o " +
+                    $"carregador e põe o dgVoodoo atrás dele como {CarregadorD3d8R.D3d8R}, o nome que o fix procura.");
 
             // O dgVoodoo só funciona com ESTE nome de arquivo — e ele pode já estar ocupado
             // por outro wrapper que o usuário pôs ali de propósito. Foi o Dead Space 2: o
@@ -588,6 +608,32 @@ public static class InstallPlanBuilder
                         "DxWrapper lê) ganha um RealDllPath apontando para " +
                         "ele: o DxWrapper carrega o dgVoodoo em vez do d3d9 do Windows. A marca d'água do " +
                         "dgVoodoo na tela continua sendo a prova de que a corrente fechou.");
+                    break;
+
+                // O carregador do Silent Hill 3 PC Fix: ele fica, e o dgVoodoo entra com o nome
+                // que ele procura ao lado antes de cair no d3d8 do Windows. Ver CarregadorD3d8R.
+                case Ocupante.Carregador:
+                    var d3d8R = Path.Combine(renderer, CarregadorD3d8R.D3d8R);
+                    if (File.Exists(d3d8R)
+                        && !ApiDetector.ScanForMarkers(d3d8R, new[] { "dgVoodoo" }, OrcamentoWrapper).Contains("dgVoodoo"))
+                    {
+                        plan.Blockers.Add(
+                            $"O D3D8.dll desta pasta é {CarregadorD3d8R.Descrever(renderer)}, e o {CarregadorD3d8R.D3d8R} " +
+                            "que ele encadeia já é outro wrapper, não o dgVoodoo. O dgVoodoo precisa exatamente desse " +
+                            "lugar, e instalar por cima substitui o que o jogo está usando hoje. Se você não usa mais " +
+                            $"esse wrapper, remova o {CarregadorD3d8R.D3d8R} e instale de novo; se usa, os dois não convivem.");
+                        return plan;
+                    }
+                    Copy(wrapperSrc, renderer, CarregadorD3d8R.D3d8R);
+                    plan.Warnings.Add(
+                        $"O D3D8.dll desta pasta é {CarregadorD3d8R.Descrever(renderer)}. Ele FICA. O dgVoodoo " +
+                        $"entra ao lado como {CarregadorD3d8R.D3d8R}, o nome que o carregador procura antes de cair " +
+                        "no d3d8 do Windows: o fix continua subindo, e o Direct3D 8 do jogo vai para o dgVoodoo, " +
+                        "que traduz para D3D11, onde o ReShade e o Feeder entram. Não troque o d3d8.dll do fix pelo " +
+                        "do dgVoodoo: sem ele o fix fica de fora (resolução mínima, menu de opções que não abre). " +
+                        $"Com o {CarregadorD3d8R.D3d8R} presente o próprio fix desliga os ajustes que só valem para o " +
+                        "d3d8 do Windows (janela maximizada, DirectX 12), e o dgVoodoo.conf sai no perfil padrão, " +
+                        "com todas as resoluções. A marca d'água do dgVoodoo na tela é a prova de que a corrente fechou.");
                     break;
 
                 default:
@@ -759,7 +805,7 @@ public static class InstallPlanBuilder
     private const long OrcamentoWrapper = 32L * 1024 * 1024;
 
     /// <summary>Quem está com o nome que o dgVoodoo precisa.</summary>
-    private enum Ocupante { Ninguem, DxWrapper, Outro }
+    private enum Ocupante { Ninguem, DxWrapper, Carregador, Outro }
 
     private static string? LerTexto(string? caminho)
     {
@@ -779,6 +825,9 @@ public static class InstallPlanBuilder
         // A varredura já cobre ASCII/UTF-16 e minúsculas: "DxWrapper" acha "dxwrapper.dll".
         var marcas = ApiDetector.ScanForMarkers(existente, new[] { "dgVoodoo", "DxWrapper" }, OrcamentoWrapper);
         if (marcas.Contains("dgVoodoo")) return Ocupante.Ninguem;
+
+        if (wrapper.Equals(CarregadorD3d8R.Arquivo, StringComparison.OrdinalIgnoreCase) && CarregadorD3d8R.Presente(renderer))
+            return Ocupante.Carregador;
 
         return marcas.Contains("DxWrapper") || DxWrapperChain.DxWrapperPresente(renderer)
             ? Ocupante.DxWrapper

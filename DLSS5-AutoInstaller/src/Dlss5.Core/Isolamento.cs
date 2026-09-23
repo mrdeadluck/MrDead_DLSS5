@@ -71,11 +71,14 @@ public sealed class Isolamento
                 Path.Combine(rendererFolder, DxWrapperChain.NomeEncadeado("D3D9.dll")),
             },
             // Só o que é dgVoodoo de fato: num jogo DirectX 8 atrás do SH2 Enhancements o
-            // D3D8.dll é a mod, e desligá-la junto faria o teste concluir errado.
+            // D3D8.dll é a mod, e desligá-la junto faria o teste concluir errado. Atrás do
+            // carregador do Silent Hill 3 PC Fix o dgVoodoo é o d3d8R.dll; sem ele o carregador
+            // volta sozinho para o d3d8 do Windows, com o fix ainda de pé.
             EstadoIsolamento.SemDgVoodoo => new[]
             {
                 Path.Combine(rendererFolder, "D3D8.dll"),
                 Path.Combine(rendererFolder, "D3D9.dll"),
+                Path.Combine(rendererFolder, CarregadorD3d8R.D3d8R),
             }.Where(EhDgVoodoo).ToArray(),
             // TODOS os nomes com que o ReShade pode ter sido instalado. Enquanto isto
             // listava só dxgi.dll e opengl32.dll, num jogo instalado como d3d11.dll (MGS V)

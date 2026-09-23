@@ -127,6 +127,12 @@ AVISOS
      o multiplayer não funciona sem o EAC.
    - Desligue as sobreposições da Steam e do NVIDIA App no jogo que for
      usar: elas disputam o mesmo ponto de interceptação.
+   - Jogo com um conserto que já usa o d3d8.dll (Silent Hill 3 PC Fix):
+     NÃO renomeie nem troque esse arquivo para conseguir instalar. O
+     programa reconhece o carregador do fix, deixa o d3d8.dll dele onde
+     está e põe o dgVoodoo atrás dele como d3d8R.dll. Sem o d3d8.dll do
+     fix o DLSS 5 até roda, mas o jogo abre na resolução mínima e o menu
+     de opções não abre.
    - Desligue MSAA/SSAA nas opções gráficas do jogo. FXAA e SMAA podem
      continuar ligados.
 

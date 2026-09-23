@@ -132,6 +132,18 @@ o ReShade se pendura no resultado. Muda só qual wrapper é copiado — e isso i
 porque um jogo D3D8 nunca carrega um `D3D9.dll`. Confirme a marca d'água do dgVoodoo na
 tela: é o único teste confiável de que ele está interceptando.
 
+**Nome já ocupado por outro conserto.** O dgVoodoo precisa do nome `D3D8.dll`/`D3D9.dll`, e
+há jogo em que esse nome já é de um conserto que tem que ficar. O programa reconhece três e
+encadeia em vez de sobrescrever: o **DxWrapper** (Dead Space 2) — o dgVoodoo entra como
+`dgVoodoo_D3D9.dll`, apontado pelo `RealDllPath`; a mod do **Silent Hill 2 Enhanced
+Edition** (d3d8to9) — o dgVoodoo entra como `D3D9.dll`; e o carregador do **Silent Hill 3
+PC Fix** — o `d3d8.dll` do fix fica, porque é ele que sobe o `Silent_Hill_3_PC_Fix.dll`
+(resolução, janela, menu de opções), e o dgVoodoo entra como `d3d8R.dll`, o nome que o
+carregador procura ao lado dele. Não renomeie nem troque o `d3d8.dll` do fix para
+conseguir instalar: o DLSS 5 até roda, mas o jogo abre na resolução mínima e o menu de
+opções não abre. Qualquer outro arquivo com o nome o plano recusa, para não apostar com o
+jogo.
+
 **OpenGL** está fora da matriz validada da especificação. O ReShade é instalado com o
 nome certo (`opengl32.dll`) e deve carregar e abrir o overlay, mas o addon do Feeder
 anuncia D3D11/D3D12/Vulkan — o DLSS 5 pode não engatar. Se o jogo tiver um seletor de

@@ -73,6 +73,9 @@ public static class Propriedade
     {
         ("D3D9.dll", "dgVoodoo"),
         ("D3D8.dll", "dgVoodoo"),
+        // O dgVoodoo atrás do carregador do Silent Hill 3 PC Fix. O nome é o que o fix procura,
+        // e o usuário pode ter posto outro wrapper ali: só é nosso se for o dgVoodoo.
+        (CarregadorD3d8R.D3d8R, "dgVoodoo"),
         // O OptiScaler entra no host64 com o nome de uma DLL do sistema; só é nosso se for ele.
         (OptiScalerNr.Proxy, OptiScalerNr.Marca),
         // O ReShade que o OptiScaler carrega no host64: só é nosso se for o ReShade.

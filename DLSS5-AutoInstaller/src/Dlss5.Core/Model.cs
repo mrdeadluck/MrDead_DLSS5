@@ -322,17 +322,40 @@ public sealed class GameProfile
     /// Jogo DirectX 8 cujo D3D8.dll é uma mod com d3d8to9 (Silent Hill 2 Enhanced Edition):
     /// ela converte para DirectX 9 e carrega um d3d9.dll local de preferência, então o
     /// dgVoodoo entra como D3D9.dll ao lado, e o D3D8.dll dela fica. Ver <see cref="D3d8to9Wrapper"/>.
-    /// Decidido pela pasta (<see cref="AtualizarD3d8ViaD3D9"/>) e guardado no manifesto.
+    /// Decidido pela pasta (<see cref="AtualizarArranjoD3d8"/>) e guardado no manifesto.
     /// </summary>
     public bool D3d8ViaD3D9 { get; set; }
 
-    /// <summary>Olha a pasta do renderizador e decide <see cref="D3d8ViaD3D9"/>. Devolve o marcador achado.</summary>
-    public string? AtualizarD3d8ViaD3D9()
+    /// <summary>
+    /// Jogo DirectX 8 cujo D3D8.dll é um carregador que passa o Direct3D 8 para um d3d8R.dll
+    /// da própria pasta (Silent Hill 3 PC Fix): o carregador fica, e o dgVoodoo — o D3D8 do
+    /// kit — entra como d3d8R.dll. Ver <see cref="CarregadorD3d8R"/>. Decidido pela pasta
+    /// (<see cref="AtualizarArranjoD3d8"/>) e guardado no manifesto.
+    /// </summary>
+    public bool D3d8ViaD3d8R { get; set; }
+
+    /// <summary>
+    /// Com que nome o dgVoodoo fica na pasta do renderizador: o do wrapper, ou d3d8R.dll atrás
+    /// do carregador. (Atrás do DxWrapper é outro arranjo: <see cref="DgVoodooChainedName"/>.)
+    /// </summary>
+    public string DgVoodooNaPasta => D3d8ViaD3d8R ? CarregadorD3d8R.D3d8R : DgVoodooWrapperName;
+
+    /// <summary>
+    /// Olha a pasta do renderizador e decide <see cref="D3d8ViaD3D9"/> e <see cref="D3d8ViaD3d8R"/>.
+    /// Devolve o marcador de d3d8to9 achado.
+    /// </summary>
+    public string? AtualizarArranjoD3d8()
     {
         string? marca = null;
+        bool carregador = false;
         if (Api == GraphicsApi.D3D8 && RealExePath is not null)
-            marca = D3d8to9Wrapper.Qual(RendererFolder ?? ExeFolder);
+        {
+            var pasta = RendererFolder ?? ExeFolder;
+            marca = D3d8to9Wrapper.Qual(pasta);
+            carregador = marca is null && CarregadorD3d8R.Presente(pasta);
+        }
         D3d8ViaD3D9 = marca is not null;
+        D3d8ViaD3d8R = carregador;
         return marca;
     }
 

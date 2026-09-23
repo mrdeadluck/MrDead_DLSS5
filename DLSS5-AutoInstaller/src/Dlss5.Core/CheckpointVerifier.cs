@@ -595,16 +595,45 @@ public static class CheckpointVerifier
             // Encadeado atrás do DxWrapper, o dgVoodoo tem outro nome — e o D3D9.dll da
             // pasta é o DxWrapper, que passaria neste teste sem ser o que interessa.
             bool encadeado = DxWrapperChain.Encadeado(renderer, wrapper);
-            var nomeDg = encadeado ? profile.DgVoodooChainedName : wrapper;
+            // Atrás do carregador do Silent Hill 3 PC Fix, idem: o D3D8.dll é o carregador, e o
+            // dgVoodoo é o d3d8R.dll — onde o usuário também pode ter posto outro wrapper.
+            bool atrasDoCarregador = !encadeado
+                && wrapper.Equals(CarregadorD3d8R.Arquivo, StringComparison.OrdinalIgnoreCase)
+                && CarregadorD3d8R.Presente(renderer);
+            var nomeDg = encadeado ? profile.DgVoodooChainedName : atrasDoCarregador ? CarregadorD3d8R.D3d8R : wrapper;
             var d3d9 = Path.Combine(renderer, nomeDg);
             var conf = Path.Combine(renderer, "dgVoodoo.conf");
-            bool d3d9Ok = File.Exists(d3d9) && PeFile.GetArchitecture(d3d9) == PeArchitecture.X86;
+            bool d3d9Ok = File.Exists(d3d9) && PeFile.GetArchitecture(d3d9) == PeArchitecture.X86
+                          && (!atrasDoCarregador || Propriedade.ContemTexto(d3d9, "dgVoodoo"));
             r.Add(new CheckResult(5, "dgVoodoo2 na pasta do renderizador",
                 d3d9Ok ? CheckStatus.Pass : CheckStatus.Fail,
                 d3d9Ok
-                    ? $"{nomeDg} (x86) em {renderer}" + (encadeado ? " — encadeado atrás do DxWrapper." : "")
-                    : $"{nomeDg} x86 ausente em {renderer}",
-                d3d9Ok ? null : $"No Source o {wrapper} vai em bin\\, não na raiz."));
+                    ? $"{nomeDg} (x86) em {renderer}" + (encadeado ? " — encadeado atrás do DxWrapper."
+                        : atrasDoCarregador ? " — atrás do carregador do fix, que continua sendo o D3D8.dll." : "")
+                    : atrasDoCarregador
+                        ? $"O D3D8.dll é o carregador do fix, mas o {nomeDg} ao lado dele não é o dgVoodoo x86 (ou não existe): " +
+                          "o carregador passa o Direct3D 8 para o d3d8 do Windows ou para outro wrapper, e o dgVoodoo fica de fora."
+                        : $"{nomeDg} x86 ausente em {renderer}",
+                d3d9Ok ? null
+                    : atrasDoCarregador ? $"Instale de novo: o plano põe o dgVoodoo como {nomeDg} e deixa o carregador onde está."
+                    : $"No Source o {wrapper} vai em bin\\, não na raiz."));
+
+            // O Silent Hill 3 PC Fix só sobe pelo carregador dele no D3D8.dll. Quem trocou esse
+            // arquivo pelo dgVoodoo tem DLSS 5, mas o jogo abre na resolução mínima e o menu de
+            // opções não abre.
+            if (profile.Api == GraphicsApi.D3D8 && File.Exists(Path.Combine(renderer, CarregadorD3d8R.ModSh3)))
+            {
+                bool sobe = CarregadorD3d8R.Presente(renderer);
+                r.Add(new CheckResult(5, "Silent Hill 3 PC Fix carregado pelo D3D8.dll",
+                    sobe ? CheckStatus.Pass : CheckStatus.Fail,
+                    sobe
+                        ? $"O D3D8.dll é o carregador do fix: é ele que sobe o {CarregadorD3d8R.ModSh3}."
+                        : $"O {CarregadorD3d8R.ModSh3} está na pasta, mas o D3D8.dll não é o carregador dele: o fix não sobe " +
+                          "(resolução mínima, menu de opções que não abre).",
+                    sobe ? null
+                        : "Devolva o d3d8.dll do fix ao lugar (se o renomeou, volte o nome para d3d8.dll) e instale de novo: " +
+                          $"o dgVoodoo entra atrás dele como {CarregadorD3d8R.D3d8R}."));
+            }
 
             if (encadeado)
             {
