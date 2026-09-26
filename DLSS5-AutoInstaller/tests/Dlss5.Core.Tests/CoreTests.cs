@@ -358,9 +358,147 @@ public class ReShadeIniPorCaminhoTests
     [Fact]
     public void NoCaminhoDiretoSoEfeitosMarcadosCarregam()
     {
-        // Preset vazio + EffectLoadSkipping: nenhum .fx que sobrou na pasta é compilado.
-        Assert.Contains("EffectLoadSkipping=1", ReShadeConfigWriter.BuildReShadeIni(feederUsed: false));
-        Assert.DoesNotContain("EffectLoadSkipping", ReShadeConfigWriter.BuildReShadeIni(feederUsed: true));
+        // A chave que o ReShade 6 lê é SkipLoadingDisabledEffects; a "EffectLoadSkipping" que saía
+        // aqui não existe e era ignorada. Com o preset vazio do direto ela ainda não pula nada:
+        // vale quando o usuário marcar algum efeito.
+        var direto = ReShadeConfigWriter.BuildReShadeIni(feederUsed: false);
+        Assert.Equal("1", IniTexto.Ler(direto, "GENERAL", "SkipLoadingDisabledEffects"));
+        Assert.DoesNotContain("EffectLoadSkipping", direto);
+        Assert.DoesNotContain("AutoSavePreset", direto);
+        // Feeder em jogo 64-bit: nada muda, o ReShade carrega a pasta como sempre.
+        var feeder64 = ReShadeConfigWriter.BuildReShadeIni(feederUsed: true);
+        Assert.DoesNotContain("SkipLoadingDisabledEffects", feeder64);
+        Assert.DoesNotContain("AutoSavePreset", feeder64);
+        Assert.DoesNotContain("EffectLoadSkipping", feeder64);
+    }
+
+    [Fact]
+    public void Jogo32BitComFeederCarregaSoOsEfeitosDoPresetEOPresetNaoSeGravaSozinho()
+    {
+        // Black Mesa (26/09/2026): o ReShade do bms.exe compilou os 44 efeitos da pasta e o jogo
+        // caiu com "failed to lock vertex buffer". Em 32-bit sobem só o provedor de MV e o
+        // DLSS5_Feed do preset — e o preset não é regravado pelo F6, senão o DLSS5_Feed.fx nem
+        // carregaria na abertura seguinte.
+        var ini = ReShadeConfigWriter.BuildReShadeIni(feederUsed: true, soEfeitosMarcados: true);
+        Assert.Equal("1", IniTexto.Ler(ini, "GENERAL", CargaDeEfeitos.Chave));
+        Assert.Equal("0", IniTexto.Ler(ini, "OVERLAY", CargaDeEfeitos.ChaveAutoSalvar));
+        // O resto do caminho do Feeder continua igual.
+        Assert.Contains(@"EffectSearchPaths=.\reshade-shaders\Shaders\**", ini);
+        Assert.Contains("DepthCopyBeforeClears=1", ini);
+        Assert.Equal(2, RenodxIni.Ler(ini));
+        // Junto com o "forçar janela" as duas seções convivem.
+        var comJanela = ReShadeConfigWriter.BuildReShadeIni(feederUsed: true, forceWindowed: true, soEfeitosMarcados: true);
+        Assert.Equal("1", IniTexto.Ler(comJanela, "APP", "ForceWindowed"));
+        Assert.Equal("0", IniTexto.Ler(comJanela, "OVERLAY", CargaDeEfeitos.ChaveAutoSalvar));
+    }
+
+    [Fact]
+    public void SoOJogo32BitComFeederCarregaSoOsMarcados()
+    {
+        GameProfile Perfil(PeArchitecture arch, GraphicsApi api) =>
+            new() { GameFolder = Path.GetTempPath(), Architecture = arch, Api = api };
+        Assert.True(Perfil(PeArchitecture.X86, GraphicsApi.D3D9).SoEfeitosMarcados);   // rota C (Black Mesa)
+        Assert.True(Perfil(PeArchitecture.X86, GraphicsApi.D3D11).SoEfeitosMarcados);  // rota B
+        Assert.False(Perfil(PeArchitecture.X64, GraphicsApi.D3D11).SoEfeitosMarcados);
+        var direto = Perfil(PeArchitecture.X64, GraphicsApi.D3D12);
+        direto.HasNativeDlss = true;
+        Assert.False(direto.SoEfeitosMarcados);
+    }
+}
+
+public class CargaDeEfeitosTests
+{
+    // Trechos do ReShade.log do Black Mesa (26/09/2026), com um efeito que falhou, um que foi
+    // recompilado na mesma sessão e o aviso de várias linhas que o ReShade pendura no "with warnings".
+    private const string LogDoBlackMesa =
+        "23:30:26:640 [34580] | INFO  | Successfully compiled 'M:\\SteamLibrary\\steamapps\\common\\Black Mesa\\reshade-shaders\\Shaders\\Daltonize.fx' in 0.041000 s.\r\n" +
+        "23:30:26:956 [11960] | WARN  | Successfully compiled 'M:\\SteamLibrary\\steamapps\\common\\Black Mesa\\reshade-shaders\\Shaders\\MartysMods_SOLARIS.fx' in 0.356000 s with warnings:\r\n" +
+        "m:\\steamlibrary\\steamapps\\common\\black mesa\\Shader@0x1B6A5B80(350,15-48): warning X3556: integer modulus may be much slower, try using uints if possible.\r\n" +
+        "\r\n" +
+        "23:30:28:057 [34580] | WARN  | Successfully compiled 'M:\\SteamLibrary\\steamapps\\common\\Black Mesa\\reshade-shaders\\Shaders\\DLSS5_Feed.fx' in 0.962000 s with warnings:\r\n" +
+        "23:30:28:832 [34580] | INFO  | Successfully compiled 'M:\\SteamLibrary\\steamapps\\common\\Black Mesa\\reshade-shaders\\Shaders\\DO_NOT_ENABLE.addonfx' in 0.009000 s.\r\n" +
+        "23:30:33:371 [ 8424] | INFO  | Successfully compiled 'M:\\SteamLibrary\\steamapps\\common\\Black Mesa\\reshade-shaders\\Shaders\\vort_Motion.fx' in 0.440000 s.\r\n" +
+        "23:30:33:400 [ 8424] | ERROR | Failed to compile 'M:\\SteamLibrary\\steamapps\\common\\Black Mesa\\reshade-shaders\\Shaders\\MotionEstimation.fx':\r\n" +
+        "23:30:47:100 [ 8424] | INFO  | Successfully compiled 'M:\\SteamLibrary\\steamapps\\common\\Black Mesa\\reshade-shaders\\Shaders\\vort_Motion.fx' in 0.012000 s.\r\n";
+
+    [Fact]
+    public void ContaCadaEfeitoUmaVezSoPeloLog()
+    {
+        var efeitos = CargaDeEfeitos.NoLog(LogDoBlackMesa);
+        Assert.Equal(
+            new[] { "Daltonize.fx", "MartysMods_SOLARIS.fx", "DLSS5_Feed.fx", "DO_NOT_ENABLE.addonfx", "vort_Motion.fx", "MotionEstimation.fx" },
+            efeitos.Select(CargaDeEfeitos.NomeDoArquivo));
+        Assert.Empty(CargaDeEfeitos.NoLog(null));
+        Assert.Empty(CargaDeEfeitos.NoLog("23:30:22:668 [12692] | INFO  | Registered add-on \"DLSS 5 Feed (32-bit) 0.15.1\""));
+
+        // Apóstrofo no caminho do jogo e a variante "permutation" do ReShade.
+        var comApostrofo = CargaDeEfeitos.NoLog(
+            "10:00:00:000 [1] | INFO  | Successfully compiled 'D:\\Jogos\\Tom Clancy's Splinter Cell\\reshade-shaders\\Shaders\\DLSS5_Feed.fx' in 0.9 s.\r\n" +
+            "10:00:00:100 [1] | INFO  | Successfully compiled 'D:\\Jogos\\Tom Clancy's Splinter Cell\\reshade-shaders\\Shaders\\vort_Motion.fx' permutation in 0.2 s.\r\n" +
+            "10:00:00:200 [1] | ERROR | Failed to compile 'D:\\Jogos\\Tom Clancy's Splinter Cell\\reshade-shaders\\Shaders\\MotionEstimation.fx'!\r\n");
+        Assert.Equal(new[] { "DLSS5_Feed.fx", "vort_Motion.fx", "MotionEstimation.fx" }, comApostrofo.Select(CargaDeEfeitos.NomeDoArquivo));
+        Assert.StartsWith("D:\\Jogos\\Tom Clancy's Splinter Cell\\", comApostrofo[0]);
+    }
+
+    [Fact]
+    public void NomeDoArquivoEntendeACaminhoDoWindowsEmQualquerSistema()
+    {
+        Assert.Equal("vort_Motion.fx", CargaDeEfeitos.NomeDoArquivo(@"M:\Jogos\Black Mesa\reshade-shaders\Shaders\vort_Motion.fx"));
+        Assert.Equal("CAS.fx", CargaDeEfeitos.NomeDoArquivo("/jogo/reshade-shaders/Shaders/SweetFX/CAS.fx"));
+        Assert.Equal("LUT.fx", CargaDeEfeitos.NomeDoArquivo("LUT.fx"));
+    }
+
+    private static string LogCom(IEnumerable<string> efeitos) => string.Concat(efeitos.Select(e =>
+        $"23:30:26:640 [34580] | INFO  | Successfully compiled 'M:\\Jogos\\Black Mesa\\reshade-shaders\\Shaders\\{e}' in 0.010000 s.\r\n"));
+
+    private static readonly string[] DoPreset = { "DLSS5_Feed.fx", "DO_NOT_ENABLE.addonfx", "vort_Motion.fx" };
+
+    private static readonly string[] PastaInteira = Enumerable.Range(1, 41).Select(i => $"Efeito{i}.fx").Concat(DoPreset).ToArray();
+
+    private static CheckResult? Item(string pasta, PeArchitecture arch = PeArchitecture.X86)
+    {
+        var perfil = new GameProfile
+        {
+            GameFolder = pasta, RealExePath = Path.Combine(pasta, "bms.exe"),
+            Architecture = arch, Api = GraphicsApi.D3D9, RendererFolder = Path.Combine(pasta, "bin"),
+        };
+        return CheckpointVerifier.Verify(perfil, null)
+            .SingleOrDefault(c => c.Number == 5 && c.Title.Contains("só com os efeitos do DLSS 5", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void VerificacaoAcusaOJogo32BitQueCompilaAPastaInteira()
+    {
+        var pasta = Path.Combine(Path.GetTempPath(), "dlss5efeitos_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(pasta);
+        try
+        {
+            // Instalação de antes desta versão: sem a chave, e o log com os 44 da pasta.
+            File.WriteAllText(Path.Combine(pasta, "ReShade.ini"), ReShadeConfigWriter.BuildReShadeIni(feederUsed: true));
+            File.WriteAllText(Path.Combine(pasta, "ReShade.log"), LogCom(PastaInteira));
+            var antes = Item(pasta)!;
+            Assert.Equal(CheckStatus.Warning, antes.State);
+            Assert.Contains("44 efeito(s)", antes.Detail);
+            Assert.Contains("failed to lock vertex buffer", antes.Detail);
+            Assert.Contains("Instalar de novo", antes.FixHint!);
+
+            // Reinstalado, mas o log ainda é da abertura anterior (ou alguém forçou carregar tudo).
+            File.WriteAllText(Path.Combine(pasta, "ReShade.ini"), ReShadeConfigWriter.BuildReShadeIni(feederUsed: true, soEfeitosMarcados: true));
+            var logVelho = Item(pasta)!;
+            Assert.Equal(CheckStatus.Warning, logVelho.State);
+            Assert.Contains("Forçar carregar todos os efeitos", logVelho.Detail);
+
+            // Aberto de novo: só o que o preset marca (e o .addonfx, que o ReShade nunca pula).
+            File.WriteAllText(Path.Combine(pasta, "ReShade.log"), LogCom(DoPreset));
+            var depois = Item(pasta)!;
+            Assert.Equal(CheckStatus.Pass, depois.State);
+            Assert.Contains("3 efeito(s): DLSS5_Feed.fx, DO_NOT_ENABLE.addonfx, vort_Motion.fx", depois.Detail);
+            Assert.Null(depois.FixHint);
+
+            // Jogo 64-bit: o item nem aparece.
+            Assert.Null(Item(pasta, PeArchitecture.X64));
+        }
+        finally { Directory.Delete(pasta, true); }
     }
 }
 
@@ -601,7 +739,8 @@ public class PlanBuilderTests
         // A pasta já ficou de fora do caminho direto, na suspeita de que compilar os .fx
         // derrubava o RE9. A suspeita caiu (era a proteção anti-adulteração do jogo), e
         // sem a pasta o ReShade abre reclamando "nenhum arquivo de efeito encontrado" —
-        // parece defeito e não é. Com EffectLoadSkipping e preset vazio nada é compilado.
+        // parece defeito e não é. (Com o preset vazio do direto o ReShade compila a pasta:
+        // lista vazia não pula nada — ver CargaDeEfeitos.)
         var direto = Profile(PeArchitecture.X64, GraphicsApi.D3D12);
         direto.HasNativeDlss = true;
         Assert.True(Targets(InstallPlanBuilder.Build(direto, FullKit(), new InstallOptions()), "reshade-shaders"));

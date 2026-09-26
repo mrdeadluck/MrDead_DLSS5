@@ -540,7 +540,11 @@ public static class CheckpointVerifier
                 ordemOk && defOk
                     ? null
                     : !ordemOk
-                        ? "O preset deve listar o provedor de MV antes do DLSS5_Feed."
+                        ? "O preset deve listar o provedor de MV antes do DLSS5_Feed." +
+                          (profile.SoEfeitosMarcados && !hasFeed
+                              ? " Em jogo 32-bit o ReShade só carrega o que o preset marca: sem o DLSS5_Feed na lista o efeito nem " +
+                                "sobe, e o F6 não tem o que ligar. Clique em Instalar de novo."
+                              : "")
                         : $"O DLSS5_Feed.fx {FeederKit.VersaoDoKit} escolhe de quem lê os vetores de movimento por essa " +
                           "definição; sem ela lê texMotionVectors, que o Launchpad não escreve — o DLSS roda sem vetores " +
                           "(nítido parado, borrado em movimento). Clique em Instalar de novo: esta versão do programa grava a definição."));
@@ -586,6 +590,43 @@ public static class CheckpointVerifier
                       $"ao lado como {nomeExe}{Patch4Gb.SufixoDoBackup}. É o mesmo que a ferramenta \"4GB Patch\" da NTCore faz. Depois abra o " +
                       "jogo de novo. Se o erro continuar, teste \"Isolar a causa\" sem o Feeder: se some, é a memória das texturas do feed."
                     : null));
+        }
+
+        // 5d — jogo 32-bit com o Feeder: o ReShade do jogo carrega só os efeitos do preset. Sem a
+        // chave ele compila a pasta reshade-shaders inteira dentro do processo 32-bit (Black Mesa,
+        // 26/09/2026: 44 efeitos no ReShade.log e "failed to lock vertex buffer" com o exe já LAA e
+        // sem DXVK). O ReShade.log diz quantos subiram de fato. Ver CargaDeEfeitos.
+        if (profile.SoEfeitosMarcados)
+        {
+            string iniEfeitos = "", logEfeitos = "";
+            try { if (File.Exists(profile.ReShadeIniPath)) iniEfeitos = ReadShared(profile.ReShadeIniPath); } catch { }
+            try { if (File.Exists(profile.ReShadeLogPath)) logEfeitos = ReadShared(profile.ReShadeLogPath); } catch { }
+            bool soMarcados = IniTexto.Ler(iniEfeitos, "GENERAL", CargaDeEfeitos.Chave) == "1";
+            var carregados = CargaDeEfeitos.NoLog(logEfeitos);
+            bool demais = carregados.Count > CargaDeEfeitos.LimiteEsperado;
+            string noLog = carregados.Count == 0
+                ? ""
+                : $" O ReShade.log da última abertura carregou {carregados.Count} efeito(s)" +
+                  (demais ? "." : ": " + string.Join(", ", carregados.Select(CargaDeEfeitos.NomeDoArquivo)) + ".");
+            r.Add(new CheckResult(5, "ReShade do jogo 32-bit só com os efeitos do DLSS 5",
+                soMarcados && !demais ? CheckStatus.Pass : CheckStatus.Warning,
+                (soMarcados
+                    ? $"{CargaDeEfeitos.Chave}=1 no ReShade.ini: sobem só os efeitos marcados no preset (o provedor de MV e o DLSS 5 Feed)."
+                    : $"O ReShade.ini não tem {CargaDeEfeitos.Chave}=1: o ReShade do jogo compila e cria TODOS os efeitos da pasta " +
+                      "reshade-shaders (mais de 40) dentro do processo 32-bit, que divide a memória com o jogo, o dgVoodoo e o feed. " +
+                      "No Black Mesa isso terminou em \"failed to lock vertex buffer in CMeshDX8::LockVertexBuffer\", e noutra " +
+                      "abertura em \"Compilando (40 efeitos restantes)\" parado na tela de carregamento.") + noLog +
+                (soMarcados && demais
+                    ? " Com a chave ligada isso quer dizer que o log é de uma abertura anterior a ela, ou que o botão \"Forçar " +
+                      "carregar todos os efeitos\" (Force load all effects) do painel foi usado nessa sessão."
+                    : ""),
+                !soMarcados
+                    ? "Clique em Instalar de novo: esta versão grava a chave (e desliga o salvamento automático do preset, para o F6 " +
+                      "não esconder o DLSS 5 na abertura seguinte). Para testar antes de reinstalar: no jogo, painel do ReShade → aba " +
+                      "Configurações → Geral → marque \"Carregar apenas efeitos ativados\" (Load only enabled effects) e reabra o jogo."
+                    : demais
+                        ? "Abra o jogo de novo (sem clicar em \"Forçar carregar todos os efeitos\") e clique em Verificar."
+                        : null));
         }
 
         if (route == InstallRoute.C)

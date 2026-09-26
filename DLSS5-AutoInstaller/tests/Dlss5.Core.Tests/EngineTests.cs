@@ -964,6 +964,29 @@ public class ConsumidoresNoHost64Tests
     }
 
     [Fact]
+    public void Jogo32Bit_OReShadeIniInstaladoSoCarregaOsEfeitosDoPreset()
+    {
+        // Black Mesa (26/09/2026): 44 efeitos compilados dentro do processo 32-bit. O ini gravado
+        // pela instalação tem que trazer a chave que o ReShade 6 lê, e o preset o que ela deixa subir.
+        using var c = new Cenario();
+        var r = new InstallerEngine(_ => { }).Execute(
+            InstallPlanBuilder.Build(PerfilX86(c, NeuralEngine.RenodxDlss5Feeder, 1), c.Inventario, OpcoesX86(c)), c.Inventario);
+        Assert.True(r.Sucesso, r.Erro);
+        var ini = File.ReadAllText(c.NoJogo("ReShade.ini"));
+        Assert.Equal("1", IniTexto.Ler(ini, "GENERAL", CargaDeEfeitos.Chave));
+        Assert.Equal("0", IniTexto.Ler(ini, "OVERLAY", CargaDeEfeitos.ChaveAutoSalvar));
+        Assert.Contains("Techniques=MartysMods_Launchpad@MartysMods_LAUNCHPAD.fx,DLSS5_Feed@DLSS5_Feed.fx",
+            File.ReadAllText(c.NoJogo("ReShadePreset.ini")));
+
+        // Jogo 64-bit com o Feeder: o ini segue como sempre foi.
+        using var c64 = new Cenario();
+        Assert.True(new InstallerEngine(_ => { }).Execute(c64.Plano(c64.Perfil(PeArchitecture.X64, GraphicsApi.D3D11)), c64.Inventario).Sucesso);
+        var ini64 = File.ReadAllText(c64.NoJogo("ReShade.ini"));
+        Assert.Null(IniTexto.Ler(ini64, "GENERAL", CargaDeEfeitos.Chave));
+        Assert.DoesNotContain(CargaDeEfeitos.ChaveAutoSalvar, ini64);
+    }
+
+    [Fact]
     public void JanelaForcada_ReconheceOAddonNoReShadeLog()
     {
         Assert.True(JanelaForcada.Registrado(

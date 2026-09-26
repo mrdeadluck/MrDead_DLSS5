@@ -150,6 +150,11 @@ public static class ReShadeConfigWriter
     /// reframework\plugins e resolve caminho relativo a partir dali, não da pasta do jogo —
     /// os caminhos do ini precisam ser absolutos ou nada é encontrado.
     /// </param>
+    /// <param name="soEfeitosMarcados">
+    /// Jogo 32-bit com o Feeder: o ReShade do jogo carrega só o que o preset marca (o provedor
+    /// de MV e o DLSS5_Feed), e o preset deixa de ser gravado sozinho — ver
+    /// <see cref="CargaDeEfeitos"/> e <see cref="GameProfile.SoEfeitosMarcados"/>.
+    /// </param>
     public static string BuildReShadeIni(
         int overlayKey = KeyHome,
         bool ctrl = false,
@@ -162,7 +167,8 @@ public static class ReShadeConfigWriter
         string? basePath = null,
         bool shortFuse = false,
         int passCount = ShortFuseDlss.PassesPadrao,
-        bool forceWindowed = false)
+        bool forceWindowed = false,
+        bool soEfeitosMarcados = false)
     {
         // Sem baseDir tudo continua relativo, como sempre foi.
         string Raiz(string relativo) => baseDir is null
@@ -186,15 +192,29 @@ public static class ReShadeConfigWriter
         sb.AppendLine($"EffectSearchPaths={Raiz(@"reshade-shaders\Shaders\**")}");
         sb.AppendLine($"TextureSearchPaths={Raiz(@"reshade-shaders\Textures\**")}");
         sb.AppendLine($"PresetPath={Raiz(presetFile)}");
-        // Caminho direto: só efeitos marcados no preset são carregados — e o preset é
-        // vazio. Assim nenhum .fx que sobrou na pasta (de instalação antiga, ou do
-        // usuário) é compilado e alocado no device do jogo.
-        if (!feederUsed)
-            sb.AppendLine("EffectLoadSkipping=1");
+        // Só os efeitos marcados no preset são carregados (ver CargaDeEfeitos; até 26/09/2026
+        // saía aqui "EffectLoadSkipping=1", nome que o ReShade não lê).
+        // - Jogo 32-bit com o Feeder: sobem o provedor de MV e o DLSS5_Feed, não a pasta
+        //   inteira dentro do processo 32-bit (Black Mesa: "failed to lock vertex buffer").
+        // - Caminho direto: o preset nasce vazio, e com a lista vazia o ReShade não pula nada;
+        //   a chave passa a valer quando o usuário marcar algum efeito.
+        if (soEfeitosMarcados || !feederUsed)
+            sb.AppendLine($"{CargaDeEfeitos.Chave}=1");
         sb.AppendLine();
         sb.AppendLine("[INPUT]");
         sb.AppendLine($"KeyOverlay={overlayKey},{Bit(ctrl)},{Bit(shift)},{Bit(alt)}");
         sb.AppendLine();
+        if (soEfeitosMarcados)
+        {
+            // Com efeitos pulados, o preset gravado com o DLSS 5 desligado (o F6 grava na hora)
+            // faria o DLSS5_Feed.fx nem carregar na abertura seguinte, e o F6 ficaria sem o que
+            // ligar. Sem o salvamento automático, o F6 e as caixas do painel valem para a
+            // sessão; o jogo sempre abre com o preset da instalação. Para guardar uma mudança
+            // feita no painel, o botão de salvar do ReShade.
+            sb.AppendLine("[OVERLAY]");
+            sb.AppendLine($"{CargaDeEfeitos.ChaveAutoSalvar}=0");
+            sb.AppendLine();
+        }
         if (forceWindowed)
         {
             // Lido pelo addon swapchain_override (exemplo 16 do ReShade 6, que o kit compila e o

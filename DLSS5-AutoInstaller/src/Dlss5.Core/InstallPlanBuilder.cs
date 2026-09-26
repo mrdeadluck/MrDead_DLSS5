@@ -273,9 +273,9 @@ public static class InstallPlanBuilder
         // derrubava o RE9. A suspeita caiu: o RE9 caía pela proteção anti-adulteração do
         // próprio jogo (com o REFramework hospedando o ReShade, ele abre). E sem a pasta
         // o ReShade abre reclamando na aba Início — "nenhum arquivo de efeito (.fx)
-        // encontrado nos caminhos de pesquisa" — o que parece defeito e não é. Com a
-        // pasta no lugar e EffectLoadSkipping=1 (preset vazio no direto), os arquivos
-        // existem e mesmo assim nenhum é compilado.
+        // encontrado nos caminhos de pesquisa" — o que parece defeito e não é. Com o preset
+        // vazio do direto o ReShade compila a pasta (lista vazia não pula nada); em jogo
+        // 32-bit com o Feeder só sobem os dois efeitos do preset (ver CargaDeEfeitos).
         if (kit.ShadersDir is not null)
             plan.Actions.Add(new PlanAction(PlanActionKind.CopyFile,
                 $"Copiar pasta reshade-shaders → {Rel(profile, shadersTarget)}",
@@ -365,6 +365,16 @@ public static class InstallPlanBuilder
                     "dgVoodoo/ReShade/feed moram lá dentro. Jogo pesado pode cair com erro de memória (na engine Source: " +
                     "\"failed to lock vertex buffer in CMeshDX8::LockVertexBuffer\", visto no Black Mesa). Se acontecer, aplique " +
                     "o 4GB Patch (NTCore) no exe. A verificação confere a flag.");
+            // O ReShade do jogo carrega só os efeitos do preset (ver CargaDeEfeitos): a pasta inteira
+            // compilada dentro do processo 32-bit foi o que sobrou de suspeito no Black Mesa (26/09/2026).
+            if (profile.SoEfeitosMarcados)
+                plan.Warnings.Add(
+                    "Jogo 32-bit: o ReShade do jogo carrega só o provedor de MV e o DLSS 5 Feed, e não os mais de 40 efeitos " +
+                    "da pasta reshade-shaders — compilados dentro do processo 32-bit, eles disputam a memória com o jogo, o " +
+                    "dgVoodoo e o feed (Black Mesa: \"failed to lock vertex buffer\" e \"Compilando (40 efeitos restantes)\" parado). " +
+                    "O F6 e as caixas do painel valem para a sessão: o jogo sempre abre com o DLSS 5 ligado. Para usar outro " +
+                    "efeito: no painel, \"Forçar carregar todos os efeitos\" (Force load all effects), marque o efeito e salve o " +
+                    "preset no botão de salvar (o disquete).");
             var addonJanela = Path.Combine(exe, JanelaForcada.Addon32);
             if (options.ForcarJanela)
             {

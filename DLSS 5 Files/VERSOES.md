@@ -172,6 +172,30 @@ começando por `info:  DXVK: v2.6.2`. Solução: abrir pela opção **"Play Dire
 Steam. A detecção avisa quando o jogo traz o DXVK, e a verificação (item 5c) acusa quando o log do
 DXVK existe. O `bms.exe` já tinha a flag LAA — o que segue abaixo vale para exe 32-bit sem ela.
 
+**26/09/2026: o mesmo erro com o dgVoodoo e o feed funcionando.** Sem DXVK (o `ReShade.log` do jogo
+mostra o `DGD3D11ROOT` do dgVoodoo), com o `bms.exe` LAA, o feed entregou os primeiros quadros e o
+jogo caiu ~1 s depois; noutra abertura ficou parado na tela de carregamento com o banner "Compilando
+(40 efeitos restantes)". O que sobrou de suspeito: o `ReShade.log` do jogo tinha **44**
+`Successfully compiled` — o ReShade compilava e criava a pasta `reshade-shaders` inteira (SweetFX,
+MartysMods, REST…) dentro do processo 32-bit, junto com o jogo, o dgVoodoo, o feed e o driver,
+quando o preset só usa dois efeitos (o próprio ReShade limita a 4 as threads de compilação em 32-bit
+por falta de endereço). Agora, em jogo 32-bit com o Feeder, o `ReShade.ini` sai com `[GENERAL]
+SkipLoadingDisabledEffects=1` — a opção "Carregar apenas efeitos ativados" ("Load only enabled
+effects"): só o provedor de MV e o `DLSS5_Feed` do preset sobem — e `[OVERLAY] AutoSavePreset=0`. A
+segunda é o que mantém o F6 funcionando: o ReShade grava o preset na hora em que o F6 desliga a
+technique, e com os efeitos pulados um preset gravado assim faria o `DLSS5_Feed.fx` nem carregar na
+abertura seguinte (e o F6 não teria o que ligar). Sem o salvamento automático, o F6 e as caixas do
+painel valem para a sessão e o jogo sempre abre com o DLSS 5 ligado; para guardar uma mudança feita
+no painel, o botão de salvar do ReShade. Para usar outro efeito da pasta num jogo 32-bit: "Forçar
+carregar todos os efeitos" ("Force load all effects") no painel, marcar e salvar. O item 5d da
+verificação confere a chave e conta os efeitos que o `ReShade.log` carregou. Instalação anterior:
+"Instalar de novo" regrava o ini; para testar antes, painel do ReShade → Configurações → Geral →
+"Carregar apenas efeitos ativados".
+
+A chave que o programa gravava no caminho direto, `EffectLoadSkipping=1`, não existe no ReShade 6
+(a do `runtime.cpp` do 6.8.0 é `SkipLoadingDisabledEffects`) e era ignorada. Mesmo com o nome certo,
+o preset vazio do direto não pula nada: o ReShade só pula quando a lista `Techniques` tem algo.
+
 Fora isso, o mesmo erro também é a engine Source dizendo que a memória do processo acabou. Um exe 32-bit sem a flag LAA
 (Large Address Aware) enxerga 2 GB, e dentro deles moram o jogo, o dgVoodoo, o ReShade, as
 texturas compartilhadas do feed e o driver. A verificação (item 5) lê a flag no exe que sobe
@@ -192,7 +216,9 @@ quadro cru: é a comparação antes/depois. Aperta de novo e volta. Por que não
 ShortFuse não tem tecla nenhuma (conferido nas strings do addon), e o F6 do Krish (`NRToggleKey`
 em `[RenoDX.DLSS5]`) não chega ao host64 em jogo 32-bit. Em jogo 64-bit com DLSS nativo o preset
 é vazio e o F6 continua sendo o do Krish — uma tecla só nas duas rotas. Para trocar depois: painel
-do ReShade, botão direito em "DLSS 5 Feed", campo da tecla.
+do ReShade, botão direito em "DLSS 5 Feed", campo da tecla. Em jogo 32-bit o F6 vale para a sessão
+(o jogo sempre abre com o DLSS 5 ligado) e a troca de tecla precisa do botão de salvar do painel —
+ver `AutoSavePreset=0` na seção do Black Mesa.
 
 ## O que mudou no Feeder de 0.13.1-beta.1 para 0.15.1
 

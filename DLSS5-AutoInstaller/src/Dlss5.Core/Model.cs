@@ -225,6 +225,14 @@ public sealed class GameProfile
     public bool NeedsDgVoodoo => Route == InstallRoute.C;
 
     /// <summary>
+    /// O ReShade do jogo carrega só os efeitos marcados no preset — o provedor de MV e o
+    /// DLSS5_Feed —, não a pasta reshade-shaders inteira. Vale para jogo 32-bit com o Feeder,
+    /// onde cada efeito compilado pesa na memória que o jogo, o dgVoodoo e o feed dividem
+    /// (Black Mesa, 26/09/2026). Ver <see cref="CargaDeEfeitos"/>.
+    /// </summary>
+    public bool SoEfeitosMarcados => Architecture == PeArchitecture.X86 && NeedsFeeder;
+
+    /// <summary>
     /// Hospedar o ReShade dentro do REFramework em vez de injetá-lo como dxgi.dll.
     /// É o caminho para jogo da RE Engine com proteção anti-adulteração (o RE9 recusa a
     /// injeção direta e cai antes de criar qualquer DLSS). Ver <see cref="ReFramework"/>.

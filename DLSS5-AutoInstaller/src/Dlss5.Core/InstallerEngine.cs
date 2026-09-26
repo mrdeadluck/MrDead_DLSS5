@@ -388,7 +388,8 @@ public sealed partial class InstallerEngine
                 basePath: plan.Profile.ReShadeForaDaRaiz ? plan.Profile.ExeFolder : null,
                 shortFuse: plan.Profile.UsesShortFuse,
                 passCount: plan.Profile.PassCount,
-                forceWindowed: plan.Options.ForcarJanela)
+                forceWindowed: plan.Options.ForcarJanela,
+                soEfeitosMarcados: plan.Profile.SoEfeitosMarcados)
             : ReShadeConfigWriter.BuildPresetIni(plan.Options.MvProvider, feederUsed: plan.Profile.NeedsFeeder,
                 teclaLigaDesliga: plan.Options.TeclaLigaDesliga);
     }

@@ -150,7 +150,7 @@ vez de recusar em silêncio.
 | Escolha do caminho A/B/C | Árvore de decisão da spec (seção 5) |
 | Layout dos arquivos | Cada rota tem o seu; em jogo 32-bit os `.addon64` vão **só** em `host64\` |
 | ReShade | Copia o `dxgi.dll` da arquitetura certa ou **extrai** `ReShade32/64.dll` do instalador |
-| `ReShade.ini` | Gerado com `EffectSearchPaths`, `TextureSearchPaths`, `AddonPath` e a combinação de teclas escolhida (`KeyOverlay=<vk>,<ctrl>,<shift>,<alt>`) |
+| `ReShade.ini` | Gerado com `EffectSearchPaths`, `TextureSearchPaths`, `AddonPath` e a combinação de teclas escolhida (`KeyOverlay=<vk>,<ctrl>,<shift>,<alt>`). Em jogo 32-bit com o Feeder, também `SkipLoadingDisabledEffects=1` (só os efeitos do preset sobem no processo 32-bit) e `AutoSavePreset=0` (o F6 vale para a sessão) |
 | `ReShadePreset.ini` | Gerado com o provedor de motion vectors **acima** do `DLSS5_Feed`, ambos já marcados |
 | `dgVoodoo.conf` | Patch consciente de seção (5 chaves) |
 | Override de assinatura | 3 chaves em `HKLM`, com verificação e reversão |

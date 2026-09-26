@@ -128,13 +128,21 @@ public static class ManualSteps
             steps.Add(new ManualStep(n++, "Conferir o depth buffer",
                 "Na aba Complementos → Generic Depth, confirme que o buffer da cena está selecionado e não está " +
                 "marcado como Multisampled. Se a imagem ficar estranha, ative o DisplayDepth.fx para ver o depth: " +
-                "se estiver invertido ou de cabeça para baixo, marque RESHADE_DEPTH_INPUT_IS_REVERSED / IS_UPSIDE_DOWN.", false));
+                "se estiver invertido ou de cabeça para baixo, marque RESHADE_DEPTH_INPUT_IS_REVERSED / IS_UPSIDE_DOWN." +
+                (profile.SoEfeitosMarcados
+                    ? " Em jogo 32-bit o ReShade só carrega os efeitos do preset: para achar o DisplayDepth na lista, clique antes " +
+                      "em \"Forçar carregar todos os efeitos\" (Force load all effects) no alto dela (vale só para essa sessão)."
+                    : ""), false));
             if (options.TeclaLigaDesliga > 0)
                 steps.Add(new ManualStep(n++, "Comparar antes/depois sem abrir o painel",
                     $"No jogo, aperte {options.TeclaLigaDesligaLabel}: o DLSS 5 (DLAA + Neural Rendering) desliga e o jogo mostra o " +
                     "quadro cru; aperte de novo e volta. É a tecla de alternância da technique \"DLSS 5 Feed\" no preset do " +
                     "ReShade — o addon só trabalha logo depois de ela rodar, então desligá-la desliga tudo. Para trocar a tecla " +
-                    "depois: painel do ReShade, botão direito em \"DLSS 5 Feed\", campo da tecla.", false));
+                    "depois: painel do ReShade, botão direito em \"DLSS 5 Feed\", campo da tecla." +
+                    (profile.SoEfeitosMarcados
+                        ? " Em jogo 32-bit o estado vale para a sessão: o jogo sempre abre com o DLSS 5 ligado (o preset só é " +
+                          "gravado pelo botão de salvar do painel — a troca de tecla também precisa dele)."
+                        : ""), false));
         }
         else
         {
