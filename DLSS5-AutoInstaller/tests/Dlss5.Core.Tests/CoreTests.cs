@@ -5587,6 +5587,39 @@ public class FeederAntigoNaVerificacaoTests
         Assert.True(FeedLog.Ler("dlss5-feed 0.5.0 (built Aug 30 2026 12:38:05) attached.\n[feed] frame 1 delivered\n")!.ProvedorOk);
     }
 
+    // dlss5-feed.log real do Black Mesa (26/09/2026, 0.15.1 em 32-bit): o runtime nasce sem os efeitos
+    // ("technique MISSING"), carrega o Launchpad, e ao fechar o jogo nasce de novo e loga MISSING outra vez.
+    private const string LogBlackMesa =
+        "00:09:22.472  dlss5-feed32 0.15.1 (built Sep  9 2026 07:48:17) attached.\n" +
+        "00:09:23.079  [feed32] effect runtime 18E9D198 initialised (device 129A9B04, window class 'Valve001'; 1 runtime in this process)\n" +
+        "00:09:23.080  [feed32] effects: technique MISSING, DLSS5_MV MISSING, DLSS5_Depth MISSING, DLSS5_MV_PROVIDER=0 (texMotionVectors) -> none (not installed), depth reversed=1\n" +
+        "00:09:27.968  [feed32] effects: technique found, DLSS5_MV found, DLSS5_Depth found, DLSS5_MV_PROVIDER=1 (Launchpad) -> MartysMods_Launchpad (enabled), depth reversed=1\n" +
+        "00:09:32.546  [feed32] shared set ready: 2560x1440 (100% of 2560x1440) color fmt=28 output fmt=28 (host ngx 0x00000001, DLSS)\n" +
+        "00:10:58.229  [feed32] frame 10800 delivered (2560x1440, reset=0)\n" +
+        "00:11:04.603  [feed32] effect runtime 18EA35E8 destroyed -- it was the bound one (0 runtimes left)\n" +
+        "00:11:04.607  [feed32] effect runtime 18EA35E8 initialised (device 129A9B04, window class 'Valve001'; 1 runtime in this process)\n" +
+        "00:11:04.607  [feed32] effects: technique MISSING, DLSS5_MV MISSING, DLSS5_Depth MISSING, DLSS5_MV_PROVIDER=1 (Launchpad) -> none (not installed), depth reversed=1\n";
+
+    [Fact]
+    public void OMissingDoRuntimeRecemNascidoNaoAcusaOProvedor()
+    {
+        // A última linha é a do fechamento: o provedor que valeu foi o da última linha com a technique carregada.
+        var s = FeedLog.Ler(LogBlackMesa)!;
+        Assert.Equal("Launchpad -> MartysMods_Launchpad", s.Provedor);
+        Assert.Equal("enabled", s.EstadoDoProvedor);
+        Assert.True(s.ProvedorOk);
+        Assert.Equal(10800, s.FramesEntregues);
+
+        // Com a technique carregada e o provedor ausente, a acusação continua de pé.
+        var semProvedor = FeedLog.Ler(LogBlackMesa.Replace("MartysMods_Launchpad (enabled)", "none (not installed)"))!;
+        Assert.False(semProvedor.ProvedorOk);
+        Assert.Equal("not installed", semProvedor.EstadoDoProvedor);
+
+        // E se a technique nunca carregou, vale a última linha que houver.
+        var nunca = FeedLog.Ler(string.Join("\n", LogBlackMesa.Split('\n').Where(l => !l.Contains("technique found"))))!;
+        Assert.False(nunca.ProvedorOk);
+    }
+
     [Fact]
     public void Checkpoint15ApontaOFeederAntigoEmVezDaEscadaDeResolucao()
     {

@@ -301,6 +301,17 @@ public static class HostLog
         return (codigo, explicacao);
     }
 
+    /// <summary>
+    /// O tamanho dos quadros do jogo que o host recebeu ("[host] build: 2560x1440 color=..."), o último
+    /// se houve mais de um build na sessão; null se o log não tem nenhum.
+    /// </summary>
+    public static string? TamanhoDoBuild(string? hostLog)
+    {
+        if (string.IsNullOrEmpty(hostLog)) return null;
+        var builds = System.Text.RegularExpressions.Regex.Matches(hostLog, @"\[host\] build: (\d+x\d+)");
+        return builds.Count == 0 ? null : builds[^1].Groups[1].Value;
+    }
+
     /// <summary>Quantas vezes o addon do jogo viu o host morrer ("host lost: frame message failed").</summary>
     public static int HostsPerdidos(string? feedLog)
     {

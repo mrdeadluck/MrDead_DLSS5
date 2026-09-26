@@ -384,6 +384,13 @@ ReShade x64 como `host64\ReShade64.dll`. O botão
   motor em que o x2+ apareceu na tela**; o OptiScaler construía as passadas sem diferença visível.
 - **Enslaved: Odyssey to the West** (32-bit, D3D9 via dgVoodoo → host64): `source=1` a 2560x1440
   (`replace_source=true`), 4 features Reserved18 (4 passadas), 101 avaliações registradas.
+- **Black Mesa (26/09/2026) — não chegou ao jogo:** o NR, ligado pelo painel com o jogo já rodando, criou
+  uma feature só, a 900x1402 (`source=3`, a janela do host), e fez 1171 avaliações nela; nenhuma do
+  tamanho do build (2560x1440). A verificação passava isso como "aplicado"; agora o item 25 cruza os
+  tamanhos das features com o `[host] build:` do `dlss5-feed-host.log` (`ShortFuseStatus.SoNaJanelaDoHost`)
+  e avisa. No mesmo log, o item 15 acusava "Launchpad not installed" pela linha `technique MISSING` do
+  runtime recém-nascido no fechamento do jogo; o `FeedLog` passa a ler o provedor só das linhas com a
+  technique carregada.
 
 O host segue dizendo `renodx-dlss5*.addon64 not found next to the host` e "serving plain DLAA" — ele não
 sabe que o ShortFuse está lá, e mesmo assim as passadas saem, porque o addon intercepta o

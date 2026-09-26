@@ -1419,7 +1419,25 @@ public static class CheckpointVerifier
                         "Abra o jogo, jogue alguns segundos e verifique de novo.");
                 else
                 {
-                    var c14 = ShortFuseLog.Ler(logTexto).Checkpoint14(passes, false);
+                    var sf = ShortFuseLog.Ler(logTexto);
+                    var c14 = sf.Checkpoint14(passes, false);
+                    // Avaliar não basta: dentro do host o ShortFuse também pega o swapchain da janela do
+                    // próprio host (source=3). Se nenhuma feature tem o tamanho dos quadros do jogo, o NR
+                    // nunca chegou ao jogo — Black Mesa, 26/09/2026: 1171 avaliações, todas a 900x1402.
+                    var build = HostLog.TamanhoDoBuild(hostLogTexto);
+                    if (c14.State == CheckStatus.Pass && sf.SoNaJanelaDoHost(build))
+                        c14 = c14 with
+                        {
+                            State = CheckStatus.Warning,
+                            Detail = $"O Neural Rendering avaliou ({sf.Avaliacoes} avaliação(ões)), mas só em imagens de " +
+                                     $"{string.Join(", ", sf.Tamanhos!)} — a janela do próprio host —, nunca nos quadros do jogo ({build}, " +
+                                     "o build do host64\\dlss5-feed-host.log): o jogo recebeu só o DLAA do host. No SH2 EE a primeira " +
+                                     "avaliação também caiu na janela do host e as seguintes já na saída do DLSS; aqui a troca não aconteceu.",
+                            FixHint = "Feche e abra o jogo com o NR já ligado no painel do RenoDX DLSS (Options Mode DLSS-NR) e verifique " +
+                                      "de novo: o host64\\ReShade.log tem que ganhar um \"CreateFeature(Reserved18) succeeded\" com " +
+                                      $"size={build}. Se continuar só na janela do host, compare com outro consumidor do host64 " +
+                                      "(OptiScaler DLSS-NR; o addon do Krish só na versão 4.55 com driver 616.64+).",
+                        };
                     yield return new CheckResult(25, "RenoDX DLSS (ShortFuse) no host64: " + c14.Title, c14.State, c14.Detail, c14.FixHint);
                 }
             }

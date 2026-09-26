@@ -1055,6 +1055,82 @@ public class ConsumidoresNoHost64Tests
         Assert.True(so.Avaliou);
     }
 
+    // Trecho real do host64\ReShade.log do Black Mesa (26/09/2026): o NR, ligado pelo painel com o jogo já
+    // rodando, pegou só o swapchain da janela do próprio host (source=3, 900x1402), nunca a saída do DLSS.
+    private const string LogShortFuseBlackMesa =
+        "00:09:28:118 [ 2560] | INFO  | Registered add-on \"RenoDX DLSS\" v0.0.0.0 using ReShade API version 18.\r\n" +
+        "00:09:28:198 [ 2560] | INFO  | [RenoDX DLSS] RenoDX DLSS attached; ReShade logical unload will be ignored.\r\n" +
+        "00:10:23:319 [ 2560] | INFO  | [RenoDX DLSS] [RenoDX] DLSS-NR direct: attached snippet M:\\SteamLibrary\\steamapps\\common\\Black Mesa\\host64\\nvngx_dlssnr.dll\r\n" +
+        "00:10:24:158 [ 2560] | INFO  | [RenoDX DLSS] [RenoDX] DLSS-NR direct: CreateFeature(Reserved18) succeeded: handle=0x1d04c66c180 size=900x1402 performance=6 preset=1\r\n" +
+        "00:10:24:162 [ 2560] | INFO  | [RenoDX DLSS] [RenoDX] DLSS-NR direct: EvaluateFeature succeeded: evaluation=1 options_revision=3 result=0x00000001\r\n" +
+        "00:10:24:162 [ 2560] | INFO  | [RenoDX DLSS] RenoDX DLSS-NR source evaluation completed: source=3 application_frame=6731 size=900x1402 replace_source=true return_output=false.\r\n" +
+        "00:10:34:843 [ 2560] | INFO  | [RenoDX DLSS] [RenoDX] DLSS-NR direct: EvaluateFeature succeeded: evaluation=1171 options_revision=14 result=0x00000001\r\n";
+
+    private const string HostLogBlackMesa =
+        "00:09:31:623  [host] game pid 9796 connected (protocol v9, D3D11 client -- the game creates the shared textures)\r\n" +
+        "00:09:31:624  [host] build: 2560x1440 color=28 output=28 hdr=0 inverted=1\r\n" +
+        "00:09:32:480  [host] feature ready: 2560x1440 DLAA flags=74\r\n";
+
+    [Fact]
+    public void LogDoShortFuseNoHost64_DoBlackMesa_SoNaJanelaDoHostNaoEhAplicado()
+    {
+        var s = ShortFuseLog.Ler(LogShortFuseBlackMesa);
+        Assert.True(s.Avaliou);
+        Assert.Equal(1171, s.Avaliacoes);
+        Assert.Equal(new[] { "900x1402" }, s.Tamanhos);
+        Assert.Equal("2560x1440", HostLog.TamanhoDoBuild(HostLogBlackMesa));
+        Assert.True(s.SoNaJanelaDoHost("2560x1440"));
+        Assert.False(s.SoNaJanelaDoHost(null));   // sem o build do host não dá para saber
+
+        // SH2 EE: a primeira na janela do host e as seguintes na saída do DLSS (1920x1080) — isso é aplicado.
+        var sh2 = ShortFuseLog.Ler(
+            "Registered add-on \"RenoDX DLSS\"\r\nRenoDX DLSS attached\r\n" +
+            "DLSS-NR direct: CreateFeature(Reserved18) succeeded: handle=0x27dabd33040 size=900x1064 performance=6 preset=1\r\n" +
+            "DLSS-NR direct: CreateFeature(Reserved18) succeeded: handle=0x27dc0e63eb0 size=1920x1080 performance=6 preset=1\r\n" +
+            "DLSS-NR direct: EvaluateFeature succeeded: evaluation=2714 options_revision=19 result=0x00000001\r\n");
+        Assert.Equal(new[] { "900x1064", "1920x1080" }, sh2.Tamanhos);
+        Assert.False(sh2.SoNaJanelaDoHost("1920x1080"));
+        Assert.Null(HostLog.TamanhoDoBuild("sem build nenhum"));
+    }
+
+    [Fact]
+    public void VerificacaoDoBlackMesa_NaoDizQueONrChegouAoJogoNemQueOProvedorSumiu()
+    {
+        using var c = new Cenario();
+        var host64 = Path.Combine(c.Jogo, "host64");
+        Directory.CreateDirectory(host64);
+        File.WriteAllText(Path.Combine(host64, ShortFuseDlss.Addon), "sf");
+        File.WriteAllText(Path.Combine(host64, ShortFuseNoHost64.Ini), ShortFuseNoHost64.GerarIni(null, 1));
+        File.WriteAllText(Path.Combine(host64, "ReShade.log"), LogShortFuseBlackMesa);
+        File.WriteAllText(Path.Combine(host64, "dlss5-feed-host.log"), HostLogBlackMesa);
+        File.WriteAllText(c.NoJogo("dlss5-feed.log"),
+            "00:09:27.968  [feed32] effects: technique found, DLSS5_MV found, DLSS5_Depth found, DLSS5_MV_PROVIDER=1 (Launchpad) -> MartysMods_Launchpad (enabled), depth reversed=1\n" +
+            "00:09:32.484  [feed32] the host answered the build in 859 ms\n" +
+            "00:09:32.546  [feed32] shared set ready: 2560x1440 (100% of 2560x1440) color fmt=28 output fmt=28 (host ngx 0x00000001, DLSS)\n" +
+            "00:10:58.229  [feed32] frame 10800 delivered (2560x1440, reset=0)\n" +
+            "00:11:04.607  [feed32] effects: technique MISSING, DLSS5_MV MISSING, DLSS5_Depth MISSING, DLSS5_MV_PROVIDER=1 (Launchpad) -> none (not installed), depth reversed=1\n");
+        var perfil = PerfilX86(c, NeuralEngine.RenodxDlssShortFuse, 1);
+        perfil.Api = GraphicsApi.D3D9;
+
+        var itens = CheckpointVerifier.Verify(perfil, null);
+
+        var nr = itens.Single(i => i.Number == 25 && i.Title.Contains("DLSS 5 aplicado", StringComparison.Ordinal));
+        Assert.Equal(CheckStatus.Warning, nr.State);
+        Assert.Contains("900x1402", nr.Detail);
+        Assert.Contains("2560x1440", nr.Detail);
+        Assert.Contains("size=2560x1440", nr.FixHint!);
+
+        var feeder = itens.Single(i => i.Number == 15);
+        Assert.Equal(CheckStatus.Pass, feeder.State);
+        Assert.Contains("10800", feeder.Detail);
+
+        // Com uma feature do tamanho do jogo o NR chegou lá: volta a ser Pass.
+        File.AppendAllText(Path.Combine(host64, "ReShade.log"),
+            "00:10:40:000 [ 2560] | INFO  | [RenoDX DLSS] [RenoDX] DLSS-NR direct: CreateFeature(Reserved18) succeeded: handle=0x1 size=2560x1440 performance=6 preset=1\r\n");
+        Assert.Equal(CheckStatus.Pass, CheckpointVerifier.Verify(perfil, null)
+            .Single(i => i.Number == 25 && i.Title.Contains("DLSS 5 aplicado", StringComparison.Ordinal)).State);
+    }
+
     [Fact]
     public void PlanoOptiScaler_LevaOReShadeParaOHostPeloLoadReshade()
     {

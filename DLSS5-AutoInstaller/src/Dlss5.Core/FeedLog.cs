@@ -84,9 +84,22 @@ public static class FeedLog
         var ultima = Ultima.Match(text);
         var parou = Parou.Match(text);
 
-        // O último registro do provedor é o que vale (o shader pode ter sido recarregado).
-        var provs = Provedor.Matches(text);
-        Match? prov = provs.Count > 0 ? provs[^1] : null;
+        // O último registro do provedor é o que vale (o shader pode ter sido recarregado) — mas só das
+        // linhas em que a technique do Feed já tinha carregado. Logo que o runtime nasce (na abertura, e
+        // de novo quando o jogo fecha ou troca de resolução) o addon loga "technique MISSING ... ->
+        // none (not installed)" porque os efeitos ainda não recarregaram, e isso não diz nada do
+        // provedor. Black Mesa (26/09/2026): a última linha do log, a do fechamento, acusava o Launchpad
+        // "not installed" depois de 11 mil quadros com ele "(enabled)". Sem nenhuma linha com a
+        // technique carregada, vale a última que houver.
+        Match? prov = null, provQualquer = null;
+        foreach (Match m in Provedor.Matches(text))
+        {
+            provQualquer = m;
+            int inicio = text.LastIndexOf('\n', m.Index) + 1;
+            if (text.IndexOf("technique found", inicio, m.Index - inicio, StringComparison.OrdinalIgnoreCase) >= 0)
+                prov = m;
+        }
+        prov ??= provQualquer;
 
         bool recriado = text.Contains("recreated its", StringComparison.OrdinalIgnoreCase)
                         || Regex.IsMatch(text, @"effect runtime \S+ destroyed", RegexOptions.IgnoreCase);

@@ -73,8 +73,19 @@ public static class ShortFuseDlss
 /// <summary>O que o RenoDX DLSS do ShortFuse registrou no ReShade.log.</summary>
 public sealed record ShortFuseStatus(
     bool Registrado, bool Anexou, bool Avaliou, bool Falhou, bool PedeReinicio, string Falha,
-    int Avaliacoes = 0, int FeaturesCriadas = 0, bool SnippetAnexado = false, string? UltimoTamanho = null)
+    int Avaliacoes = 0, int FeaturesCriadas = 0, bool SnippetAnexado = false, string? UltimoTamanho = null,
+    IReadOnlyList<string>? Tamanhos = null)
 {
+    /// <summary>
+    /// Dentro do host64: o NR avaliou, mas nenhuma feature Reserved18 tem o tamanho dos quadros do jogo
+    /// (o build do host). Foi o Black Mesa (26/09/2026): uma feature só, a 900x1402 — a janela do próprio
+    /// host (source=3) —, e o jogo recebendo só o DLAA. No SH2 EE a primeira avaliação também caiu na
+    /// janela do host, e as seguintes já na saída do DLSS, com uma feature a 1920x1080.
+    /// </summary>
+    public bool SoNaJanelaDoHost(string? tamanhoDoJogo) =>
+        Avaliou && tamanhoDoJogo is not null && Tamanhos is { Count: > 0 }
+        && !Tamanhos.Contains(tamanhoDoJogo, StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Resumo do que o log prova, para o detalhe do checkpoint.</summary>
     public string Evidencia =>
         (Avaliacoes > 0 ? $" {Avaliacoes} avaliação(ões) do modelo" : "") +
@@ -136,13 +147,17 @@ public static class ShortFuseLog
         // "CreateFeature(Reserved18) succeeded: handle=... size=WxH" (uma feature por passada; recriadas ao
         // mudar Pass Count ou escala) e "EvaluateFeature succeeded: evaluation=N" (N cresce por quadro).
         int avaliacoes = 0, features = 0; string? ultimoTamanho = null;
+        var tamanhos = new List<string>();
         foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(text, @"EvaluateFeature succeeded: evaluation=(\d+)"))
             if (int.TryParse(m.Groups[1].Value, out var n) && n > avaliacoes) avaliacoes = n;
         foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(text, @"CreateFeature\(Reserved18\) succeeded: handle=\S+ size=(\d+x\d+)"))
-        { features++; ultimoTamanho = m.Groups[1].Value; }
+        {
+            features++; ultimoTamanho = m.Groups[1].Value;
+            if (!tamanhos.Contains(ultimoTamanho, StringComparer.OrdinalIgnoreCase)) tamanhos.Add(ultimoTamanho);
+        }
         bool snippet = text.Contains("DLSS-NR direct: attached snippet", StringComparison.OrdinalIgnoreCase);
         // Uma avaliação da feature 18 concluída também conta como "avaliou", mesmo sem a linha de resumo.
         if (!avaliou && avaliacoes > 0) avaliou = true;
-        return new ShortFuseStatus(registrado, anexou, avaliou, falha.Length > 0, pedeReinicio, falha, avaliacoes, features, snippet, ultimoTamanho);
+        return new ShortFuseStatus(registrado, anexou, avaliou, falha.Length > 0, pedeReinicio, falha, avaliacoes, features, snippet, ultimoTamanho, tamanhos);
     }
 }
