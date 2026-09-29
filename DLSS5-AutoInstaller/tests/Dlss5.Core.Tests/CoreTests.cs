@@ -988,6 +988,58 @@ public class PlanBuilderTests
     }
 
     [Fact]
+    public void RotaC_D3D8_ConversorDxcfgDoSh4_DgVoodooEntraComoD3D9()
+    {
+        // Silent Hill 4 (GOG): o d3d8.dll do jogo converte para DirectX 9, lê o dxcfg.ini e importa
+        // o Direct3DCreate9 do d3d9.dll — que o Windows acha primeiro na pasta do exe. Trocar esse
+        // d3d8.dll pelo dgVoodoo deixava o jogo travado ao abrir.
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5sh4_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var conversor = System.Text.Encoding.ASCII.GetBytes("MZ ... d3d9.dll Direct3DCreate9 ... ")
+                .Concat(System.Text.Encoding.Unicode.GetBytes(@"%s\dxcfg.ini" + "\0")).ToArray();
+            File.WriteAllBytes(Path.Combine(dir, "D3D8.dll"), conversor);
+            var perfil = PerfilRotaC(dir);
+            perfil.Api = GraphicsApi.D3D8;
+
+            var plan = InstallPlanBuilder.Build(perfil, FullKit(), new InstallOptions());
+
+            Assert.True(plan.CanRun, string.Join("; ", plan.Blockers));
+            Assert.True(perfil.D3d8ViaD3D9);
+            Assert.Equal(D3d8to9Wrapper.MarcaDxcfg, D3d8to9Wrapper.Qual(dir));
+            Assert.DoesNotContain(plan.Actions, a =>
+                Path.GetFileName(a.TargetPath ?? "").Equals("D3D8.dll", StringComparison.OrdinalIgnoreCase));
+            Assert.True(Targets(plan, "D3D9.dll"));
+            Assert.Contains(plan.Warnings, w => w.Contains("dxcfg.ini", StringComparison.Ordinal)
+                                                && !w.Contains("d3d8to9 = 0", StringComparison.Ordinal));
+            Assert.Equal(DgVoodooProfile.Padrao, DgVoodooConfigurator.ProfileFor(perfil));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void RotaC_D3D8_DxcfgSemOConversor_Avisa()
+    {
+        // A pasta de quem renomeou o d3d8.dll do SH4 e pôs o dgVoodoo no lugar.
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5sh4_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "D3D8.dll"), "MZ ... dgVoodoo 2.87.4 - Direct3D8 ...");
+            File.WriteAllText(Path.Combine(dir, "dxcfg.ini"), "[display]\r\n");
+            var perfil = PerfilRotaC(dir);
+            perfil.Api = GraphicsApi.D3D8;
+
+            var plan = InstallPlanBuilder.Build(perfil, FullKit(), new InstallOptions());
+
+            Assert.False(perfil.D3d8ViaD3D9);
+            Assert.Contains(plan.Warnings, w => w.Contains("não é o conversor", StringComparison.Ordinal));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
     public void RotaC_D3D8_CarregadorDoSh3PcFix_DgVoodooEntraComoD3d8R()
     {
         // Silent Hill 3 PC Fix: o d3d8.dll da pasta só carrega o Silent_Hill_3_PC_Fix.dll e

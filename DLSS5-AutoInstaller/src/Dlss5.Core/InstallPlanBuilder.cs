@@ -557,8 +557,11 @@ public static class InstallPlanBuilder
                     $"O D3D8.dll desta pasta é {D3d8to9Wrapper.Descrever(marcaD3d8to9)}. Ele FICA: converte o " +
                     "jogo para DirectX 9 (d3d8to9) e carrega de preferência um d3d9.dll da própria pasta, " +
                     "então o dgVoodoo entra como D3D9.dll ao lado dele — a mod continua inteira e o dgVoodoo " +
-                    "traduz o DirectX 9 dela para D3D11, onde o ReShade e o Feeder entram. Se a mod estiver " +
-                    "com d3d8to9 = 0 no d3d8.ini, volte para 1 (é o padrão): sem isso o D3D9.dll não é usado.");
+                    "traduz o DirectX 9 dela para D3D11, onde o ReShade e o Feeder entram." +
+                    (marcaD3d8to9 == D3d8to9Wrapper.MarcaDxcfg
+                        ? " Não renomeie nem troque esse d3d8.dll pelo do dgVoodoo: é ele que aplica as opções de vídeo " +
+                          "do dxcfg.ini que o jogo espera."
+                        : " Se a mod estiver com d3d8to9 = 0 no d3d8.ini, volte para 1 (é o padrão): sem isso o D3D9.dll não é usado."));
             }
             var wrapperSrc = profile.DgVoodooWrapperName.Equals("D3D8.dll", StringComparison.OrdinalIgnoreCase)
                 ? kit.DgVoodooD3D8X86 : kit.DgVoodooD3D9X86;
@@ -574,6 +577,17 @@ public static class InstallPlanBuilder
                     "abre. Se você trocou o d3d8.dll do fix pelo do dgVoodoo (ou o renomeou) para conseguir " +
                     "instalar, devolva o d3d8.dll do fix ao lugar e instale de novo: o instalador mantém o " +
                     $"carregador e põe o dgVoodoo atrás dele como {CarregadorD3d8R.D3d8R}, o nome que o fix procura.");
+
+            // O dxcfg.ini do conversor que vem com o jogo (Silent Hill 4 da GOG) está na pasta, mas o
+            // D3D8.dll não é mais ele: foi trocado pelo dgVoodoo à mão. Instala, mas o jogo perde o
+            // conversor original — no SH4 isso deu jogo travado ao abrir.
+            if (profile.Api == GraphicsApi.D3D8 && marcaD3d8to9 is null
+                && File.Exists(Path.Combine(renderer, D3d8to9Wrapper.MarcaDxcfg)))
+                plan.Warnings.Add(
+                    $"A pasta tem o {D3d8to9Wrapper.MarcaDxcfg}, mas o D3D8.dll não é o conversor de DirectX 8 para 9 " +
+                    "que vem com o jogo (e que lê esse arquivo). Se você renomeou o d3d8.dll original para instalar, " +
+                    "devolva o nome d3d8.dll a ele e instale de novo: o instalador mantém o conversor e põe o dgVoodoo " +
+                    "como D3D9.dll ao lado.");
 
             // O dgVoodoo só funciona com ESTE nome de arquivo — e ele pode já estar ocupado
             // por outro wrapper que o usuário pôs ali de propósito. Foi o Dead Space 2: o
