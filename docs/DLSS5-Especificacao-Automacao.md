@@ -37,7 +37,7 @@ Limitações estruturais (não são bugs de configuração):
 | x86 | D3D11 | Sim | B | Tomb Raider 2013 |
 | x86 | D3D9 | Sim, via dgVoodoo2 → D3D11 | C | Castlevania: Lords of Shadow (variante simples), Half-Life 2 (variante Source) |
 | x86 | D3D9 | idem | C | GTA IV (parcial: dgVoodoo ok, ReShade pendente) |
-| x86 | D3D8 | Sim, via dgVoodoo2 → D3D11 (D3D9.dll atrás de mod com d3d8to9; d3d8R.dll atrás do carregador do Silent Hill 3 PC Fix) | C | Silent Hill 2 Enhanced Edition (OptiScaler x4 no host64), Silent Hill 3 + PC Fix |
+| x86 | D3D8 | Sim, via dgVoodoo2 → D3D11 (D3D9.dll atrás de mod com d3d8to9; d3d8R.dll atrás do carregador do Silent Hill 3 PC Fix) | C | Silent Hill 2 Enhanced Edition (OptiScaler x4 no host64), Silent Hill 3 + PC Fix, Silent Hill 4 (GOG) |
 | x64 | OpenGL | Sim (Feeder: em processo; MX Bikes relatado) — ReShade como opengl32.dll | A | — |
 | x86 | OpenGL | Sim (Feeder 0.9+: Worms Ultimate Mayhem, KOTOR, pelo host64) — ReShade como opengl32.dll | B | — |
 | x86 | D3D10 | Sim (Feeder 0.13.1+, nativo) — só o LumeniteFX compila como provedor | B | — |
@@ -434,7 +434,7 @@ Estado final HL2: dgVoodoo em `bin\`, ReShade `dxgi.dll` na raiz, overlays desli
 ### Silent Hill 4: The Room (GOG) — x86, D3D8 atrás do conversor do jogo (dxcfg)
 - O `d3d8.dll` que vem com o jogo (1,1 MB, compilado em 12/01/2022) é um conversor de DirectX 8 para DirectX 9 com configuração própria no `dxcfg.ini` (resolução, janela, escala, MSAA, anisotrópico, vsync). Importa `Direct3DCreate9` do `d3d9.dll` direto na tabela de imports, e o Windows procura esse `d3d9.dll` na pasta do exe antes do System32. Marcador: a string UTF-16 `%s\dxcfg.ini` (`D3d8to9Wrapper.MarcaDxcfg`).
 - Relato de 29/09/2026: com o `d3d8.dll` renomeado e o dgVoodoo no lugar (`D3D8.dll`), o DLSS 5 instalava mas o jogo travava ao abrir. Arranjo certo: o conversor fica e o dgVoodoo entra como `D3D9.dll` — o mesmo do SH2 EE (`GameProfile.D3d8ViaD3D9`, perfil padrão do `dgVoodoo.conf`).
-- `dxcfg.ini` na pasta com um `D3D8.dll` que não é o conversor: aviso no plano para devolver o `d3d8.dll` original. Não validado em jogo ainda.
+- `dxcfg.ini` na pasta com um `D3D8.dll` que não é o conversor: aviso no plano para devolver o `d3d8.dll` original. **Validado em 29/09/2026** pelo usuário que relatou o travamento: com o conversor de volta e o Reparar do instalador novo, o jogo abre com DLSS 5.
 
 ### Silent Hill 3 — x86, D3D8 atrás do carregador do Silent Hill 3 PC Fix (d3d8R.dll)
 - O `d3d8.dll` que o **Silent Hill 3 PC Fix** (Steam006) põe na pasta não desenha nada: é um carregador. A desmontagem do `DllMain` dele (build de 14/07/2024): `GetModuleFileNameW` no próprio handle → testa se existe `<pasta>\d3d8R.dll` (`CreateFileW`) → `LoadLibraryW("<pasta>\Silent_Hill_3_PC_Fix.dll")` — a mod de verdade: resolução personalizada, janela/sem borda, conserto do menu de opções — → carrega o `d3d8R.dll` se ele existia, senão o `d3d8.dll` do System32, e tira dele `Direct3DCreate8`, que o carregador exporta só repassando. Com o `d3d8R.dll` presente, as exportações `PatchMaximizedWindowedMode` e `UseDirectX12UsermodeDisplayDriver` voltam sem fazer nada: os remendos que só valem para o d3d8 do Windows ficam desligados pelo próprio fix.
