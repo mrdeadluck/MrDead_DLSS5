@@ -66,6 +66,10 @@ jobs:
           $ultimaTroca = (git log -1 --format=%H -- "DLSS 5 Files/dlss5-feed.addon64").Trim()
           if (-not $ultimaTroca) { throw "Sem histórico do dlss5-feed.addon64" }
           $base = "$ultimaTroca^"
+          # Rodada que VAI trocar (o kit ainda não é o pedido): o anterior é o kit de agora,
+          # não o de antes da troca passada (em 29/09 o zip saiu com o 0.13.1 em vez do 0.15.1).
+          $noKit = ((Get-Content "DLSS 5 Files\feeder-versao.txt" | Where-Object { $_ -match '^versao=' }) -replace '^versao=', '').Trim()
+          if ($noKit -and $noKit -ne "${{ steps.desejado.outputs.versao }}") { $base = "HEAD" }
           Write-Host "Última troca: $ultimaTroca; o anterior vem de $base"
           $anterior = "${{ github.workspace }}\feeder-anterior"
           New-Item -ItemType Directory -Path "$anterior\reshade-shaders\Shaders" -Force | Out-Null
