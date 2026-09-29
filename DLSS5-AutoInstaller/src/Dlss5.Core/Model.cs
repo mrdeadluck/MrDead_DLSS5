@@ -162,7 +162,27 @@ public sealed class GameProfile
     /// O renodx-dlss do ShortFuse no lugar do par Krish + Feeder. Só 64-bit: o addon não
     /// tem versão x86 e o NGX também não, então em 32-bit a escolha é ignorada.
     /// </summary>
-    public bool UsesShortFuse => Engine == NeuralEngine.RenodxDlssShortFuse && Architecture == PeArchitecture.X64;
+    public bool UsesShortFuse => Engine == NeuralEngine.RenodxDlssShortFuse && Architecture == PeArchitecture.X64 && ShortFuseAceitaAApi;
+
+    /// <summary>
+    /// O addon do ShortFuse só trabalha em D3D9, D3D11 e D3D12 ("Present supports D3D9, D3D11,
+    /// and D3D12 presentation", texto do próprio addon). Num jogo OpenGL 64-bit ele se registra no
+    /// contexto GL e o jogo nem abre: o ReShade.log do Amnesia: The Bunker (29/09/2026) termina em
+    /// "RenoDX DLSS init_swapchain begin ... api=65536". Ali o motor volta para o Krish + Feeder.
+    /// </summary>
+    public bool ShortFuseAceitaAApi => Api is GraphicsApi.D3D9 or GraphicsApi.D3D11 or GraphicsApi.D3D12;
+
+    /// <summary>
+    /// Jogo OpenGL 64-bit com o motor ShortFuse: o addon vai para dentro do host64 pelo modo
+    /// helper 64-bit do Feeder, como num jogo 32-bit. Ver <see cref="FeederHelper64"/>.
+    /// </summary>
+    public bool UsesShortFuseViaHelper64 =>
+        Engine == NeuralEngine.RenodxDlssShortFuse && Architecture == PeArchitecture.X64 && Api == GraphicsApi.OpenGL;
+
+    /// <summary>O ShortFuse foi pedido para um jogo 64-bit numa API que o addon não atende e sem caminho pelo host64.</summary>
+    public bool ShortFuseRecusadoPelaApi =>
+        Engine == NeuralEngine.RenodxDlssShortFuse && Architecture == PeArchitecture.X64 && !ShortFuseAceitaAApi
+        && !UsesShortFuseViaHelper64;
 
     /// <summary>
     /// OptiScaler DLSS-NR como consumidor neural do Feeder, dentro do host64\ (jogo 32-bit).
@@ -185,7 +205,7 @@ public sealed class GameProfile
 
     /// <summary>O motor depois das regras de arquitetura (o pedido pode não valer para esta).</summary>
     public NeuralEngine MotorEfetivo =>
-        UsesShortFuse || UsesShortFuseNoHost64 ? NeuralEngine.RenodxDlssShortFuse
+        UsesShortFuse || UsesShortFuseNoHost64 || UsesShortFuseViaHelper64 ? NeuralEngine.RenodxDlssShortFuse
         : UsesOptiScalerNr ? NeuralEngine.OptiScalerNr
         : UsesDeepFriedChicken ? NeuralEngine.DeepFriedChicken
         : NeuralEngine.RenodxDlss5Feeder;
@@ -322,17 +342,40 @@ public sealed class GameProfile
     /// Jogo DirectX 8 cujo D3D8.dll é uma mod com d3d8to9 (Silent Hill 2 Enhanced Edition):
     /// ela converte para DirectX 9 e carrega um d3d9.dll local de preferência, então o
     /// dgVoodoo entra como D3D9.dll ao lado, e o D3D8.dll dela fica. Ver <see cref="D3d8to9Wrapper"/>.
-    /// Decidido pela pasta (<see cref="AtualizarD3d8ViaD3D9"/>) e guardado no manifesto.
+    /// Decidido pela pasta (<see cref="AtualizarArranjoD3d8"/>) e guardado no manifesto.
     /// </summary>
     public bool D3d8ViaD3D9 { get; set; }
 
-    /// <summary>Olha a pasta do renderizador e decide <see cref="D3d8ViaD3D9"/>. Devolve o marcador achado.</summary>
-    public string? AtualizarD3d8ViaD3D9()
+    /// <summary>
+    /// Jogo DirectX 8 cujo D3D8.dll é um carregador que passa o Direct3D 8 para um d3d8R.dll
+    /// da própria pasta (Silent Hill 3 PC Fix): o carregador fica, e o dgVoodoo — o D3D8 do
+    /// kit — entra como d3d8R.dll. Ver <see cref="CarregadorD3d8R"/>. Decidido pela pasta
+    /// (<see cref="AtualizarArranjoD3d8"/>) e guardado no manifesto.
+    /// </summary>
+    public bool D3d8ViaD3d8R { get; set; }
+
+    /// <summary>
+    /// Com que nome o dgVoodoo fica na pasta do renderizador: o do wrapper, ou d3d8R.dll atrás
+    /// do carregador. (Atrás do DxWrapper é outro arranjo: <see cref="DgVoodooChainedName"/>.)
+    /// </summary>
+    public string DgVoodooNaPasta => D3d8ViaD3d8R ? CarregadorD3d8R.D3d8R : DgVoodooWrapperName;
+
+    /// <summary>
+    /// Olha a pasta do renderizador e decide <see cref="D3d8ViaD3D9"/> e <see cref="D3d8ViaD3d8R"/>.
+    /// Devolve o marcador de d3d8to9 achado.
+    /// </summary>
+    public string? AtualizarArranjoD3d8()
     {
         string? marca = null;
+        bool carregador = false;
         if (Api == GraphicsApi.D3D8 && RealExePath is not null)
-            marca = D3d8to9Wrapper.Qual(RendererFolder ?? ExeFolder);
+        {
+            var pasta = RendererFolder ?? ExeFolder;
+            marca = D3d8to9Wrapper.Qual(pasta);
+            carregador = marca is null && CarregadorD3d8R.Presente(pasta);
+        }
         D3d8ViaD3D9 = marca is not null;
+        D3d8ViaD3d8R = carregador;
         return marca;
     }
 

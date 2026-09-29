@@ -104,7 +104,7 @@ O QUE ESPERAR — leia antes, evita decepção
    - Consome bastante VRAM. Se travar, teste primeiro em 1080p e em modo
      janela.
    - Trocar resolução, tela cheia ou qualidade DENTRO do jogo recria a
-     tela e o Feeder reconstrói tudo. O Feeder deste kit (0.15.1) foi
+     tela e o Feeder reconstrói tudo. O Feeder deste kit (1.17.0) foi
      feito para sobreviver a isso; o antigo (0.5.0) derrubava o jogo.
      Se um jogo instalado com o kit antigo cair nessa hora, aponte o
      kit novo e clique em Instalar de novo — o programa troca só o que
@@ -127,6 +127,12 @@ AVISOS
      o multiplayer não funciona sem o EAC.
    - Desligue as sobreposições da Steam e do NVIDIA App no jogo que for
      usar: elas disputam o mesmo ponto de interceptação.
+   - Jogo com um conserto que já usa o d3d8.dll (Silent Hill 3 PC Fix):
+     NÃO renomeie nem troque esse arquivo para conseguir instalar. O
+     programa reconhece o carregador do fix, deixa o d3d8.dll dele onde
+     está e põe o dgVoodoo atrás dele como d3d8R.dll. Sem o d3d8.dll do
+     fix o DLSS 5 até roda, mas o jogo abre na resolução mínima e o menu
+     de opções não abre.
    - Desligue MSAA/SSAA nas opções gráficas do jogo. FXAA e SMAA podem
      continuar ligados.
 

@@ -24,13 +24,40 @@ public static class D3d8to9Wrapper
     /// <summary>Marcador do SH2 Enhancements (string de log do módulo) e do d3d8to9 genérico.</summary>
     public const string MarcaSh2 = "Silent Hill 2 Enhancements";
     public const string MarcaD3d8to9 = "d3d8to9";
-    private static readonly string[] Marcadores = { "dgVoodoo", MarcaSh2, MarcaD3d8to9 };
+
+    /// <summary>
+    /// O d3d8.dll que vem com o Silent Hill 4 (e outros relançamentos da GOG): converte DirectX
+    /// 8 em DirectX 9, lê a configuração de vídeo do dxcfg.ini (resolução, janela, escala, MSAA)
+    /// e importa o Direct3DCreate9 do d3d9.dll direto na tabela de imports — o Windows procura
+    /// esse d3d9.dll na pasta do exe antes do System32, então o dgVoodoo entra como D3D9.dll.
+    /// A string "%s\dxcfg.ini" está em UTF-16 dentro dele.
+    /// </summary>
+    public const string MarcaDxcfg = "dxcfg.ini";
+
+    /// <summary>
+    /// Não é texto do arquivo: marca o d3d8to9 que está como d3d8R.dll atrás de um carregador
+    /// (Silent Hill 3 PC Fix, ver <see cref="CarregadorD3d8R"/>). Ali o D3D8.dll só repassa, e
+    /// quem responde pelo Direct3D 8 é o d3d8R.dll — a corrente termina em DirectX 9 do mesmo
+    /// jeito, e o d3d8to9 acha o d3d9.dll pela ordem normal do Windows, a pasta do exe primeiro.
+    /// </summary>
+    public const string MarcaD3d8to9NoCarregador = "d3d8to9 como d3d8R.dll";
+
+    private static readonly string[] Marcadores = { "dgVoodoo", MarcaSh2, MarcaD3d8to9, MarcaDxcfg };
     private const long Orcamento = 32L * 1024 * 1024;
 
     /// <summary>Qual marcador identifica o D3D8.dll da pasta (null = não há, ou é o dgVoodoo, ou é outro wrapper).</summary>
     public static string? Qual(string pasta)
     {
-        var caminho = Path.Combine(pasta, Arquivo);
+        var marca = MarcaDe(Path.Combine(pasta, Arquivo));
+        if (marca is not null) return marca;
+        if (CarregadorD3d8R.Presente(pasta)
+            && MarcaDe(Path.Combine(pasta, CarregadorD3d8R.D3d8R)) == MarcaD3d8to9)
+            return MarcaD3d8to9NoCarregador;
+        return null;
+    }
+
+    private static string? MarcaDe(string caminho)
+    {
         if (!File.Exists(caminho)) return null;
         HashSet<string> marcas;
         try { marcas = ApiDetector.ScanForMarkers(caminho, Marcadores, Orcamento); }
@@ -38,12 +65,17 @@ public static class D3d8to9Wrapper
         if (marcas.Contains("dgVoodoo")) return null;
         if (marcas.Contains(MarcaSh2)) return MarcaSh2;
         if (marcas.Contains(MarcaD3d8to9)) return MarcaD3d8to9;
+        if (marcas.Contains(MarcaDxcfg)) return MarcaDxcfg;
         return null;
     }
 
     public static bool Presente(string pasta) => Qual(pasta) is not null;
 
-    public static string Descrever(string marca) => marca == MarcaSh2
-        ? "o módulo do Silent Hill 2 Enhanced Edition (a própria mod: 60 fps, widescreen, texturas)"
-        : "um wrapper com d3d8to9 (converte DirectX 8 em DirectX 9)";
+    public static string Descrever(string marca) => marca switch
+    {
+        MarcaSh2 => "o módulo do Silent Hill 2 Enhanced Edition (a própria mod: 60 fps, widescreen, texturas)",
+        MarcaDxcfg => "o conversor de DirectX 8 para DirectX 9 que vem com o jogo (versão GOG, configurado pelo dxcfg.ini)",
+        MarcaD3d8to9NoCarregador => "o carregador do Silent Hill 3 PC Fix, com um d3d8to9 encadeado como d3d8R.dll (converte DirectX 8 em DirectX 9)",
+        _ => "um wrapper com d3d8to9 (converte DirectX 8 em DirectX 9)",
+    };
 }

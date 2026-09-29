@@ -297,7 +297,49 @@ public static class InstallPlanBuilder
                     $"Remover {Rel(profile, caminho)} ({porque}; vai para backup)", null, caminho));
             }
 
-            if (profile.UsesShortFuse)
+            if (profile.ShortFuseRecusadoPelaApi)
+                plan.Warnings.Add(
+                    $"Motor ShortFuse pedido, mas o {ShortFuseDlss.Addon} só trabalha em Direct3D 9, 11 e 12, e este jogo " +
+                    $"é {profile.Api}: carregado no jogo ele o derruba (foi o que o Amnesia: The Bunker em OpenGL mostrou). O " +
+                    "plano instala o motor Krish + Feeder (1 passada) e tira o addon do ShortFuse da pasta, com backup. Em jogo " +
+                    "32-bit e em OpenGL 64-bit o ShortFuse roda dentro do host64, que é Direct3D 12.");
+
+            if (profile.UsesShortFuseViaHelper64)
+            {
+                // OpenGL 64-bit + ShortFuse: o modo helper do Feeder leva o NGX para o host64, e o
+                // ShortFuse entra lá como num jogo 32-bit. Ver FeederHelper64.
+                if (kit.FeedHelper64 is null || kit.FeedHelperHost64Exe is null || kit.FeedHelperFx is null)
+                {
+                    plan.Blockers.Add(
+                        $"Falta no kit: o modo helper 64-bit do Feeder {FeederHelper64.Versao} ({FeederHelper64.Addon}, " +
+                        $"{FeederHelper64.HostNoKit} e {FeederHelper64.FxNoKit}, na pasta \"DLSS5-Feeder-{FeederHelper64.Versao} " +
+                        "(modo helper 64-bit)\"). É por ele que o motor ShortFuse roda num jogo OpenGL 64-bit. Baixe o pacote " +
+                        "completo novo, ou escolha o motor Krish + Feeder na tela de detecção.");
+                    return plan;
+                }
+                Copy(kit.FeedHelper64, exe, FeederHelper64.Addon);
+                RemoverRival("dlss5-feed.addon64", "no modo helper quem roda no jogo é o dlss5-feed-helper.addon64");
+                RemoverRival("renodx-dlss5.addon64", "no modo helper o consumidor neural mora no host64");
+                RemoverRival(ShortFuseDlss.Addon, "no modo helper o ShortFuse mora no host64 — no jogo OpenGL ele o derruba");
+                // O .fx tem que ser o do mesmo zip do addon: vai por cima do que a pasta de shaders trouxe.
+                Copy(kit.FeedHelperFx, Path.Combine(shadersTarget, "Shaders"), "DLSS5_Feed.fx");
+                Copy(kit.FeedHelperHost64Exe, host64, "dlss5-feed-host64.exe");
+                Copy(kit.DxgiX64, host64, "dxgi.dll");
+                Copy(kit.NvngxDlssnr, host64, "nvngx_dlssnr.dll");
+                CopySemSobrescreverDoJogo(kit.NvngxDlss, host64, "nvngx_dlss.dll");
+                Copy(kit.RenodxDlssShortFuse, host64, ShortFuseDlss.Addon);
+                plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
+                    $"Gerar host64\\ReShade.ini ([ADDON] LoadFromDllMain={ShortFuseDlss.Addon}, [{ShortFuseDlss.Secao}] {ShortFuseDlss.ChavePassadas}={profile.PassCount}; o resto do ini fica)",
+                    null, Path.Combine(host64, ShortFuseNoHost64.Ini)));
+                plan.Warnings.Add(
+                    $"Motor ShortFuse em jogo OpenGL 64-bit ({profile.PassCount} passada(s)), pelo modo helper do Feeder " +
+                    $"{FeederHelper64.Versao}: no jogo fica só o {FeederHelper64.Addon}, que manda quadro, depth e vetores para o " +
+                    $"host64\\dlss5-feed-host64.exe; o {ShortFuseDlss.Addon} roda lá dentro (Direct3D 12), como num jogo 32-bit. " +
+                    "O Feeder de todos os outros jogos continua o do kit (" + FeederKit.VersaoDoKit + ") — este conjunto só entra aqui. EXPERIMENTAL: o autor do " +
+                    "Feeder testou o modo helper em Vulkan, ninguém rodou em OpenGL 64-bit ainda. Se o jogo não abrir, mande o " +
+                    "ReShade.log, o dlss5-feed.log e o host64\\dlss5-feed-host.log.");
+            }
+            else if (profile.UsesShortFuse)
             {
                 Copy(kit.RenodxDlssShortFuse, exe, ShortFuseDlss.Addon);
                 RemoverRival("renodx-dlss5.addon64", "o RenoDX DLSS do ShortFuse não convive com o addon do Krish");
@@ -307,7 +349,16 @@ public static class InstallPlanBuilder
             else
             {
                 if (profile.NeedsFeeder)
+                {
                     Copy(kit.FeedAddon64, exe, "dlss5-feed.addon64");
+                    // Feeder 1.17 (#130): em D3D12, se o jogo carrega um DLSS dele fora da pasta do
+                    // addon, o Feeder não abre a sessão. Aqui o usuário escolheu o Feeder mesmo com o
+                    // DLSS do jogo ("preferir o Feeder"): native_dlss_ok=1 mantém o que o 0.15.1 fazia.
+                    if (profile.HasNativeDlss && profile.Api == GraphicsApi.D3D12)
+                        plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
+                            $"Gravar {FeedCfg.ChaveDlssNativo}=1 em {FeedCfg.Arquivo} (o jogo tem DLSS próprio e o Feeder foi escolhido; o resto do arquivo fica)",
+                            null, Path.Combine(exe, FeedCfg.Arquivo)));
+                }
                 Copy(kit.RenodxAddon64, exe, "renodx-dlss5.addon64");
                 RemoverRival(ShortFuseDlss.Addon, "o addon do Krish e o Feeder não convivem com o RenoDX DLSS do ShortFuse");
             }
@@ -542,18 +593,52 @@ public static class InstallPlanBuilder
             // DirectX 8 com o D3D8.dll ocupado por uma mod que converte para DirectX 9 e
             // prefere um d3d9.dll local (Silent Hill 2 Enhanced Edition): a mod fica, e o
             // dgVoodoo entra como D3D9.dll ao lado dela. Ver D3d8to9Wrapper.
-            var marcaD3d8to9 = profile.AtualizarD3d8ViaD3D9();
-            if (marcaD3d8to9 is not null)
+            var marcaD3d8to9 = profile.AtualizarArranjoD3d8();
+            if (marcaD3d8to9 == D3d8to9Wrapper.MarcaD3d8to9NoCarregador)
+            {
+                plan.Warnings.Add(
+                    $"O D3D8.dll desta pasta é {D3d8to9Wrapper.Descrever(marcaD3d8to9)}. Os dois FICAM: o " +
+                    "d3d8to9 procura o d3d9.dll na pasta do jogo antes da do Windows, então o dgVoodoo entra " +
+                    "como D3D9.dll — o fix continua inteiro e o dgVoodoo traduz o DirectX 9 para D3D11, onde " +
+                    "o ReShade e o Feeder entram.");
+            }
+            else if (marcaD3d8to9 is not null)
             {
                 plan.Warnings.Add(
                     $"O D3D8.dll desta pasta é {D3d8to9Wrapper.Descrever(marcaD3d8to9)}. Ele FICA: converte o " +
                     "jogo para DirectX 9 (d3d8to9) e carrega de preferência um d3d9.dll da própria pasta, " +
                     "então o dgVoodoo entra como D3D9.dll ao lado dele — a mod continua inteira e o dgVoodoo " +
-                    "traduz o DirectX 9 dela para D3D11, onde o ReShade e o Feeder entram. Se a mod estiver " +
-                    "com d3d8to9 = 0 no d3d8.ini, volte para 1 (é o padrão): sem isso o D3D9.dll não é usado.");
+                    "traduz o DirectX 9 dela para D3D11, onde o ReShade e o Feeder entram." +
+                    (marcaD3d8to9 == D3d8to9Wrapper.MarcaDxcfg
+                        ? " Não renomeie nem troque esse d3d8.dll pelo do dgVoodoo: é ele que aplica as opções de vídeo " +
+                          "do dxcfg.ini que o jogo espera."
+                        : " Se a mod estiver com d3d8to9 = 0 no d3d8.ini, volte para 1 (é o padrão): sem isso o D3D9.dll não é usado."));
             }
             var wrapperSrc = profile.DgVoodooWrapperName.Equals("D3D8.dll", StringComparison.OrdinalIgnoreCase)
                 ? kit.DgVoodooD3D8X86 : kit.DgVoodooD3D9X86;
+
+            // O Silent Hill 3 PC Fix na pasta, mas sem o carregador dele no D3D8.dll: foi o que
+            // restou a quem trocou o d3d8.dll do fix pelo do dgVoodoo quando o plano recusava o
+            // nome ocupado. O DLSS 5 roda, mas o fix não sobe — resolução mínima e menu de
+            // opções que não abre.
+            if (profile.Api == GraphicsApi.D3D8 && CarregadorD3d8R.FixSemCarregador(renderer))
+                plan.Warnings.Add(
+                    $"A pasta tem o {CarregadorD3d8R.ModSh3}, mas o D3D8.dll não é o carregador do fix, que é " +
+                    "quem sobe o fix. Sem ele o Silent Hill 3 abre na resolução mínima e o menu de opções não " +
+                    "abre. Se você trocou o d3d8.dll do fix pelo do dgVoodoo (ou o renomeou) para conseguir " +
+                    "instalar, devolva o d3d8.dll do fix ao lugar e instale de novo: o instalador mantém o " +
+                    $"carregador e põe o dgVoodoo atrás dele como {CarregadorD3d8R.D3d8R}, o nome que o fix procura.");
+
+            // O dxcfg.ini do conversor que vem com o jogo (Silent Hill 4 da GOG) está na pasta, mas o
+            // D3D8.dll não é mais ele: foi trocado pelo dgVoodoo à mão. Instala, mas o jogo perde o
+            // conversor original — no SH4 isso deu jogo travado ao abrir.
+            if (profile.Api == GraphicsApi.D3D8 && marcaD3d8to9 is null
+                && File.Exists(Path.Combine(renderer, D3d8to9Wrapper.MarcaDxcfg)))
+                plan.Warnings.Add(
+                    $"A pasta tem o {D3d8to9Wrapper.MarcaDxcfg}, mas o D3D8.dll não é o conversor de DirectX 8 para 9 " +
+                    "que vem com o jogo (e que lê esse arquivo). Se você renomeou o d3d8.dll original para instalar, " +
+                    "devolva o nome d3d8.dll a ele e instale de novo: o instalador mantém o conversor e põe o dgVoodoo " +
+                    "como D3D9.dll ao lado.");
 
             // O dgVoodoo só funciona com ESTE nome de arquivo — e ele pode já estar ocupado
             // por outro wrapper que o usuário pôs ali de propósito. Foi o Dead Space 2: o
@@ -588,6 +673,32 @@ public static class InstallPlanBuilder
                         "DxWrapper lê) ganha um RealDllPath apontando para " +
                         "ele: o DxWrapper carrega o dgVoodoo em vez do d3d9 do Windows. A marca d'água do " +
                         "dgVoodoo na tela continua sendo a prova de que a corrente fechou.");
+                    break;
+
+                // O carregador do Silent Hill 3 PC Fix: ele fica, e o dgVoodoo entra com o nome
+                // que ele procura ao lado antes de cair no d3d8 do Windows. Ver CarregadorD3d8R.
+                case Ocupante.Carregador:
+                    var d3d8R = Path.Combine(renderer, CarregadorD3d8R.D3d8R);
+                    if (File.Exists(d3d8R)
+                        && !ApiDetector.ScanForMarkers(d3d8R, new[] { "dgVoodoo" }, OrcamentoWrapper).Contains("dgVoodoo"))
+                    {
+                        plan.Blockers.Add(
+                            $"O D3D8.dll desta pasta é {CarregadorD3d8R.Descrever(renderer)}, e o {CarregadorD3d8R.D3d8R} " +
+                            "que ele encadeia já é outro wrapper, não o dgVoodoo. O dgVoodoo precisa exatamente desse " +
+                            "lugar, e instalar por cima substitui o que o jogo está usando hoje. Se você não usa mais " +
+                            $"esse wrapper, remova o {CarregadorD3d8R.D3d8R} e instale de novo; se usa, os dois não convivem.");
+                        return plan;
+                    }
+                    Copy(wrapperSrc, renderer, CarregadorD3d8R.D3d8R);
+                    plan.Warnings.Add(
+                        $"O D3D8.dll desta pasta é {CarregadorD3d8R.Descrever(renderer)}. Ele FICA. O dgVoodoo " +
+                        $"entra ao lado como {CarregadorD3d8R.D3d8R}, o nome que o carregador procura antes de cair " +
+                        "no d3d8 do Windows: o fix continua subindo, e o Direct3D 8 do jogo vai para o dgVoodoo, " +
+                        "que traduz para D3D11, onde o ReShade e o Feeder entram. Não troque o d3d8.dll do fix pelo " +
+                        "do dgVoodoo: sem ele o fix fica de fora (resolução mínima, menu de opções que não abre). " +
+                        $"Com o {CarregadorD3d8R.D3d8R} presente o próprio fix desliga os ajustes que só valem para o " +
+                        "d3d8 do Windows (janela maximizada, DirectX 12), e o dgVoodoo.conf sai no perfil padrão, " +
+                        "com todas as resoluções. A marca d'água do dgVoodoo na tela é a prova de que a corrente fechou.");
                     break;
 
                 default:
@@ -759,7 +870,7 @@ public static class InstallPlanBuilder
     private const long OrcamentoWrapper = 32L * 1024 * 1024;
 
     /// <summary>Quem está com o nome que o dgVoodoo precisa.</summary>
-    private enum Ocupante { Ninguem, DxWrapper, Outro }
+    private enum Ocupante { Ninguem, DxWrapper, Carregador, Outro }
 
     private static string? LerTexto(string? caminho)
     {
@@ -779,6 +890,9 @@ public static class InstallPlanBuilder
         // A varredura já cobre ASCII/UTF-16 e minúsculas: "DxWrapper" acha "dxwrapper.dll".
         var marcas = ApiDetector.ScanForMarkers(existente, new[] { "dgVoodoo", "DxWrapper" }, OrcamentoWrapper);
         if (marcas.Contains("dgVoodoo")) return Ocupante.Ninguem;
+
+        if (wrapper.Equals(CarregadorD3d8R.Arquivo, StringComparison.OrdinalIgnoreCase) && CarregadorD3d8R.Presente(renderer))
+            return Ocupante.Carregador;
 
         return marcas.Contains("DxWrapper") || DxWrapperChain.DxWrapperPresente(renderer)
             ? Ocupante.DxWrapper

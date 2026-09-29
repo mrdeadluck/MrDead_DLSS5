@@ -99,8 +99,12 @@ public static class ManualSteps
             steps.Add(new ManualStep(n++, "Se o jogo recusar o adaptador de vídeo",
                 "Jogo de DirectX 8 checa a placa antes de abrir, e o cartão virtual do dgVoodoo se " +
                 "identifica como ele mesmo — daí mensagens como \"requires a DirectX 8 compatible " +
-                "display adapter\". O programa já grava o perfil Legado (AdapterIDType=nvidia, " +
-                "MSD3DDeviceNames=true, VRAM 256 MB), que resolve a maioria dos casos. Se persistir, " +
+                "display adapter\". " +
+                (DgVoodooConfigurator.ProfileFor(profile) == DgVoodooProfile.Legado
+                    ? "O programa já grava o perfil Legado (AdapterIDType=nvidia, MSD3DDeviceNames=true, " +
+                      "VRAM 256 MB), que resolve a maioria dos casos. Se persistir, "
+                    : "Aqui o dgVoodoo.conf sai no perfil padrão, com todas as resoluções, porque a mod da " +
+                      "pasta quer a resolução do monitor. Se o jogo recusar o adaptador, ") +
                 "abra o Painel do dgVoodoo (botão na tela de verificação), aba DirectX, e troque " +
                 "VideoCard: tente geforce_ti_4800, depois ati_radeon_8500. É só salvar e reabrir o " +
                 "jogo — nada precisa ser reinstalado.\r\n\r\n" +

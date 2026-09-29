@@ -29,7 +29,7 @@ public static class Propriedade
     {
         "renodx-dlss5.addon64", ShortFuseDlss.Addon, "dlss5-feed.addon64", "dlss5-feed.addon32",
         "dlss5-feed-host64.exe", "dlss5-feed.cfg", "dlss5-feed.log", "dlss5-feed-host.log", "dlss5-feed-crash.dmp",
-        "nvngx_dlssnr.dll", JanelaForcada.Addon32, JanelaForcada.Addon64,
+        "nvngx_dlssnr.dll", JanelaForcada.Addon32, JanelaForcada.Addon64, FeederHelper64.Addon,
         // Consumidores alternativos do host64: nenhum jogo traz nada disso.
         OptiScalerNr.Ini, OptiScalerNr.Shim, OptiScalerNr.Log,
         DeepFriedChicken.Addon, DeepFriedChicken.Nvngx, DeepFriedChicken.Cfg,
@@ -73,6 +73,9 @@ public static class Propriedade
     {
         ("D3D9.dll", "dgVoodoo"),
         ("D3D8.dll", "dgVoodoo"),
+        // O dgVoodoo atrás do carregador do Silent Hill 3 PC Fix. O nome é o que o fix procura,
+        // e o usuário pode ter posto outro wrapper ali: só é nosso se for o dgVoodoo.
+        (CarregadorD3d8R.D3d8R, "dgVoodoo"),
         // O OptiScaler entra no host64 com o nome de uma DLL do sistema; só é nosso se for ele.
         (OptiScalerNr.Proxy, OptiScalerNr.Marca),
         // O ReShade que o OptiScaler carrega no host64: só é nosso se for o ReShade.
@@ -83,7 +86,7 @@ public static class Propriedade
     public static readonly string[] ProvasDoKit =
     {
         "nvngx_dlssnr.dll", "renodx-dlss5.addon64", ShortFuseDlss.Addon, "dlss5-feed.addon64",
-        "dlss5-feed.addon32", "dlss5-feed-host64.exe",
+        "dlss5-feed.addon32", "dlss5-feed-host64.exe", FeederHelper64.Addon,
     };
 
     public static readonly string[] PastasNossas = { "host64", "reshade-shaders" };
@@ -150,7 +153,7 @@ public static class Propriedade
         "renodx-dlss5.addon64", ShortFuseDlss.Addon, "dlss5-feed.addon64", "dlss5-feed.addon32",
         "dlss5-feed-host64.exe", "dlss5-feed.cfg", "dlss5-feed.log", "dlss5-feed-host.log", "dlss5-feed-crash.dmp",
         "nvngx_dlssnr.dll", "dgVoodoo_D3D9.dll", "dgVoodoo_D3D8.dll", InstallManifest.FileName,
-        JanelaForcada.Addon32, JanelaForcada.Addon64,
+        JanelaForcada.Addon32, JanelaForcada.Addon64, FeederHelper64.Addon,
         OptiScalerNr.Ini, OptiScalerNr.Shim, OptiScalerNr.Log,
         DeepFriedChicken.Addon, DeepFriedChicken.Nvngx, DeepFriedChicken.Cfg,
     };

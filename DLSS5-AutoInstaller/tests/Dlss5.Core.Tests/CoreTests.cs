@@ -625,6 +625,24 @@ public class PlanBuilderTests
         var plan = InstallPlanBuilder.Build(profile, FullKit(), new InstallOptions());
         Assert.True(Targets(plan, "dlss5-feed.addon64"));
         Assert.Contains(plan.Warnings, w => w.Contains("DLSS desligado", StringComparison.Ordinal));
+        // Feeder 1.17 (#130) não abre a sessão com o DLSS do jogo carregado sem native_dlss_ok=1.
+        Assert.Contains(plan.Actions, a => a.Kind == PlanActionKind.WriteGeneratedFile
+                                           && Path.GetFileName(a.TargetPath!) == FeedCfg.Arquivo);
+    }
+
+    [Fact]
+    public void FeederSemDlssNativoNaoMexeNoCfg()
+    {
+        var plan = InstallPlanBuilder.Build(Profile(PeArchitecture.X64, GraphicsApi.D3D12), FullKit(), new InstallOptions());
+        Assert.DoesNotContain(plan.Actions, a => a.TargetPath is not null && Path.GetFileName(a.TargetPath) == FeedCfg.Arquivo);
+    }
+
+    [Fact]
+    public void CfgGanhaNativeDlssOkSemPerderOResto()
+    {
+        var cfg = FeedCfg.Gravar("work_resolution=75\r\n", 1, FeedCfg.ChaveDlssNativo);
+        Assert.Equal(75, FeedCfg.Ler(cfg));
+        Assert.Equal(1, FeedCfg.Ler(cfg, FeedCfg.ChaveDlssNativo));
     }
 
     [Fact]
@@ -983,6 +1001,264 @@ public class PlanBuilderTests
             Assert.False(perfil.D3d8ViaD3D9);
             Assert.Contains(plan.Blockers, b => b.Contains("não é o dgVoodoo", StringComparison.Ordinal));
             Assert.Null(D3d8to9Wrapper.Qual(dir));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void OpenGL64_ShortFuseVaiParaOHost64PeloModoHelper()
+    {
+        // Amnesia: The Bunker (OpenGL 64-bit): com o renodx-dlss.addon64 no jogo ele nem abria (o addon
+        // só atende D3D9/11/12). Pelo modo helper do Feeder 1.18 o ShortFuse roda dentro do host64.
+        var perfil = Profile(PeArchitecture.X64, GraphicsApi.OpenGL);
+        perfil.Engine = NeuralEngine.RenodxDlssShortFuse;
+        perfil.PassCount = 3;
+        Assert.False(perfil.UsesShortFuse);
+        Assert.True(perfil.UsesShortFuseViaHelper64);
+        Assert.False(perfil.ShortFuseRecusadoPelaApi);
+        Assert.True(perfil.NeedsFeeder);
+        Assert.Equal(NeuralEngine.RenodxDlssShortFuse, perfil.MotorEfetivo);
+
+        // Kit sem o conjunto do modo helper: recusa, em vez de cair noutro motor.
+        var semHelper = InstallPlanBuilder.Build(perfil, FullKit(), new InstallOptions());
+        Assert.Contains(semHelper.Blockers, b => b.Contains(FeederHelper64.Addon, StringComparison.Ordinal));
+
+        var kit = FullKit();
+        kit.RenodxDlssShortFuse = @"C:\kit\renodx-dlss.addon64";
+        kit.FeedHelper64 = @"C:\kit\helper\dlss5-feed-helper.addon64";
+        kit.FeedHelperHost64Exe = @"C:\kit\helper\" + FeederHelper64.HostNoKit;
+        kit.FeedHelperFx = @"C:\kit\helper\" + FeederHelper64.FxNoKit;
+        var plan = InstallPlanBuilder.Build(perfil, kit, new InstallOptions());
+
+        Assert.True(plan.CanRun, string.Join("; ", plan.Blockers));
+        Assert.True(Targets(plan, @"game\dlss5-feed-helper.addon64"));
+        Assert.True(Targets(plan, @"game\host64\renodx-dlss.addon64"));
+        Assert.True(Targets(plan, @"game\host64\dxgi.dll"));
+        Assert.True(Targets(plan, @"game\host64\nvngx_dlssnr.dll"));
+        Assert.True(Targets(plan, @"game\host64\ReShade.ini"));
+        var host = Assert.Single(plan.Actions, a => Norm(a.TargetPath).EndsWith(@"host64\dlss5-feed-host64.exe", StringComparison.OrdinalIgnoreCase));
+        Assert.EndsWith(FeederHelper64.HostNoKit, host.SourcePath!, StringComparison.OrdinalIgnoreCase);
+        var fx = Assert.Single(plan.Actions, a => a.Kind == PlanActionKind.CopyFile && Norm(a.TargetPath).EndsWith(@"Shaders\DLSS5_Feed.fx", StringComparison.OrdinalIgnoreCase));
+        Assert.EndsWith(FeederHelper64.FxNoKit, fx.SourcePath!, StringComparison.OrdinalIgnoreCase);
+        // Nada de addon neural nem do Feeder "normal" na raiz do jogo.
+        Assert.False(Targets(plan, @"game\renodx-dlss.addon64"));
+        Assert.False(Targets(plan, @"game\renodx-dlss5.addon64"));
+        Assert.False(Targets(plan, @"game\dlss5-feed.addon64"));
+        Assert.Contains(plan.Warnings, w => w.Contains("modo helper", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ShortFuseFora_DoOpenGL64_NaoMuda()
+    {
+        // O modo helper é só para OpenGL 64-bit: D3D11/D3D12 seguem com o ShortFuse no jogo, e em
+        // Vulkan 64-bit (que o addon não atende) o motor continua caindo no Krish + Feeder.
+        foreach (var api in new[] { GraphicsApi.D3D11, GraphicsApi.D3D12 })
+        {
+            var p = Profile(PeArchitecture.X64, api);
+            p.Engine = NeuralEngine.RenodxDlssShortFuse;
+            Assert.True(p.UsesShortFuse);
+            Assert.False(p.UsesShortFuseViaHelper64);
+            var kit = FullKit();
+            kit.RenodxDlssShortFuse = @"C:\kit\renodx-dlss.addon64";
+            var plan = InstallPlanBuilder.Build(p, kit, new InstallOptions());
+            Assert.True(Targets(plan, @"game\renodx-dlss.addon64"));
+            Assert.False(Targets(plan, FeederHelper64.Addon));
+        }
+        var vk = Profile(PeArchitecture.X64, GraphicsApi.Vulkan);
+        vk.Engine = NeuralEngine.RenodxDlssShortFuse;
+        Assert.True(vk.ShortFuseRecusadoPelaApi);
+        Assert.False(vk.UsesShortFuseViaHelper64);
+        Assert.Equal(NeuralEngine.RenodxDlss5Feeder, vk.MotorEfetivo);
+        var gl32 = Profile(PeArchitecture.X86, GraphicsApi.OpenGL);
+        gl32.Engine = NeuralEngine.RenodxDlssShortFuse;
+        Assert.True(gl32.UsesShortFuseNoHost64);
+        Assert.False(gl32.UsesShortFuseViaHelper64);
+    }
+
+    [Fact]
+    public void RotaC_D3D8_ConversorDxcfgDoSh4_DgVoodooEntraComoD3D9()
+    {
+        // Silent Hill 4 (GOG): o d3d8.dll do jogo converte para DirectX 9, lê o dxcfg.ini e importa
+        // o Direct3DCreate9 do d3d9.dll — que o Windows acha primeiro na pasta do exe. Trocar esse
+        // d3d8.dll pelo dgVoodoo deixava o jogo travado ao abrir.
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5sh4_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var conversor = System.Text.Encoding.ASCII.GetBytes("MZ ... d3d9.dll Direct3DCreate9 ... ")
+                .Concat(System.Text.Encoding.Unicode.GetBytes(@"%s\dxcfg.ini" + "\0")).ToArray();
+            File.WriteAllBytes(Path.Combine(dir, "D3D8.dll"), conversor);
+            var perfil = PerfilRotaC(dir);
+            perfil.Api = GraphicsApi.D3D8;
+
+            var plan = InstallPlanBuilder.Build(perfil, FullKit(), new InstallOptions());
+
+            Assert.True(plan.CanRun, string.Join("; ", plan.Blockers));
+            Assert.True(perfil.D3d8ViaD3D9);
+            Assert.Equal(D3d8to9Wrapper.MarcaDxcfg, D3d8to9Wrapper.Qual(dir));
+            Assert.DoesNotContain(plan.Actions, a =>
+                Path.GetFileName(a.TargetPath ?? "").Equals("D3D8.dll", StringComparison.OrdinalIgnoreCase));
+            Assert.True(Targets(plan, "D3D9.dll"));
+            Assert.Contains(plan.Warnings, w => w.Contains("dxcfg.ini", StringComparison.Ordinal)
+                                                && !w.Contains("d3d8to9 = 0", StringComparison.Ordinal));
+            Assert.Equal(DgVoodooProfile.Padrao, DgVoodooConfigurator.ProfileFor(perfil));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void RotaC_D3D8_DxcfgSemOConversor_Avisa()
+    {
+        // A pasta de quem renomeou o d3d8.dll do SH4 e pôs o dgVoodoo no lugar.
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5sh4_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "D3D8.dll"), "MZ ... dgVoodoo 2.87.4 - Direct3D8 ...");
+            File.WriteAllText(Path.Combine(dir, "dxcfg.ini"), "[display]\r\n");
+            var perfil = PerfilRotaC(dir);
+            perfil.Api = GraphicsApi.D3D8;
+
+            var plan = InstallPlanBuilder.Build(perfil, FullKit(), new InstallOptions());
+
+            Assert.False(perfil.D3d8ViaD3D9);
+            Assert.Contains(plan.Warnings, w => w.Contains("não é o conversor", StringComparison.Ordinal));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void RotaC_D3D8_CarregadorDoSh3PcFix_DgVoodooEntraComoD3d8R()
+    {
+        // Silent Hill 3 PC Fix: o d3d8.dll da pasta só carrega o Silent_Hill_3_PC_Fix.dll e
+        // repassa o Direct3D 8 para um d3d8R.dll ao lado (ou para o do Windows). O plano
+        // recusava ("não é o dgVoodoo"); trocar o arquivo à mão tirava o fix — resolução
+        // mínima e menu de opções que não abre. Agora o carregador fica e o dgVoodoo é o d3d8R.dll.
+        var dir = Sh3PcFixFalso.NovaPasta();
+        try
+        {
+            var perfil = PerfilRotaC(dir);
+            perfil.Api = GraphicsApi.D3D8;
+
+            var plan = InstallPlanBuilder.Build(perfil, FullKit(), new InstallOptions());
+
+            Assert.True(plan.CanRun, string.Join("; ", plan.Blockers));
+            Assert.True(perfil.D3d8ViaD3d8R);
+            Assert.False(perfil.D3d8ViaD3D9);
+            Assert.Equal("D3D8.dll", perfil.DgVoodooWrapperName);
+            Assert.Equal("d3d8R.dll", perfil.DgVoodooNaPasta);
+            // O carregador não é alvo de nada; o dgVoodoo D3D8 x86 do kit vira d3d8R.dll.
+            Assert.DoesNotContain(plan.Actions, a =>
+                Path.GetFileName(a.TargetPath ?? "").Equals("D3D8.dll", StringComparison.OrdinalIgnoreCase));
+            var copia = Assert.Single(plan.Actions, a =>
+                a.Kind == PlanActionKind.CopyFile &&
+                Path.GetFileName(a.TargetPath ?? "").Equals("d3d8R.dll", StringComparison.OrdinalIgnoreCase));
+            Assert.EndsWith(@"MS\x86\D3D8.dll", copia.SourcePath!, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(plan.Warnings, w => w.Contains("Silent Hill 3 PC Fix", StringComparison.Ordinal)
+                                                && w.Contains("d3d8R.dll", StringComparison.Ordinal));
+            Assert.DoesNotContain(plan.Warnings, w => w.Contains("não é o carregador do fix", StringComparison.Ordinal));
+            // O fix quer a resolução do monitor: perfil padrão do dgVoodoo, não o "Legado".
+            Assert.Equal(DgVoodooProfile.Padrao, DgVoodooConfigurator.ProfileFor(perfil));
+
+            // O manifesto leva a decisão, para a verificação e a desinstalação.
+            var m = InstallManifest.Para(plan, FullKit());
+            Assert.True(m.D3d8ViaD3d8R);
+            Assert.Equal("d3d8R.dll", m.PerfilGravado()!.DgVoodooNaPasta);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void RotaC_D3D8_CarregadorComDgVoodooNoD3d8R_Sobrescreve()
+    {
+        // Quem já tinha montado a corrente à mão com o dgVoodoo: é o mesmo programa, entra por
+        // cima com backup (o original volta na desinstalação).
+        var dir = Sh3PcFixFalso.NovaPasta();
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "d3d8R.dll"), "MZ ... dgVoodoo 2.86 - Direct3D8 ...");
+            var perfil = PerfilRotaC(dir);
+            perfil.Api = GraphicsApi.D3D8;
+
+            var plan = InstallPlanBuilder.Build(perfil, FullKit(), new InstallOptions());
+
+            Assert.True(plan.CanRun, string.Join("; ", plan.Blockers));
+            Assert.True(Targets(plan, "d3d8R.dll"));
+            Assert.Contains(plan.Conflitos, c => c.Contains("d3d8R.dll", StringComparison.Ordinal));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void RotaC_D3D8_CarregadorComOutroWrapperNoD3d8R_Bloqueia()
+    {
+        var dir = Sh3PcFixFalso.NovaPasta();
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "d3d8R.dll"), "MZ ... DXVK ...");
+            var perfil = PerfilRotaC(dir);
+            perfil.Api = GraphicsApi.D3D8;
+
+            var plan = InstallPlanBuilder.Build(perfil, FullKit(), new InstallOptions());
+
+            Assert.False(plan.CanRun);
+            Assert.Contains(plan.Blockers, b => b.Contains("d3d8R.dll", StringComparison.Ordinal)
+                                                && b.Contains("outro wrapper", StringComparison.Ordinal));
+            Assert.DoesNotContain(plan.Actions, a =>
+                Path.GetFileName(a.TargetPath ?? "").Equals("d3d8R.dll", StringComparison.OrdinalIgnoreCase));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void RotaC_D3D8_CarregadorComD3d8to9NoD3d8R_DgVoodooEntraComoD3D9()
+    {
+        // O d3d8to9 encadeado ao fix fala DirectX 9 e acha o d3d9.dll na pasta do exe antes do
+        // System32: os dois ficam, e o dgVoodoo entra como D3D9.dll — o arranjo do SH2 EE.
+        var dir = Sh3PcFixFalso.NovaPasta();
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "d3d8R.dll"), "MZ ... d3d8to9 ...");
+            var perfil = PerfilRotaC(dir);
+            perfil.Api = GraphicsApi.D3D8;
+
+            var plan = InstallPlanBuilder.Build(perfil, FullKit(), new InstallOptions());
+
+            Assert.True(plan.CanRun, string.Join("; ", plan.Blockers));
+            Assert.True(perfil.D3d8ViaD3D9);
+            Assert.False(perfil.D3d8ViaD3d8R);
+            Assert.Equal(D3d8to9Wrapper.MarcaD3d8to9NoCarregador, D3d8to9Wrapper.Qual(dir));
+            Assert.DoesNotContain(plan.Actions, a =>
+                Path.GetFileName(a.TargetPath ?? "") is var n
+                && (n.Equals("D3D8.dll", StringComparison.OrdinalIgnoreCase) || n.Equals("d3d8R.dll", StringComparison.OrdinalIgnoreCase)));
+            var copia = Assert.Single(plan.Actions, a =>
+                a.Kind == PlanActionKind.CopyFile &&
+                Path.GetFileName(a.TargetPath ?? "").Equals("D3D9.dll", StringComparison.OrdinalIgnoreCase));
+            Assert.EndsWith(@"MS\x86\D3D9.dll", copia.SourcePath!, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(plan.Warnings, w => w.Contains("Os dois FICAM", StringComparison.Ordinal));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void RotaC_D3D8_FixSemOCarregador_Avisa()
+    {
+        // A pasta de quem trocou o d3d8.dll do fix pelo do dgVoodoo: instala (o dgVoodoo é
+        // nosso), mas avisa que o fix ficou de fora e como devolvê-lo.
+        var dir = Sh3PcFixFalso.NovaPasta();
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "D3D8.dll"), "MZ ... dgVoodoo 2.87.4 - Direct3D8 ...");
+            var perfil = PerfilRotaC(dir);
+            perfil.Api = GraphicsApi.D3D8;
+
+            var plan = InstallPlanBuilder.Build(perfil, FullKit(), new InstallOptions());
+
+            Assert.True(plan.CanRun, string.Join("; ", plan.Blockers));
+            Assert.False(perfil.D3d8ViaD3d8R);
+            Assert.True(Targets(plan, "D3D8.dll"));
+            Assert.Contains(plan.Warnings, w => w.Contains("não é o carregador do fix", StringComparison.Ordinal)
+                                                && w.Contains("d3d8R.dll", StringComparison.Ordinal));
         }
         finally { Directory.Delete(dir, true); }
     }
@@ -3020,6 +3296,194 @@ public class DxWrapperChainTests
             var aberta = CheckpointVerifier.Verify(perfil, null)
                 .First(c => c.Number == 5 && c.Title.Contains("RealDllPath", StringComparison.Ordinal));
             Assert.Equal(CheckStatus.Fail, aberta.State);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}
+
+/// <summary>A pasta do Silent Hill 3 com o PC Fix, do jeito que o carregador dele se apresenta.</summary>
+internal static class Sh3PcFixFalso
+{
+    /// <summary>
+    /// O d3d8.dll do fix: os caminhos que o DllMain monta ficam em UTF-16, como no binário real
+    /// (L"\\d3d8R.dll", L"\\Silent_Hill_3_PC_Fix.dll", L"\\d3d8.dll").
+    /// </summary>
+    public static byte[] Carregador()
+    {
+        var b = new List<byte>(System.Text.Encoding.ASCII.GetBytes("MZ carregador"));
+        foreach (var s in new[] { @"\d3d8R.dll", @"\Silent_Hill_3_PC_Fix.dll", @"\d3d8.dll", "Failed to load d3d8.dll!" })
+            b.AddRange(System.Text.Encoding.Unicode.GetBytes(s + "\0"));
+        return b.ToArray();
+    }
+
+    /// <summary>PE x86 mínimo com um texto depois do cabeçalho (o checkpoint 5 lê a arquitetura).</summary>
+    public static void PeX86(string caminho, string texto)
+    {
+        var bytes = new byte[0x200];
+        bytes[0] = (byte)'M';
+        bytes[1] = (byte)'Z';
+        const int peOffset = 0x80;
+        BitConverter.GetBytes(peOffset).CopyTo(bytes, 0x3C);
+        bytes[peOffset] = (byte)'P';
+        bytes[peOffset + 1] = (byte)'E';
+        BitConverter.GetBytes((ushort)0x014C).CopyTo(bytes, peOffset + 4);
+        File.WriteAllBytes(caminho, bytes.Concat(System.Text.Encoding.ASCII.GetBytes(texto)).ToArray());
+    }
+
+    /// <summary>Pasta nova com o carregador como D3D8.dll e o Silent_Hill_3_PC_Fix.dll ao lado.</summary>
+    public static string NovaPasta()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5sh3_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        File.WriteAllBytes(Path.Combine(dir, "D3D8.dll"), Carregador());
+        File.WriteAllText(Path.Combine(dir, CarregadorD3d8R.ModSh3), "MZ o fix de verdade");
+        return dir;
+    }
+}
+
+public class CarregadorD3d8RTests
+{
+    private static GameProfile PerfilSh3(string dir) => new()
+    {
+        GameFolder = dir,
+        RealExePath = Path.Combine(dir, "sh3.exe"),
+        Architecture = PeArchitecture.X86,
+        Api = GraphicsApi.D3D8,
+        RendererFolder = dir,
+    };
+
+    [Fact]
+    public void ReconheceOCarregadorPeloTextoUtf16()
+    {
+        var dir = Sh3PcFixFalso.NovaPasta();
+        try
+        {
+            Assert.True(CarregadorD3d8R.Presente(dir));
+            Assert.False(CarregadorD3d8R.Encadeado(dir));
+            Assert.False(CarregadorD3d8R.FixSemCarregador(dir));
+            Assert.Contains("Silent Hill 3 PC Fix", CarregadorD3d8R.Descrever(dir));
+            Assert.Null(D3d8to9Wrapper.Qual(dir));
+
+            File.WriteAllText(Path.Combine(dir, "d3d8R.dll"), "MZ ... dgVoodoo ...");
+            Assert.True(CarregadorD3d8R.Encadeado(dir));
+
+            // O dgVoodoo no lugar do carregador: o fix está na pasta, mas ninguém o sobe.
+            File.WriteAllText(Path.Combine(dir, "D3D8.dll"), "MZ ... dgVoodoo 2.87.4 - Direct3D8 ...");
+            Assert.False(CarregadorD3d8R.Presente(dir));
+            Assert.True(CarregadorD3d8R.FixSemCarregador(dir));
+
+            File.Delete(Path.Combine(dir, "D3D8.dll"));
+            Assert.False(CarregadorD3d8R.Presente(dir));
+            Assert.True(CarregadorD3d8R.FixSemCarregador(dir));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void CarregadorSemOFixDoSh3TemDescricaoGenerica()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dlss5ldr_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllBytes(Path.Combine(dir, "D3D8.dll"), System.Text.Encoding.Unicode.GetBytes(@"MZ \d3d8R.dll"));
+            Assert.True(CarregadorD3d8R.Presente(dir));
+            Assert.DoesNotContain("Silent Hill 3", CarregadorD3d8R.Descrever(dir));
+            Assert.False(CarregadorD3d8R.FixSemCarregador(dir));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void Checkpoint5ConfereODgVoodooAtrasDoCarregadorEOFix()
+    {
+        var dir = Sh3PcFixFalso.NovaPasta();
+        try
+        {
+            var d3d8R = Path.Combine(dir, "d3d8R.dll");
+            Sh3PcFixFalso.PeX86(d3d8R, "dgVoodoo 2.87.4 - Direct3D8");
+            var perfil = PerfilSh3(dir);
+            perfil.AtualizarArranjoD3d8();
+            Assert.True(perfil.D3d8ViaD3d8R);
+
+            var c5 = CheckpointVerifier.Verify(perfil, null).Where(c => c.Number == 5).ToList();
+            var dg = c5.First(c => c.Title.StartsWith("dgVoodoo2", StringComparison.Ordinal));
+            var fix = c5.First(c => c.Title.Contains("Silent Hill 3 PC Fix", StringComparison.Ordinal));
+            Assert.Equal(CheckStatus.Pass, dg.State);
+            Assert.Contains("d3d8R.dll", dg.Detail);
+            Assert.Contains("carregador", dg.Detail);
+            Assert.Equal(CheckStatus.Pass, fix.State);
+
+            // Outro wrapper como d3d8R.dll: x86, mas não é o dgVoodoo — não passa.
+            Sh3PcFixFalso.PeX86(d3d8R, "DXVK");
+            dg = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 5 && c.Title.StartsWith("dgVoodoo2", StringComparison.Ordinal));
+            Assert.Equal(CheckStatus.Fail, dg.State);
+
+            // O carregador trocado pelo dgVoodoo: o fix fica de fora, e o item diz.
+            Sh3PcFixFalso.PeX86(Path.Combine(dir, "D3D8.dll"), "dgVoodoo 2.87.4 - Direct3D8");
+            fix = CheckpointVerifier.Verify(perfil, null).First(c => c.Number == 5 && c.Title.Contains("Silent Hill 3 PC Fix", StringComparison.Ordinal));
+            Assert.Equal(CheckStatus.Fail, fix.State);
+            Assert.Contains("d3d8R.dll", fix.FixHint);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void IsolamentoDesligaSoOD3d8REDeixaOCarregador()
+    {
+        // Sem o d3d8R.dll o carregador volta sozinho para o d3d8 do Windows, com o fix de pé:
+        // é exatamente o "sem dgVoodoo" do teste. Desligar o D3D8.dll tiraria o fix junto.
+        var dir = Sh3PcFixFalso.NovaPasta();
+        try
+        {
+            var d3d8R = Path.Combine(dir, "d3d8R.dll");
+            File.WriteAllText(d3d8R, "MZ ... dgVoodoo ...");
+            var iso = new Isolamento(_ => { });
+
+            iso.Aplicar(EstadoIsolamento.SemDgVoodoo, dir, dir);
+            Assert.False(File.Exists(d3d8R));
+            Assert.True(File.Exists(d3d8R + Isolamento.Sufixo));
+            Assert.Equal(Sh3PcFixFalso.Carregador(), File.ReadAllBytes(Path.Combine(dir, "D3D8.dll")));
+
+            iso.Aplicar(EstadoIsolamento.Tudo, dir, dir);
+            Assert.True(File.Exists(d3d8R));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void FaxinaTiraOD3d8RDoDgVoodooEDeixaOFix()
+    {
+        var dir = Sh3PcFixFalso.NovaPasta();
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "d3d8R.dll"), "MZ ... dgVoodoo ...");
+            File.WriteAllText(Path.Combine(dir, "dlss5-feed.addon32"), "feed");   // prova de instalação nossa
+
+            var sobras = new InstallerEngine(_ => { }).LimpezaTotal(dir);
+
+            Assert.Empty(sobras);
+            Assert.False(File.Exists(Path.Combine(dir, "d3d8R.dll")));
+            Assert.Equal(Sh3PcFixFalso.Carregador(), File.ReadAllBytes(Path.Combine(dir, "D3D8.dll")));
+            Assert.True(File.Exists(Path.Combine(dir, CarregadorD3d8R.ModSh3)));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void D3d8RQueNaoEhDgVoodooNuncaEhNosso()
+    {
+        // O nome é o que o fix procura: o usuário pode ter posto outro wrapper ali.
+        var dir = Sh3PcFixFalso.NovaPasta();
+        try
+        {
+            var d3d8R = Path.Combine(dir, "d3d8R.dll");
+            File.WriteAllText(d3d8R, "MZ ... DXVK ...");
+            File.WriteAllText(Path.Combine(dir, "dlss5-feed.addon32"), "feed");
+
+            Assert.False(Propriedade.EhNossoPorHeuristica(d3d8R));
+            new InstallerEngine(_ => { }).LimpezaTotal(dir);
+            Assert.True(File.Exists(d3d8R));
         }
         finally { Directory.Delete(dir, true); }
     }
@@ -5287,6 +5751,7 @@ public class FeederKitTests
         Assert.Equal("0.5.0", FeederKit.VersaoNoLog("15:38:28.311  dlss5-feed 0.5.0 (built Aug 30 2026 12:38:05) attached.\n"));
         Assert.Equal("0.12.0", FeederKit.VersaoNoLog("dlss5-feed 0.12.0 (built Sep  1 2026 10:00:00) attached."));
         Assert.Equal("0.10.0-beta.3", FeederKit.VersaoNoLog("dlss5-feed 0.10.0-beta.3 (built Sep  1 2026 10:00:00) attached."));
+        Assert.Equal("1.17.0", FeederKit.VersaoNoLog("dlss5-feed 1.17.0 commit 03710dd (built Sep 20 2026 10:00:00) attached."));
         Assert.Null(FeederKit.VersaoNoLog("[feed] building: 1280x720"));
         Assert.Null(FeederKit.VersaoNoLog(null));
     }
@@ -5303,7 +5768,7 @@ public class FeederKitTests
         Assert.False(FeederKit.Antiga("0.12.0.0"));
         Assert.False(FeederKit.Antiga("v0.13.1"));
         Assert.False(FeederKit.Antiga("1.0.0"));
-        Assert.Equal("0.15.1", FeederKit.VersaoDoKit);
+        Assert.Equal("1.17.0", FeederKit.VersaoDoKit);
         Assert.False(FeederKit.Antiga(FeederKit.VersaoDoKit));
     }
 

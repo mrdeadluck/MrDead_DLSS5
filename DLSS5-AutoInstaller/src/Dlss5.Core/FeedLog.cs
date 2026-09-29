@@ -117,6 +117,8 @@ public static class FeedCfg
 {
     public const string Arquivo = "dlss5-feed.cfg";
     public const string ChaveResolucao = "work_resolution";
+    /// <summary>1.17 (#130): 1 = abre a sessão D3D12 mesmo com o DLSS do próprio jogo carregado.</summary>
+    public const string ChaveDlssNativo = "native_dlss_ok";
     public const int ResolucaoPadrao = 100;
 
     /// <summary>Na ordem em que a tela oferece.</summary>

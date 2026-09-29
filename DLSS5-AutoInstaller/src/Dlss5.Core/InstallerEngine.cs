@@ -363,6 +363,9 @@ public sealed partial class InstallerEngine
             return OptiScalerNr.GerarIni(LerSePuder(realDllPath), plan.Profile.PassCount);
         if (nomeAlvo.Equals(DeepFriedChicken.Cfg, StringComparison.OrdinalIgnoreCase))
             return DeepFriedChicken.GerarCfg(LerSePuder(realDllPath), plan.Profile.PassCount);
+        // dlss5-feed.cfg: só a chave native_dlss_ok muda; work_resolution e o resto ficam.
+        if (nomeAlvo.Equals(FeedCfg.Arquivo, StringComparison.OrdinalIgnoreCase))
+            return FeedCfg.Gravar(LerSePuder(target), 1, FeedCfg.ChaveDlssNativo);
         // host64\ReShade.ini do ShortFuse-no-host: mescla no ini que o host já gravou (ou cria).
         if (nomeAlvo.Equals(ShortFuseNoHost64.Ini, StringComparison.OrdinalIgnoreCase)
             && string.Equals(Path.GetFileName(Path.GetDirectoryName(target) ?? ""), "host64", StringComparison.OrdinalIgnoreCase))
@@ -660,9 +663,9 @@ public sealed partial class InstallerEngine
         OptiScalerNr.Ini, OptiScalerNr.Shim, OptiScalerNr.Log, OptiScalerNr.ReShade64,
         DeepFriedChicken.Addon, DeepFriedChicken.Nvngx, DeepFriedChicken.Cfg,
         "dlss5-feed.addon64", "dlss5-feed.addon32", "dlss5-feed.cfg", "dlss5-feed.log", "dlss5-feed-crash.dmp",
-        JanelaForcada.Addon32, JanelaForcada.Addon64,
+        JanelaForcada.Addon32, JanelaForcada.Addon64, FeederHelper64.Addon,
         "D3D9.dll", "D3D8.dll", "dgVoodoo.conf", "dgVoodooCpl.exe",
-        "dgVoodoo_D3D9.dll", "dgVoodoo_D3D8.dll",
+        "dgVoodoo_D3D9.dll", "dgVoodoo_D3D8.dll", CarregadorD3d8R.D3d8R,
     };
 
     /// <summary>
