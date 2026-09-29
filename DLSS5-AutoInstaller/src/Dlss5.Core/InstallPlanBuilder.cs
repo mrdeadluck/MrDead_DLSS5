@@ -297,6 +297,13 @@ public static class InstallPlanBuilder
                     $"Remover {Rel(profile, caminho)} ({porque}; vai para backup)", null, caminho));
             }
 
+            if (profile.ShortFuseRecusadoPelaApi)
+                plan.Warnings.Add(
+                    $"Motor ShortFuse pedido, mas o {ShortFuseDlss.Addon} só trabalha em Direct3D 9, 11 e 12, e este jogo " +
+                    $"é {profile.Api}: com ele na pasta o jogo nem abre (Amnesia: The Bunker em OpenGL). O plano instala o " +
+                    "motor Krish + Feeder (1 passada) e tira o addon do ShortFuse da pasta, com backup. Em jogo 32-bit o " +
+                    "ShortFuse continua disponível, porque ali ele roda dentro do host64, que é Direct3D 12.");
+
             if (profile.UsesShortFuse)
             {
                 Copy(kit.RenodxDlssShortFuse, exe, ShortFuseDlss.Addon);

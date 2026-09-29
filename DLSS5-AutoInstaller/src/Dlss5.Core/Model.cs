@@ -162,7 +162,19 @@ public sealed class GameProfile
     /// O renodx-dlss do ShortFuse no lugar do par Krish + Feeder. Só 64-bit: o addon não
     /// tem versão x86 e o NGX também não, então em 32-bit a escolha é ignorada.
     /// </summary>
-    public bool UsesShortFuse => Engine == NeuralEngine.RenodxDlssShortFuse && Architecture == PeArchitecture.X64;
+    public bool UsesShortFuse => Engine == NeuralEngine.RenodxDlssShortFuse && Architecture == PeArchitecture.X64 && ShortFuseAceitaAApi;
+
+    /// <summary>
+    /// O addon do ShortFuse só trabalha em D3D9, D3D11 e D3D12 ("Present supports D3D9, D3D11,
+    /// and D3D12 presentation", texto do próprio addon). Num jogo OpenGL 64-bit ele se registra no
+    /// contexto GL e o jogo nem abre: o ReShade.log do Amnesia: The Bunker (29/09/2026) termina em
+    /// "RenoDX DLSS init_swapchain begin ... api=65536". Ali o motor volta para o Krish + Feeder.
+    /// </summary>
+    public bool ShortFuseAceitaAApi => Api is GraphicsApi.D3D9 or GraphicsApi.D3D11 or GraphicsApi.D3D12;
+
+    /// <summary>O ShortFuse foi pedido para um jogo 64-bit numa API que o addon não atende.</summary>
+    public bool ShortFuseRecusadoPelaApi =>
+        Engine == NeuralEngine.RenodxDlssShortFuse && Architecture == PeArchitecture.X64 && !ShortFuseAceitaAApi;
 
     /// <summary>
     /// OptiScaler DLSS-NR como consumidor neural do Feeder, dentro do host64\ (jogo 32-bit).

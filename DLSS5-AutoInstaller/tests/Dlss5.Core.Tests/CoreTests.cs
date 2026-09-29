@@ -988,6 +988,33 @@ public class PlanBuilderTests
     }
 
     [Fact]
+    public void OpenGL64_ShortFuseVoltaParaOKrish()
+    {
+        // Amnesia: The Bunker (OpenGL 64-bit): com o renodx-dlss.addon64 na pasta o jogo nem abria;
+        // o addon só atende D3D9/11/12. O plano instala o Krish + Feeder e avisa.
+        var perfil = Profile(PeArchitecture.X64, GraphicsApi.OpenGL);
+        perfil.Engine = NeuralEngine.RenodxDlssShortFuse;
+        Assert.False(perfil.UsesShortFuse);
+        Assert.True(perfil.ShortFuseRecusadoPelaApi);
+        Assert.Equal(NeuralEngine.RenodxDlss5Feeder, perfil.MotorEfetivo);
+
+        var plan = InstallPlanBuilder.Build(perfil, FullKit(), new InstallOptions());
+        Assert.False(Targets(plan, ShortFuseDlss.Addon));
+        Assert.True(Targets(plan, "renodx-dlss5.addon64"));
+        Assert.True(Targets(plan, "dlss5-feed.addon64"));
+        Assert.Contains(plan.Warnings, w => w.Contains("só trabalha em Direct3D 9, 11 e 12", StringComparison.Ordinal));
+
+        // Em D3D12 continua valendo; em 32-bit OpenGL ele roda no host64 (D3D12).
+        var d3d12 = Profile(PeArchitecture.X64, GraphicsApi.D3D12);
+        d3d12.Engine = NeuralEngine.RenodxDlssShortFuse;
+        Assert.True(d3d12.UsesShortFuse);
+        var gl32 = Profile(PeArchitecture.X86, GraphicsApi.OpenGL);
+        gl32.Engine = NeuralEngine.RenodxDlssShortFuse;
+        Assert.True(gl32.UsesShortFuseNoHost64);
+        Assert.False(gl32.ShortFuseRecusadoPelaApi);
+    }
+
+    [Fact]
     public void RotaC_D3D8_ConversorDxcfgDoSh4_DgVoodooEntraComoD3D9()
     {
         // Silent Hill 4 (GOG): o d3d8.dll do jogo converte para DirectX 9, lê o dxcfg.ini e importa
