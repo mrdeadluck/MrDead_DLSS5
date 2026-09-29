@@ -363,6 +363,9 @@ public sealed partial class InstallerEngine
             return OptiScalerNr.GerarIni(LerSePuder(realDllPath), plan.Profile.PassCount);
         if (nomeAlvo.Equals(DeepFriedChicken.Cfg, StringComparison.OrdinalIgnoreCase))
             return DeepFriedChicken.GerarCfg(LerSePuder(realDllPath), plan.Profile.PassCount);
+        // dlss5-feed.cfg: só a chave native_dlss_ok muda; work_resolution e o resto ficam.
+        if (nomeAlvo.Equals(FeedCfg.Arquivo, StringComparison.OrdinalIgnoreCase))
+            return FeedCfg.Gravar(LerSePuder(target), 1, FeedCfg.ChaveDlssNativo);
         // host64\ReShade.ini do ShortFuse-no-host: mescla no ini que o host já gravou (ou cria).
         if (nomeAlvo.Equals(ShortFuseNoHost64.Ini, StringComparison.OrdinalIgnoreCase)
             && string.Equals(Path.GetFileName(Path.GetDirectoryName(target) ?? ""), "host64", StringComparison.OrdinalIgnoreCase))

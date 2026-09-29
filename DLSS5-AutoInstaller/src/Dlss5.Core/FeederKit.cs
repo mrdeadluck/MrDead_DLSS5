@@ -27,14 +27,15 @@ public static class FeederKit
     public const string CrashDump = "dlss5-feed-crash.dmp";
 
     /// <summary>A versão que o kit deve trazer (é a que o workflow trocar-feeder baixa).</summary>
-    public const string VersaoDoKit = "0.15.1";
+    public const string VersaoDoKit = "1.17.0";
 
     /// <summary>Abaixo disto a recriação do runtime derruba o jogo.</summary>
     public static readonly Version Minima = new(0, 12, 0);
 
     // "dlss5-feed 0.5.0 (built Aug 30 2026 12:38:05) attached." — primeira linha do dlss5-feed.log.
+    // Desde o 1.16/1.17 a linha traz o commit: "dlss5-feed 1.17.0 commit 03710dd (built ...) attached."
     private static readonly Regex Banner = new(
-        @"dlss5-feed\s+(\d+\.\d+(?:\.\d+)?(?:-[\w.]+)?)\s*\(built", RegexOptions.IgnoreCase);
+        @"dlss5-feed\s+(\d+\.\d+(?:\.\d+)?(?:-[\w.]+)?)(?:\s+commit\s+\w+)?\s*\(built", RegexOptions.IgnoreCase);
 
     /// <summary>A versão que o log do Feeder anuncia na primeira linha; null se o log não a traz.</summary>
     public static string? VersaoNoLog(string? feedLog)

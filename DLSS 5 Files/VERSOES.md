@@ -23,8 +23,8 @@ rodou (aba Actions do repositório).
 | Arquivo | Versão | Origem | Substitui |
 |---|---|---|---|
 | `renodx-dlss5.addon64` | **4.70** (banner `RenoDX DLSS5 Generic v4.7`, build 02/09/2026), 1.732.608 B. **Atenção ao driver:** com o NVIDIA **616.64 ou mais novo** o 4.6/4.7 cai dentro do NGX (`evaluate raised 0xC0000005 in D3D12Core.dll`, medido pelo projeto do Feeder); o **4.55** (`versoes-anteriores/renodx-dlss5-4.55.addon64`) passa 300/300. O botão "Testar o host64…" da verificação mostra isso em 15 s, sem abrir jogo. | [RankFTW/rhi-repo](https://github.com/RankFTW/rhi-repo/releases) `renodx-dlss5-4.70` (espelho do `#DLSS5` do Discord do RenoDX, autor Krish) | Generic 4.1.5 (build 30/08) → `versoes-anteriores/renodx-dlss5-4.1.5.addon64`; 4.55 → `versoes-anteriores/renodx-dlss5-4.55.addon64` |
-| `dlss5-feed.addon64` / `.addon32` / `dlss5-feed-host64.exe` | **0.15.1** (09/09/2026), protocolo v9 — OptiScaler DLSS-NR como terceiro consumidor neural (dentro de `host64\` em 32-bit), `--test` do host, correção do HDR10 (`hdr_bridge`), shaders do addon64 em SM 4 (feature level 10) | [jlrouzies-fr/DLSS5-Feeder](https://github.com/jlrouzies-fr/DLSS5-Feeder/releases) via `feeder-desejado.txt` | 0.13.1-beta.1 → o binário anterior o workflow guarda no zip `DLSS5-Feeder-anterior-kit.zip`; 0.12.0 → `versoes-anteriores/feeder-0.12.0/` |
-| `reshade-shaders/Shaders/DLSS5_Feed.fx` | 0.15.1 (51 KB) — provedor por `DLSS5_MV_PROVIDER`, validação dos vetores, máscara `DLSS5_Mask` | mesmo zip | 0.12.0 → `versoes-anteriores/feeder-0.12.0/DLSS5_Feed_0.12.0.fx` |
+| `dlss5-feed.addon64` / `.addon32` / `dlss5-feed-host64.exe` | **1.17.0** (29/09/2026, commit `03710dd`), protocolo **v11** — addon do RenoDX v6.1 a v8.0.1 reconhecido (o 4.70 do kit segue aceito), fork wilsjo2 do OptiScaler DLSS-NR, estabilizador de saída (desligado por padrão), #130 (`native_dlss_ok`: o instalador grava 1 quando o Feeder é escolhido em jogo D3D12 com DLSS próprio). Antes: **0.15.1** (09/09/2026), protocolo v9 — OptiScaler DLSS-NR como terceiro consumidor neural (dentro de `host64\` em 32-bit), `--test` do host, correção do HDR10 (`hdr_bridge`), shaders do addon64 em SM 4 (feature level 10) | [jlrouzies-fr/DLSS5-Feeder](https://github.com/jlrouzies-fr/DLSS5-Feeder/releases) via `feeder-desejado.txt` | 0.15.1 → `DLSS5-Feeder-anterior-kit.zip` da Release (caminho de volta); 0.13.1-beta.1 → o binário anterior o workflow guarda no zip `DLSS5-Feeder-anterior-kit.zip`; 0.12.0 → `versoes-anteriores/feeder-0.12.0/` |
+| `reshade-shaders/Shaders/DLSS5_Feed.fx` | 1.17.0 (compila para um stub em D3D9, #129) — antes 0.15.1 (51 KB); provedor por `DLSS5_MV_PROVIDER`, validação dos vetores, máscara `DLSS5_Mask` | mesmo zip | 0.12.0 → `versoes-anteriores/feeder-0.12.0/DLSS5_Feed_0.12.0.fx` |
 | `reshade-shaders/Shaders/vort_Motion.fx` + `Includes/vort_*.fxh` + `Textures/vort_BlueNoise.png` | VORT Motion (MIT), commit `b410b9f` | [vortigern11/vort_Shaders](https://github.com/vortigern11/vort_Shaders) | novo — provedor de motion vectors que o Feed.fx 0.13 recomenda; **padrão do instalador** |
 | `dgVoodoo2/` | **2.87.4** (corrige o crash em builds 26H1+ do Windows 11) | [dege-diosg/dgVoodoo2](https://github.com/dege-diosg/dgVoodoo2/releases) | 2.87.3 → `versoes-anteriores/dgVoodoo2-2.87.3/` |
 | `nvngx_dlssnr.dll` | 310.8.SF-v2 (build do ShortFuse para RTX 20/30/40/50) | rhi-repo via `runtime-desejado.txt` — **não mudou** nesta rodada | — |
@@ -193,6 +193,19 @@ ShortFuse não tem tecla nenhuma (conferido nas strings do addon), e o F6 do Kri
 em `[RenoDX.DLSS5]`) não chega ao host64 em jogo 32-bit. Em jogo 64-bit com DLSS nativo o preset
 é vazio e o F6 continua sendo o do Krish — uma tecla só nas duas rotas. Para trocar depois: painel
 do ReShade, botão direito em "DLSS 5 Feed", campo da tecla.
+
+## O que mudou no Feeder de 0.15.1 para 1.17.0 (29/09/2026)
+
+- **Protocolo IPC v11** (0.15.1 era v9): addon32 e host64 precisam vir do mesmo zip — o kit e o
+  instalador trocam os dois juntos. A primeira linha do `dlss5-feed.log` passa a trazer o commit
+  (`dlss5-feed 1.17.0 commit 03710dd (built ...)`); o instalador lê as duas formas.
+- **#130:** em D3D12, se o jogo carrega um `nvngx_dlss.dll`/`sl.dlss.dll` próprio fora da pasta do
+  addon, o Feeder não abre uma segunda sessão (`native_dlss_ok=1` no `dlss5-feed.cfg` libera). O
+  instalador grava essa chave quando o usuário escolhe o Feeder num jogo com DLSS próprio.
+- Addon do RenoDX v6.1 / v7.0.0-rc8 / v8.0.1 reconhecidos; 4.6/4.7 continuam aceitos (com o aviso
+  do driver 616.64+). Fork wilsjo2 do OptiScaler DLSS-NR como consumidor. Estabilizador de saída
+  experimental (desligado por padrão). Correções #121, #126, #129, #131, #97.
+- O modo helper (OpenGL 64-bit + ShortFuse) continua no conjunto **1.18.0-beta.1** separado.
 
 ## O que mudou no Feeder de 0.13.1-beta.1 para 0.15.1
 

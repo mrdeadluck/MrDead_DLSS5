@@ -73,8 +73,8 @@ Regra derivada: em 32 bits, D3D11/D3D10/OpenGL vão direto ao host64; D3D9/D3D8 
 
 | Arquivo | Tamanho | Arch | Local |
 |---|---|---|---|
-| `dlss5-feed.addon32` | 176.640 B (0.15.1) | x86 | pasta do exe (única peça do Feeder fora de `host64\`). 0.13.1: D3D10 nativo. |
-| `dlss5-feed-host64.exe` | 146.944 B (0.15.1) | x64 | `host64\` — protocolo v9; **precisa ser do mesmo build do addon32**. `--test` = 300 avaliações sem jogo (botão "Testar o host64…") |
+| `dlss5-feed.addon32` | 189.952 B (1.17.0; 0.15.1: 176.640 B) | x86 | pasta do exe (única peça do Feeder fora de `host64\`). 0.13.1: D3D10 nativo. |
+| `dlss5-feed-host64.exe` | 169.472 B (1.17.0; 0.15.1: 146.944 B) | x64 | `host64\` — protocolo v11 (0.15.1: v9); **precisa ser do mesmo build do addon32**. `--test` = 300 avaliações sem jogo (botão "Testar o host64…") |
 | `dxgi.dll` (ReShade x86) | 4.398.080 B | x86 | pasta do exe |
 | `dxgi.dll` (ReShade x64) | 5.592.064 B | x64 | `host64\` |
 | `renodx-dlss5.addon64` | | x64 | `host64\` (**não** na raiz) — consumidor neural padrão, 1 passada. **Ou, no lugar dele** (nunca dois): `winmm.dll` (= `OptiScaler.dll` v10.0.0-pre1 com DLSS-NR) + `nvngx.dll_dlssnr.dll` + `OptiScaler\D3D12_OptiScaler\D3D12Core.dll` + `OptiScaler.ini` gerado (1–5 passadas), ou `deep-fried-chicken.addon64` + `-nvngx.dll` + `.cfg` gerado (1–30). Ver 6.5. |
@@ -434,7 +434,7 @@ Estado final HL2: dgVoodoo em `bin\`, ReShade `dxgi.dll` na raiz, overlays desli
 ### Amnesia: The Bunker — x64, OpenGL 4.x (HPL 3.5)
 - 29/09/2026: com o motor ShortFuse o jogo nem abria. O `ReShade.log` (ReShade como `opengl32.dll`) termina em `RenoDX DLSS init_swapchain begin ... api=65536` — o addon do ShortFuse se registrou no contexto OpenGL e o processo morreu ali; o `dlss5-feed.log` nem nasceu. O próprio addon declara "Present supports D3D9, D3D11, and D3D12 presentation".
 - O usuário quer passadas múltiplas, não o Krish (1 passada). Saída: o **modo helper 64-bit** do DLSS5-Feeder (`dlss5-feed-helper.addon64`, a metade de dentro do jogo do caminho 32-bit compilada em x64; só vem no zip a partir do **1.18.0-beta.1**, 29/09/2026). No jogo ficam o ReShade (`opengl32.dll`), o `dlss5-feed-helper.addon64` e o `DLSS5_Feed.fx` do mesmo zip; em `host64\` o `dlss5-feed-host64.exe` do mesmo zip, o ReShade x64 como `dxgi.dll`, os `nvngx_*` e o `renodx-dlss.addon64` com o `host64\ReShade.ini` do ShortFuse — o mesmo arranjo do ShortFuse em jogo 32-bit (validado no SH2 EE). `GameProfile.UsesShortFuseViaHelper64` (x64 + OpenGL + motor ShortFuse); ver `FeederHelper64`.
-- Isolado de propósito: o kit continua com o Feeder 0.15.1 para todos os outros jogos. Os três arquivos do 1.18 ficam em `DLSS5-Feeder-1.18.0-beta.1 (modo helper 64-bit)/`, com o host e o `.fx` renomeados (`dlss5-feed-host64_1.18.0-beta.1.exe`, `DLSS5_Feed_1.18.0-beta.1.fx`) para a busca do kit não confundir com os do 0.15.1; o plano grava com o nome certo só no jogo que usa o modo helper. Kit sem esses arquivos → o plano recusa (não troca de motor sozinho).
+- Isolado de propósito: o kit continua com o Feeder estável (0.15.1 até 29/09, 1.17.0 depois) para todos os outros jogos. Os três arquivos do 1.18 ficam em `DLSS5-Feeder-1.18.0-beta.1 (modo helper 64-bit)/`, com o host e o `.fx` renomeados (`dlss5-feed-host64_1.18.0-beta.1.exe`, `DLSS5_Feed_1.18.0-beta.1.fx`) para a busca do kit não confundir com os do 0.15.1; o plano grava com o nome certo só no jogo que usa o modo helper. Kit sem esses arquivos → o plano recusa (não troca de motor sozinho).
 - Em Vulkan 64-bit o ShortFuse continua recusado (o motor efetivo volta para Krish + Feeder, com aviso). **Validado em 29/09/2026** no Amnesia: The Bunker (OpenGL 64-bit) com o pacote montado desta branch: ShortFuse dentro do `host64\` pelo modo helper, com passadas múltiplas. Era o primeiro jogo OpenGL 64-bit no modo helper — o autor do Feeder só o tinha testado em Vulkan (shadPS4).
 
 ### Silent Hill 4: The Room (GOG) — x86, D3D8 atrás do conversor do jogo (dxcfg)
@@ -746,9 +746,9 @@ Get-FileHash $dll -Algorithm SHA256
 
 ---
 
-## 14. Chaves úteis do `dlss5-feed.cfg` (Feeder 0.15.1)
+## 14. Chaves úteis do `dlss5-feed.cfg` (Feeder 1.17.0)
 
-O kit traz o **dlss5-feed 0.15.1** (desde 09/09; 0.13.1-beta.1 de 04/09 a 09/09; antes 0.12.0, guardado em `versoes-anteriores/feeder-0.12.0/`) (`DLSS 5 Files/feeder-versao.txt` registra a release e os
+O kit traz o **dlss5-feed 1.17.0** (desde 29/09/2026; 0.15.1 de 09/09 a 29/09, devolvido pelo `DLSS5-Feeder-anterior-kit.zip`; 0.13.1-beta.1 de 04/09 a 09/09; antes 0.12.0, guardado em `versoes-anteriores/feeder-0.12.0/`) (`DLSS 5 Files/feeder-versao.txt` registra a release e os
 hashes; `feeder-desejado.txt` é o que se muda para trocar). Até 02/09 o kit trazia o 0.5.0,
 que derrubava a sessão inteira quando o jogo recriava a swapchain — trocar resolução, tela
 cheia ou qualidade dentro do jogo — e criava a feature de novo bem quando o addon do RenoDX
@@ -776,6 +776,7 @@ pré-processador **por efeito** — na seção `[DLSS5_Feed.fx]` do `ReShadePres
 | `host_window` | 0 | jogos 32-bit: 0 esconde a janela do auxiliar (o painel é projetado no jogo); 1 dá janela própria |
 | `async_home` | 1 | 32-bit: handoff em pipeline (tira o teto de ~35 fps); 0 = mesmo frame |
 | `enabled` | 1 | 0.13.0+: 0 desliga tudo de verdade (antes só parava o trabalho neural) |
+| `native_dlss_ok` | 0 | 1.17.0 (#130): em D3D12, 0 = não abre a sessão se o jogo carrega DLSS próprio fora da pasta do addon; o instalador grava 1 quando o Feeder é escolhido num jogo com DLSS próprio |
 | `hdr_bridge` | -1 | 0.15.1: em swapchain HDR10 (R10G10B10A2 PQ) decodifica para linear FP16 antes do consumidor e volta a PQ depois (os brilhos estouravam); 0 desliga, 1 força |
 
 ---

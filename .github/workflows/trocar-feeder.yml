@@ -13,7 +13,7 @@ name: Trocar o Feeder do kit (dlss5-feed) e refazer o pacote
 # Feeder (DLSS5-Feeder-kit.zip), para atualizar um kit já baixado sem os 230 MB.
 on:
   push:
-    branches: ['claude/renodx-updates-e5mjc7', 'claude/upload-large-files-02562q', 'claude/executable-fixes-xytsgm', 'main']
+    branches: ['claude/relaxed-brown-o6ewgg', 'claude/renodx-updates-e5mjc7', 'claude/upload-large-files-02562q', 'claude/executable-fixes-xytsgm', 'main']
     paths:
       - 'DLSS 5 Files/feeder-desejado.txt'
       - '.github/workflows/trocar-feeder.yml'

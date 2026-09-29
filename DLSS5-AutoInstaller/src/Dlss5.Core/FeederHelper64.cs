@@ -13,8 +13,9 @@ namespace Dlss5.Core;
 ///
 /// É um conjunto separado de propósito: o addon helper só existe a partir do Feeder
 /// 1.18.0-beta.1, e metade de dentro e host precisam ser do mesmo zip. O kit continua com o
-/// Feeder 0.15.1 para todo o resto; este conjunto vive numa pasta própria, com o host e o .fx
-/// renomeados para não disputar o nome com os do 0.15.1 na busca do kit, e só entra no jogo
+/// Feeder estável (FeederKit.VersaoDoKit, 1.17.0 desde 29/09/2026) para todo o resto; este conjunto
+/// vive numa pasta própria, com o host e o .fx renomeados para não disputar o nome com os do
+/// Feeder principal na busca do kit, e só entra no jogo
 /// que usa o modo helper (o plano grava com o nome certo).
 /// </summary>
 public static class FeederHelper64

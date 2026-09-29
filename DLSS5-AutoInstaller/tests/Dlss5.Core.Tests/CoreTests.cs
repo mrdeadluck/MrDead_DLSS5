@@ -625,6 +625,24 @@ public class PlanBuilderTests
         var plan = InstallPlanBuilder.Build(profile, FullKit(), new InstallOptions());
         Assert.True(Targets(plan, "dlss5-feed.addon64"));
         Assert.Contains(plan.Warnings, w => w.Contains("DLSS desligado", StringComparison.Ordinal));
+        // Feeder 1.17 (#130) não abre a sessão com o DLSS do jogo carregado sem native_dlss_ok=1.
+        Assert.Contains(plan.Actions, a => a.Kind == PlanActionKind.WriteGeneratedFile
+                                           && Path.GetFileName(a.TargetPath!) == FeedCfg.Arquivo);
+    }
+
+    [Fact]
+    public void FeederSemDlssNativoNaoMexeNoCfg()
+    {
+        var plan = InstallPlanBuilder.Build(Profile(PeArchitecture.X64, GraphicsApi.D3D12), FullKit(), new InstallOptions());
+        Assert.DoesNotContain(plan.Actions, a => a.TargetPath is not null && Path.GetFileName(a.TargetPath) == FeedCfg.Arquivo);
+    }
+
+    [Fact]
+    public void CfgGanhaNativeDlssOkSemPerderOResto()
+    {
+        var cfg = FeedCfg.Gravar("work_resolution=75\r\n", 1, FeedCfg.ChaveDlssNativo);
+        Assert.Equal(75, FeedCfg.Ler(cfg));
+        Assert.Equal(1, FeedCfg.Ler(cfg, FeedCfg.ChaveDlssNativo));
     }
 
     [Fact]
@@ -5733,6 +5751,7 @@ public class FeederKitTests
         Assert.Equal("0.5.0", FeederKit.VersaoNoLog("15:38:28.311  dlss5-feed 0.5.0 (built Aug 30 2026 12:38:05) attached.\n"));
         Assert.Equal("0.12.0", FeederKit.VersaoNoLog("dlss5-feed 0.12.0 (built Sep  1 2026 10:00:00) attached."));
         Assert.Equal("0.10.0-beta.3", FeederKit.VersaoNoLog("dlss5-feed 0.10.0-beta.3 (built Sep  1 2026 10:00:00) attached."));
+        Assert.Equal("1.17.0", FeederKit.VersaoNoLog("dlss5-feed 1.17.0 commit 03710dd (built Sep 20 2026 10:00:00) attached."));
         Assert.Null(FeederKit.VersaoNoLog("[feed] building: 1280x720"));
         Assert.Null(FeederKit.VersaoNoLog(null));
     }
@@ -5749,7 +5768,7 @@ public class FeederKitTests
         Assert.False(FeederKit.Antiga("0.12.0.0"));
         Assert.False(FeederKit.Antiga("v0.13.1"));
         Assert.False(FeederKit.Antiga("1.0.0"));
-        Assert.Equal("0.15.1", FeederKit.VersaoDoKit);
+        Assert.Equal("1.17.0", FeederKit.VersaoDoKit);
         Assert.False(FeederKit.Antiga(FeederKit.VersaoDoKit));
     }
 

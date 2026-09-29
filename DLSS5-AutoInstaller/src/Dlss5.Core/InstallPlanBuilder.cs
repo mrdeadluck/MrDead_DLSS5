@@ -335,7 +335,7 @@ public static class InstallPlanBuilder
                     $"Motor ShortFuse em jogo OpenGL 64-bit ({profile.PassCount} passada(s)), pelo modo helper do Feeder " +
                     $"{FeederHelper64.Versao}: no jogo fica só o {FeederHelper64.Addon}, que manda quadro, depth e vetores para o " +
                     $"host64\\dlss5-feed-host64.exe; o {ShortFuseDlss.Addon} roda lá dentro (Direct3D 12), como num jogo 32-bit. " +
-                    "O Feeder de todos os outros jogos continua o 0.15.1 — este conjunto só entra aqui. EXPERIMENTAL: o autor do " +
+                    "O Feeder de todos os outros jogos continua o do kit (" + FeederKit.VersaoDoKit + ") — este conjunto só entra aqui. EXPERIMENTAL: o autor do " +
                     "Feeder testou o modo helper em Vulkan, ninguém rodou em OpenGL 64-bit ainda. Se o jogo não abrir, mande o " +
                     "ReShade.log, o dlss5-feed.log e o host64\\dlss5-feed-host.log.");
             }
@@ -349,7 +349,16 @@ public static class InstallPlanBuilder
             else
             {
                 if (profile.NeedsFeeder)
+                {
                     Copy(kit.FeedAddon64, exe, "dlss5-feed.addon64");
+                    // Feeder 1.17 (#130): em D3D12, se o jogo carrega um DLSS dele fora da pasta do
+                    // addon, o Feeder não abre a sessão. Aqui o usuário escolheu o Feeder mesmo com o
+                    // DLSS do jogo ("preferir o Feeder"): native_dlss_ok=1 mantém o que o 0.15.1 fazia.
+                    if (profile.HasNativeDlss && profile.Api == GraphicsApi.D3D12)
+                        plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
+                            $"Gravar {FeedCfg.ChaveDlssNativo}=1 em {FeedCfg.Arquivo} (o jogo tem DLSS próprio e o Feeder foi escolhido; o resto do arquivo fica)",
+                            null, Path.Combine(exe, FeedCfg.Arquivo)));
+                }
                 Copy(kit.RenodxAddon64, exe, "renodx-dlss5.addon64");
                 RemoverRival(ShortFuseDlss.Addon, "o addon do Krish e o Feeder não convivem com o RenoDX DLSS do ShortFuse");
             }

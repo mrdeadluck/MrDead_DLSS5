@@ -44,4 +44,12 @@
 # 11/09/2026 — pacote refeito: verificação lê a flag LAA do exe 32-bit (Black Mesa: failed to lock vertex buffer)
 # 11/09/2026 — pacote refeito: botão "Aplicar 4 GB (LAA) no exe" na verificação
 # 11/09/2026 — pacote refeito: Black Mesa = DXVK do próprio jogo (item 5c + nota na detecção)
-versao=v0.15.1
+# 29/09/2026 — Por que 1.17.0 (a estável mais recente): IPC v11 (addon32 e host64 do mesmo zip, o kit
+# troca os dois juntos), suporte ao addon do RenoDX v6.1 a v8.0.1 (o 4.70 do kit continua reconhecido),
+# o fork wilsjo2 do OptiScaler DLSS-NR como consumidor, estabilizador de saída (desligado por padrão) e
+# as correções #121/#126/#129/#130/#131/#97. #130: em D3D12 o Feeder não abre a sessão se o jogo carrega
+# DLSS próprio fora da pasta do addon — o instalador grava native_dlss_ok=1 no dlss5-feed.cfg quando o
+# usuário escolhe o Feeder num jogo com DLSS (preferir o Feeder), e tudo segue como no 0.15.1.
+# O conjunto 1.18.0-beta.1 do modo helper (OpenGL 64-bit + ShortFuse) continua separado, em
+# "DLSS5-Feeder-1.18.0-beta.1 (modo helper 64-bit)/". O 0.15.1 sai no DLSS5-Feeder-anterior-kit.zip da Release.
+versao=v1.17.0
