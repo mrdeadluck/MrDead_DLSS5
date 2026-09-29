@@ -647,7 +647,9 @@ public sealed partial class MainForm
         _lblRoute.ForeColor = route == InstallRoute.Unsupported ? Ui.Bad : Ui.Ok;
         _lblRoute.Text = route switch
         {
-            InstallRoute.A => _profile.UsesShortFuse
+            InstallRoute.A => _profile.UsesShortFuseViaHelper64
+                ? $"✔ Caminho A (motor ShortFuse pelo modo helper) — 64-bit OpenGL: ReShade como opengl32.dll + {FeederHelper64.Addon} no jogo; o {ShortFuseDlss.Addon} roda dentro de host64\\ com {_profile.PassCount} passada(s). Experimental."
+                : _profile.UsesShortFuse
                 ? $"✔ Caminho A (motor ShortFuse) — 64-bit: ReShade ({_profile.ReShadeHookName}) + {ShortFuseDlss.Addon} na pasta do executável, {_profile.PassCount} passada(s) de Neural Rendering."
                 : $"✔ Caminho A — 64-bit: ReShade ({_profile.ReShadeHookName}) + addons direto na pasta do executável.",
             InstallRoute.B => $"✔ Caminho B — 32-bit {_profile.Api}: addon32 na raiz (ReShade como {_profile.ReShadeHookName}) e o resto do Feeder dentro de host64\\." + ConsumidorNoRotulo(),

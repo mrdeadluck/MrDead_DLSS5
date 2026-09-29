@@ -107,6 +107,7 @@ public sealed class Isolamento
             {
                 Path.Combine(exeFolder, "dlss5-feed.addon64"),
                 Path.Combine(exeFolder, "dlss5-feed.addon32"),
+                Path.Combine(exeFolder, FeederHelper64.Addon),
                 Path.Combine(exeFolder, "host64", "dlss5-feed-host64.exe"),
             },
             // Os dois addons de uma vez: o ReShade continua carregando, e nada mais.
@@ -114,6 +115,7 @@ public sealed class Isolamento
             {
                 Path.Combine(exeFolder, "dlss5-feed.addon64"),
                 Path.Combine(exeFolder, "dlss5-feed.addon32"),
+                Path.Combine(exeFolder, FeederHelper64.Addon),
                 Path.Combine(exeFolder, "host64", "dlss5-feed-host64.exe"),
                 Path.Combine(exeFolder, "renodx-dlss5.addon64"),
                 Path.Combine(exeFolder, "host64", "renodx-dlss5.addon64"),

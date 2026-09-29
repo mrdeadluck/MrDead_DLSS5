@@ -172,9 +172,17 @@ public sealed class GameProfile
     /// </summary>
     public bool ShortFuseAceitaAApi => Api is GraphicsApi.D3D9 or GraphicsApi.D3D11 or GraphicsApi.D3D12;
 
-    /// <summary>O ShortFuse foi pedido para um jogo 64-bit numa API que o addon não atende.</summary>
+    /// <summary>
+    /// Jogo OpenGL 64-bit com o motor ShortFuse: o addon vai para dentro do host64 pelo modo
+    /// helper 64-bit do Feeder, como num jogo 32-bit. Ver <see cref="FeederHelper64"/>.
+    /// </summary>
+    public bool UsesShortFuseViaHelper64 =>
+        Engine == NeuralEngine.RenodxDlssShortFuse && Architecture == PeArchitecture.X64 && Api == GraphicsApi.OpenGL;
+
+    /// <summary>O ShortFuse foi pedido para um jogo 64-bit numa API que o addon não atende e sem caminho pelo host64.</summary>
     public bool ShortFuseRecusadoPelaApi =>
-        Engine == NeuralEngine.RenodxDlssShortFuse && Architecture == PeArchitecture.X64 && !ShortFuseAceitaAApi;
+        Engine == NeuralEngine.RenodxDlssShortFuse && Architecture == PeArchitecture.X64 && !ShortFuseAceitaAApi
+        && !UsesShortFuseViaHelper64;
 
     /// <summary>
     /// OptiScaler DLSS-NR como consumidor neural do Feeder, dentro do host64\ (jogo 32-bit).
@@ -197,7 +205,7 @@ public sealed class GameProfile
 
     /// <summary>O motor depois das regras de arquitetura (o pedido pode não valer para esta).</summary>
     public NeuralEngine MotorEfetivo =>
-        UsesShortFuse || UsesShortFuseNoHost64 ? NeuralEngine.RenodxDlssShortFuse
+        UsesShortFuse || UsesShortFuseNoHost64 || UsesShortFuseViaHelper64 ? NeuralEngine.RenodxDlssShortFuse
         : UsesOptiScalerNr ? NeuralEngine.OptiScalerNr
         : UsesDeepFriedChicken ? NeuralEngine.DeepFriedChicken
         : NeuralEngine.RenodxDlss5Feeder;

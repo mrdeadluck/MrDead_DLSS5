@@ -30,6 +30,10 @@ public sealed class KitInventory
     public string? SwapchainOverride32 { get; set; }
     public string? SwapchainOverride64 { get; set; }
     public string? FeedHost64Exe { get; set; }
+    /// <summary>Modo helper 64-bit (Feeder 1.18.0-beta.1): addon, host e .fx do mesmo zip. Ver <see cref="FeederHelper64"/>.</summary>
+    public string? FeedHelper64 { get; set; }
+    public string? FeedHelperHost64Exe { get; set; }
+    public string? FeedHelperFx { get; set; }
 
     /// <summary>dxgi.dll do ReShade já extraído, por arquitetura.</summary>
     public string? DxgiX64 { get; set; }
@@ -245,6 +249,15 @@ public static class KitResolver
         inv.SwapchainOverride32 = First(JanelaForcada.Addon32);
         inv.SwapchainOverride64 = First(JanelaForcada.Addon64);
         inv.FeedHost64Exe = First("dlss5-feed-host64.exe");
+        inv.FeedHelper64 = First(FeederHelper64.Addon);
+        if (inv.FeedHelper64 is not null)
+        {
+            var pasta = Path.GetDirectoryName(inv.FeedHelper64)!;
+            var host = Path.Combine(pasta, FeederHelper64.HostNoKit);
+            var fx = Path.Combine(pasta, FeederHelper64.FxNoKit);
+            if (File.Exists(host) && Ok(host)) inv.FeedHelperHost64Exe = host;
+            if (File.Exists(fx) && Ok(fx)) inv.FeedHelperFx = fx;
+        }
 
         // REFramework: só o x64 serve, e ele nunca pode ser confundido com um dinput8.dll
         // que por acaso esteja em outra pasta do kit.

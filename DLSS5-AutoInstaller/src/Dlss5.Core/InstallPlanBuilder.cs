@@ -300,11 +300,46 @@ public static class InstallPlanBuilder
             if (profile.ShortFuseRecusadoPelaApi)
                 plan.Warnings.Add(
                     $"Motor ShortFuse pedido, mas o {ShortFuseDlss.Addon} só trabalha em Direct3D 9, 11 e 12, e este jogo " +
-                    $"é {profile.Api}: com ele na pasta o jogo nem abre (Amnesia: The Bunker em OpenGL). O plano instala o " +
-                    "motor Krish + Feeder (1 passada) e tira o addon do ShortFuse da pasta, com backup. Em jogo 32-bit o " +
-                    "ShortFuse continua disponível, porque ali ele roda dentro do host64, que é Direct3D 12.");
+                    $"é {profile.Api}: carregado no jogo ele o derruba (foi o que o Amnesia: The Bunker em OpenGL mostrou). O " +
+                    "plano instala o motor Krish + Feeder (1 passada) e tira o addon do ShortFuse da pasta, com backup. Em jogo " +
+                    "32-bit e em OpenGL 64-bit o ShortFuse roda dentro do host64, que é Direct3D 12.");
 
-            if (profile.UsesShortFuse)
+            if (profile.UsesShortFuseViaHelper64)
+            {
+                // OpenGL 64-bit + ShortFuse: o modo helper do Feeder leva o NGX para o host64, e o
+                // ShortFuse entra lá como num jogo 32-bit. Ver FeederHelper64.
+                if (kit.FeedHelper64 is null || kit.FeedHelperHost64Exe is null || kit.FeedHelperFx is null)
+                {
+                    plan.Blockers.Add(
+                        $"Falta no kit: o modo helper 64-bit do Feeder {FeederHelper64.Versao} ({FeederHelper64.Addon}, " +
+                        $"{FeederHelper64.HostNoKit} e {FeederHelper64.FxNoKit}, na pasta \"DLSS5-Feeder-{FeederHelper64.Versao} " +
+                        "(modo helper 64-bit)\"). É por ele que o motor ShortFuse roda num jogo OpenGL 64-bit. Baixe o pacote " +
+                        "completo novo, ou escolha o motor Krish + Feeder na tela de detecção.");
+                    return plan;
+                }
+                Copy(kit.FeedHelper64, exe, FeederHelper64.Addon);
+                RemoverRival("dlss5-feed.addon64", "no modo helper quem roda no jogo é o dlss5-feed-helper.addon64");
+                RemoverRival("renodx-dlss5.addon64", "no modo helper o consumidor neural mora no host64");
+                RemoverRival(ShortFuseDlss.Addon, "no modo helper o ShortFuse mora no host64 — no jogo OpenGL ele o derruba");
+                // O .fx tem que ser o do mesmo zip do addon: vai por cima do que a pasta de shaders trouxe.
+                Copy(kit.FeedHelperFx, Path.Combine(shadersTarget, "Shaders"), "DLSS5_Feed.fx");
+                Copy(kit.FeedHelperHost64Exe, host64, "dlss5-feed-host64.exe");
+                Copy(kit.DxgiX64, host64, "dxgi.dll");
+                Copy(kit.NvngxDlssnr, host64, "nvngx_dlssnr.dll");
+                CopySemSobrescreverDoJogo(kit.NvngxDlss, host64, "nvngx_dlss.dll");
+                Copy(kit.RenodxDlssShortFuse, host64, ShortFuseDlss.Addon);
+                plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
+                    $"Gerar host64\\ReShade.ini ([ADDON] LoadFromDllMain={ShortFuseDlss.Addon}, [{ShortFuseDlss.Secao}] {ShortFuseDlss.ChavePassadas}={profile.PassCount}; o resto do ini fica)",
+                    null, Path.Combine(host64, ShortFuseNoHost64.Ini)));
+                plan.Warnings.Add(
+                    $"Motor ShortFuse em jogo OpenGL 64-bit ({profile.PassCount} passada(s)), pelo modo helper do Feeder " +
+                    $"{FeederHelper64.Versao}: no jogo fica só o {FeederHelper64.Addon}, que manda quadro, depth e vetores para o " +
+                    $"host64\\dlss5-feed-host64.exe; o {ShortFuseDlss.Addon} roda lá dentro (Direct3D 12), como num jogo 32-bit. " +
+                    "O Feeder de todos os outros jogos continua o 0.15.1 — este conjunto só entra aqui. EXPERIMENTAL: o autor do " +
+                    "Feeder testou o modo helper em Vulkan, ninguém rodou em OpenGL 64-bit ainda. Se o jogo não abrir, mande o " +
+                    "ReShade.log, o dlss5-feed.log e o host64\\dlss5-feed-host.log.");
+            }
+            else if (profile.UsesShortFuse)
             {
                 Copy(kit.RenodxDlssShortFuse, exe, ShortFuseDlss.Addon);
                 RemoverRival("renodx-dlss5.addon64", "o RenoDX DLSS do ShortFuse não convive com o addon do Krish");

@@ -1301,3 +1301,50 @@ public class CarregadorDoSh3NoMotorTests
         Assert.False(File.Exists(c.NoJogo("d3d8R.dll")));
     }
 }
+
+public class ModoHelper64NoMotorTests
+{
+    [Fact]
+    public void OpenGL64ComShortFuseInstalaNoHost64EDesinstalaLimpo()
+    {
+        using var c = new Cenario();
+        string K(string nome, string conteudo)
+        {
+            var dir = Path.Combine(c.Kit, "DLSS5-Feeder-1.18.0-beta.1 (modo helper 64-bit)");
+            Directory.CreateDirectory(dir);
+            var p = Path.Combine(dir, nome);
+            File.WriteAllText(p, conteudo);
+            return p;
+        }
+        c.Inventario.RenodxDlssShortFuse = Path.Combine(c.Kit, "renodx-dlss.addon64");
+        File.WriteAllText(c.Inventario.RenodxDlssShortFuse, "shortfuse");
+        c.Inventario.FeedHelper64 = K(FeederHelper64.Addon, "helper 1.18");
+        c.Inventario.FeedHelperHost64Exe = K(FeederHelper64.HostNoKit, "host 1.18");
+        c.Inventario.FeedHelperFx = K(FeederHelper64.FxNoKit, "fx 1.18");
+
+        var perfil = c.Perfil(PeArchitecture.X64, GraphicsApi.OpenGL);
+        perfil.Engine = NeuralEngine.RenodxDlssShortFuse;
+        var o = c.Opcoes();
+        o.MvProvider = MvProvider.Launchpad; // o kit do cenário só tem o Launchpad
+        var plano = InstallPlanBuilder.Build(perfil, c.Inventario, o);
+        Assert.True(plano.CanRun, string.Join("; ", plano.Blockers));
+
+        var engine = new InstallerEngine(_ => { });
+        var r = engine.Execute(plano, c.Inventario);
+        Assert.True(r.Sucesso, r.Erro);
+
+        Assert.Equal("helper 1.18", File.ReadAllText(c.NoJogo(FeederHelper64.Addon)));
+        Assert.Equal("host 1.18", File.ReadAllText(Path.Combine(c.Jogo, "host64", "dlss5-feed-host64.exe")));
+        Assert.Equal("shortfuse", File.ReadAllText(Path.Combine(c.Jogo, "host64", ShortFuseDlss.Addon)));
+        // O .fx do mesmo zip do addon venceu o da pasta de shaders do kit.
+        Assert.Equal("fx 1.18", File.ReadAllText(Path.Combine(c.Jogo, "reshade-shaders", "Shaders", "DLSS5_Feed.fx")));
+        Assert.Contains("LoadFromDllMain=" + ShortFuseDlss.Addon, File.ReadAllText(Path.Combine(c.Jogo, "host64", "ReShade.ini")));
+        Assert.False(File.Exists(c.NoJogo(ShortFuseDlss.Addon)));
+        Assert.False(File.Exists(c.NoJogo("dlss5-feed.addon64")));
+
+        var rev = engine.Revert(InstallManifest.Load(c.Jogo)!, removeRegistryOverride: false);
+        Assert.True(rev.Sucesso, string.Join("; ", rev.Falhas.Concat(rev.Sobras)));
+        Assert.False(File.Exists(c.NoJogo(FeederHelper64.Addon)));
+        Assert.False(Directory.Exists(Path.Combine(c.Jogo, "host64")));
+    }
+}

@@ -14,7 +14,7 @@ name: Trocar os extras do kit (RenoDX, dgVoodoo2, alternativas)
 # terminarem, rode "Montar o DLSS5-Pacote-Completo.zip" uma vez, à mão (aba Actions).
 on:
   push:
-    branches: ['claude/renodx-updates-e5mjc7', 'claude/upload-large-files-02562q', 'claude/executable-fixes-xytsgm', 'main']
+    branches: ['claude/renodx-updates-e5mjc7', 'claude/upload-large-files-02562q', 'claude/executable-fixes-xytsgm', 'claude/relaxed-brown-o6ewgg', 'main']
     paths:
       - 'DLSS 5 Files/extras-desejado.txt'
       - '.github/workflows/trocar-extras.yml'

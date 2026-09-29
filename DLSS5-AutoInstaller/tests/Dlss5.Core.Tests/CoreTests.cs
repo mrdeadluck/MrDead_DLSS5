@@ -988,30 +988,73 @@ public class PlanBuilderTests
     }
 
     [Fact]
-    public void OpenGL64_ShortFuseVoltaParaOKrish()
+    public void OpenGL64_ShortFuseVaiParaOHost64PeloModoHelper()
     {
-        // Amnesia: The Bunker (OpenGL 64-bit): com o renodx-dlss.addon64 na pasta o jogo nem abria;
-        // o addon só atende D3D9/11/12. O plano instala o Krish + Feeder e avisa.
+        // Amnesia: The Bunker (OpenGL 64-bit): com o renodx-dlss.addon64 no jogo ele nem abria (o addon
+        // só atende D3D9/11/12). Pelo modo helper do Feeder 1.18 o ShortFuse roda dentro do host64.
         var perfil = Profile(PeArchitecture.X64, GraphicsApi.OpenGL);
         perfil.Engine = NeuralEngine.RenodxDlssShortFuse;
+        perfil.PassCount = 3;
         Assert.False(perfil.UsesShortFuse);
-        Assert.True(perfil.ShortFuseRecusadoPelaApi);
-        Assert.Equal(NeuralEngine.RenodxDlss5Feeder, perfil.MotorEfetivo);
+        Assert.True(perfil.UsesShortFuseViaHelper64);
+        Assert.False(perfil.ShortFuseRecusadoPelaApi);
+        Assert.True(perfil.NeedsFeeder);
+        Assert.Equal(NeuralEngine.RenodxDlssShortFuse, perfil.MotorEfetivo);
 
-        var plan = InstallPlanBuilder.Build(perfil, FullKit(), new InstallOptions());
-        Assert.False(Targets(plan, ShortFuseDlss.Addon));
-        Assert.True(Targets(plan, "renodx-dlss5.addon64"));
-        Assert.True(Targets(plan, "dlss5-feed.addon64"));
-        Assert.Contains(plan.Warnings, w => w.Contains("só trabalha em Direct3D 9, 11 e 12", StringComparison.Ordinal));
+        // Kit sem o conjunto do modo helper: recusa, em vez de cair noutro motor.
+        var semHelper = InstallPlanBuilder.Build(perfil, FullKit(), new InstallOptions());
+        Assert.Contains(semHelper.Blockers, b => b.Contains(FeederHelper64.Addon, StringComparison.Ordinal));
 
-        // Em D3D12 continua valendo; em 32-bit OpenGL ele roda no host64 (D3D12).
-        var d3d12 = Profile(PeArchitecture.X64, GraphicsApi.D3D12);
-        d3d12.Engine = NeuralEngine.RenodxDlssShortFuse;
-        Assert.True(d3d12.UsesShortFuse);
+        var kit = FullKit();
+        kit.RenodxDlssShortFuse = @"C:\kit\renodx-dlss.addon64";
+        kit.FeedHelper64 = @"C:\kit\helper\dlss5-feed-helper.addon64";
+        kit.FeedHelperHost64Exe = @"C:\kit\helper\" + FeederHelper64.HostNoKit;
+        kit.FeedHelperFx = @"C:\kit\helper\" + FeederHelper64.FxNoKit;
+        var plan = InstallPlanBuilder.Build(perfil, kit, new InstallOptions());
+
+        Assert.True(plan.CanRun, string.Join("; ", plan.Blockers));
+        Assert.True(Targets(plan, @"game\dlss5-feed-helper.addon64"));
+        Assert.True(Targets(plan, @"game\host64\renodx-dlss.addon64"));
+        Assert.True(Targets(plan, @"game\host64\dxgi.dll"));
+        Assert.True(Targets(plan, @"game\host64\nvngx_dlssnr.dll"));
+        Assert.True(Targets(plan, @"game\host64\ReShade.ini"));
+        var host = Assert.Single(plan.Actions, a => Norm(a.TargetPath).EndsWith(@"host64\dlss5-feed-host64.exe", StringComparison.OrdinalIgnoreCase));
+        Assert.EndsWith(FeederHelper64.HostNoKit, host.SourcePath!, StringComparison.OrdinalIgnoreCase);
+        var fx = Assert.Single(plan.Actions, a => a.Kind == PlanActionKind.CopyFile && Norm(a.TargetPath).EndsWith(@"Shaders\DLSS5_Feed.fx", StringComparison.OrdinalIgnoreCase));
+        Assert.EndsWith(FeederHelper64.FxNoKit, fx.SourcePath!, StringComparison.OrdinalIgnoreCase);
+        // Nada de addon neural nem do Feeder "normal" na raiz do jogo.
+        Assert.False(Targets(plan, @"game\renodx-dlss.addon64"));
+        Assert.False(Targets(plan, @"game\renodx-dlss5.addon64"));
+        Assert.False(Targets(plan, @"game\dlss5-feed.addon64"));
+        Assert.Contains(plan.Warnings, w => w.Contains("modo helper", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ShortFuseFora_DoOpenGL64_NaoMuda()
+    {
+        // O modo helper é só para OpenGL 64-bit: D3D11/D3D12 seguem com o ShortFuse no jogo, e em
+        // Vulkan 64-bit (que o addon não atende) o motor continua caindo no Krish + Feeder.
+        foreach (var api in new[] { GraphicsApi.D3D11, GraphicsApi.D3D12 })
+        {
+            var p = Profile(PeArchitecture.X64, api);
+            p.Engine = NeuralEngine.RenodxDlssShortFuse;
+            Assert.True(p.UsesShortFuse);
+            Assert.False(p.UsesShortFuseViaHelper64);
+            var kit = FullKit();
+            kit.RenodxDlssShortFuse = @"C:\kit\renodx-dlss.addon64";
+            var plan = InstallPlanBuilder.Build(p, kit, new InstallOptions());
+            Assert.True(Targets(plan, @"game\renodx-dlss.addon64"));
+            Assert.False(Targets(plan, FeederHelper64.Addon));
+        }
+        var vk = Profile(PeArchitecture.X64, GraphicsApi.Vulkan);
+        vk.Engine = NeuralEngine.RenodxDlssShortFuse;
+        Assert.True(vk.ShortFuseRecusadoPelaApi);
+        Assert.False(vk.UsesShortFuseViaHelper64);
+        Assert.Equal(NeuralEngine.RenodxDlss5Feeder, vk.MotorEfetivo);
         var gl32 = Profile(PeArchitecture.X86, GraphicsApi.OpenGL);
         gl32.Engine = NeuralEngine.RenodxDlssShortFuse;
         Assert.True(gl32.UsesShortFuseNoHost64);
-        Assert.False(gl32.ShortFuseRecusadoPelaApi);
+        Assert.False(gl32.UsesShortFuseViaHelper64);
     }
 
     [Fact]
