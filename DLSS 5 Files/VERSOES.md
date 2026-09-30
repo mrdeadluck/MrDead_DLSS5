@@ -194,6 +194,14 @@ em `[RenoDX.DLSS5]`) não chega ao host64 em jogo 32-bit. Em jogo 64-bit com DLS
 é vazio e o F6 continua sendo o do Krish — uma tecla só nas duas rotas. Para trocar depois: painel
 do ReShade, botão direito em "DLSS 5 Feed", campo da tecla.
 
+## Deep Fried Chicken v3.0.0 também em jogo 64-bit (30/09/2026)
+
+O instalador aceita o motor Deep Fried Chicken em jogo 64-bit (ao lado do exe, com o Feeder quando o jogo
+não tem DLSS próprio), reconhece o `deep-fried-chicken-present-support.dll` da v3.0.0 e grava `passes=N.0`
+além de `layers=N`. **Os arquivos do DFC não estão no kit nem no pacote**: a licença do autor proíbe
+redistribuir/empacotar. Cada usuário copia a pasta `64-bit` do 7z (Discord do autor) para dentro de
+`DLSS 5 Files`. O "Dancing Turkey" Beta 52 (SR em janela separada, só D3D11, teste) não foi integrado.
+
 ## Feeder 1.17 em jogo 32-bit com "forçar janela": host_window=3 (30/09/2026)
 
 Batman: Arkham Asylum fechava com o 1.17. O `dlss5-feed.log` mostrou: *"starting the host without a

@@ -196,6 +196,12 @@ public sealed class GameProfile
     public bool UsesDeepFriedChicken => Engine == NeuralEngine.DeepFriedChicken && Architecture == PeArchitecture.X86;
 
     /// <summary>
+    /// Deep Fried Chicken ao lado do exe (jogo 64-bit, v3.0.0+). Com o Feeder quando o jogo não tem
+    /// DLSS próprio (ou o usuário prefere o Feeder); sozinho quando tem — ele se pendura no DLSS do jogo.
+    /// </summary>
+    public bool UsesDeepFriedChicken64 => Engine == NeuralEngine.DeepFriedChicken && Architecture == PeArchitecture.X64;
+
+    /// <summary>
     /// O renodx-dlss do ShortFuse DENTRO do host64 (jogo 32-bit): validado no SH2 EE. Ver <see cref="ShortFuseNoHost64"/>.
     /// </summary>
     public bool UsesShortFuseNoHost64 => Engine == NeuralEngine.RenodxDlssShortFuse && Architecture == PeArchitecture.X86;
@@ -207,7 +213,7 @@ public sealed class GameProfile
     public NeuralEngine MotorEfetivo =>
         UsesShortFuse || UsesShortFuseNoHost64 || UsesShortFuseViaHelper64 ? NeuralEngine.RenodxDlssShortFuse
         : UsesOptiScalerNr ? NeuralEngine.OptiScalerNr
-        : UsesDeepFriedChicken ? NeuralEngine.DeepFriedChicken
+        : UsesDeepFriedChicken || UsesDeepFriedChicken64 ? NeuralEngine.DeepFriedChicken
         : NeuralEngine.RenodxDlss5Feeder;
 
     /// <summary>

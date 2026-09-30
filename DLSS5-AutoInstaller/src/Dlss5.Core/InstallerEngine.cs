@@ -362,7 +362,7 @@ public sealed partial class InstallerEngine
         if (nomeAlvo.Equals(OptiScalerNr.Ini, StringComparison.OrdinalIgnoreCase))
             return OptiScalerNr.GerarIni(LerSePuder(realDllPath), plan.Profile.PassCount);
         if (nomeAlvo.Equals(DeepFriedChicken.Cfg, StringComparison.OrdinalIgnoreCase))
-            return DeepFriedChicken.GerarCfg(LerSePuder(realDllPath), plan.Profile.PassCount);
+            return DeepFriedChicken.GerarCfg(LerSePuder(target) ?? LerSePuder(realDllPath), plan.Profile.PassCount);
         // dlss5-feed.cfg: só a chave native_dlss_ok muda; work_resolution e o resto ficam.
         if (nomeAlvo.Equals(FeedCfg.Arquivo, StringComparison.OrdinalIgnoreCase))
         {
@@ -671,7 +671,7 @@ public sealed partial class InstallerEngine
         "ReShade64.json", "ReShade32.json", "ReShade64_XR.json", "ReShade32_XR.json",
         "renodx-dlss5.addon64", ShortFuseDlss.Addon, "nvngx_dlssnr.dll",
         OptiScalerNr.Ini, OptiScalerNr.Shim, OptiScalerNr.Log, OptiScalerNr.ReShade64,
-        DeepFriedChicken.Addon, DeepFriedChicken.Nvngx, DeepFriedChicken.Cfg,
+        DeepFriedChicken.Addon, DeepFriedChicken.Nvngx, DeepFriedChicken.Cfg, DeepFriedChicken.PresentSupport,
         "dlss5-feed.addon64", "dlss5-feed.addon32", "dlss5-feed.cfg", "dlss5-feed.log", "dlss5-feed-crash.dmp",
         JanelaForcada.Addon32, JanelaForcada.Addon64, FeederHelper64.Addon,
         "D3D9.dll", "D3D8.dll", "dgVoodoo.conf", "dgVoodooCpl.exe",

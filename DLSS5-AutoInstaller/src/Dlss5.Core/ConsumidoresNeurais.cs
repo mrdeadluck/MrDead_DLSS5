@@ -11,7 +11,7 @@ public static class Motores
     {
         NeuralEngine.RenodxDlssShortFuse => "RenoDX DLSS (ShortFuse) — 1 a 10 passadas (64-bit direto; 32-bit dentro do host64 — o x2+ que funcionou)",
         NeuralEngine.OptiScalerNr => "OptiScaler DLSS-NR no host64 — 32-bit, 1 a 5 passadas (no SH2 EE as passadas não fizeram diferença visível)",
-        NeuralEngine.DeepFriedChicken => "Deep Fried Chicken no host64 — 32-bit, 1 a 30 passadas (arquivos do Discord)",
+        NeuralEngine.DeepFriedChicken => "Deep Fried Chicken — 1 a 30 passadas (64-bit ao lado do jogo; 32-bit no host64; arquivos do Discord)",
         _ => "RenoDX DLSS5 (Krish) + Feeder — uma passada (padrão até aqui)",
     };
 
@@ -28,7 +28,7 @@ public static class Motores
     /// <summary>Os motores que fazem sentido para a arquitetura, na ordem da tela.</summary>
     public static IReadOnlyList<NeuralEngine> Disponiveis(PeArchitecture arch) => arch == PeArchitecture.X86
         ? new[] { NeuralEngine.RenodxDlss5Feeder, NeuralEngine.RenodxDlssShortFuse, NeuralEngine.OptiScalerNr, NeuralEngine.DeepFriedChicken }
-        : new[] { NeuralEngine.RenodxDlss5Feeder, NeuralEngine.RenodxDlssShortFuse };
+        : new[] { NeuralEngine.RenodxDlss5Feeder, NeuralEngine.RenodxDlssShortFuse, NeuralEngine.DeepFriedChicken };
 
     public static bool Aplicavel(NeuralEngine e, PeArchitecture arch) => Disponiveis(arch).Contains(e);
 }
@@ -311,14 +311,20 @@ public static class HostLog
 
 /// <summary>
 /// Deep Fried Chicken (Alexander): o consumidor que o Feeder recomenda, até 30 passadas. Não tem
-/// download público — os três arquivos vêm do Discord do autor e o usuário os põe no kit. Em jogo
-/// 32-bit vão para host64\. O cfg é chave=valor sem seção; o Feeder lê arm, enabled e layers.
+/// download público e a licença proíbe redistribuir ou empacotar: os arquivos vêm do Discord do
+/// autor e o USUÁRIO os põe na cópia local do kit (o pacote da Release não os traz). Em jogo
+/// 32-bit vão para host64\; em 64-bit (desde a v3.0.0, 30/09/2026) ao lado do exe, com o Feeder
+/// quando o jogo não tem DLSS próprio (o Chicken consome o contrato DLAA sintético do Feeder) e
+/// sozinho quando tem (ele se pendura no DLSS do jogo). O cfg é chave=valor sem seção; a v2+
+/// usa passes=N.0 (contínuo 1.0–30.0) além do layers=N das versões antigas.
 /// </summary>
 public static class DeepFriedChicken
 {
     public const string Addon = "deep-fried-chicken.addon64";
     public const string Nvngx = "deep-fried-chicken-nvngx.dll";
     public const string Cfg = "deep-fried-chicken.cfg";
+    /// <summary>v3.0.0, só 64-bit: o transporte Vulkan/OpenGL e o fallback de Present. Fica ao lado do addon.</summary>
+    public const string PresentSupport = "deep-fried-chicken-present-support.dll";
     public const int PassesMax = 30;
     public const string Discord = "https://discord.gg/g2v2XGqvR";
 
@@ -326,7 +332,10 @@ public static class DeepFriedChicken
     public static string GerarCfg(string? original, int passes)
     {
         var texto = original ?? "";
-        texto = DefinirChave(texto, "layers", Math.Clamp(passes, Motores.PassesMin, PassesMax).ToString());
+        var n = Math.Clamp(passes, Motores.PassesMin, PassesMax);
+        texto = DefinirChave(texto, "layers", n.ToString());
+        // v2+: passes é o contador contínuo (1.0–30.0); só existe no cfg das versões novas.
+        if (LerChave(texto, "passes") is not null) texto = DefinirChave(texto, "passes", n.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture));
         if (LerChave(texto, "enabled") is null) texto = DefinirChave(texto, "enabled", "1");
         if (LerChave(texto, "arm") is null) texto = DefinirChave(texto, "arm", "1");
         return texto;
@@ -369,6 +378,17 @@ public static class DeepFriedChicken
         linhas.Add($"{chave}={valor}");
         return string.Join(quebra, linhas) + quebra;
     }
+
+    /// <summary>Aviso do plano para o jogo 64-bit.</summary>
+    public static string AvisoDoPlano64(int passes, bool comFeeder, bool temPresentSupport) =>
+        $"Motor Deep Fried Chicken ao lado do jogo ({passes} passada(s)). " +
+        (comFeeder
+            ? "O jogo não usa DLSS próprio aqui: o Feeder cria o contrato DLAA sintético e o Chicken roda o Neural Rendering nele. "
+            : "Caminho direto: o Chicken se pendura no DLSS do próprio jogo — deixe o DLSS LIGADO no menu do jogo. ") +
+        (temPresentSupport ? "" : $"O kit não tem o {PresentSupport} (v3.0.0): em Vulkan/OpenGL o Chicken fica sem o transporte de Present. ") +
+        "O menu fica no ReShade (Home → aba Deep Fried Chicken): ative em Render e confira os contadores em Diagnostics. " +
+        "O Windows Defender costuma apagar o deep-fried-chicken.addon64 logo depois da cópia (Detours no NGX): se sumir, " +
+        "restaure em Segurança do Windows → Histórico de proteção e adicione a pasta do jogo às exclusões. Comece com 1 passada.";
 
     public static string PassoManual(int passes) =>
         "O Windows Defender costuma apagar o deep-fried-chicken.addon64 segundos depois da cópia (ele usa Detours no NGX): " +

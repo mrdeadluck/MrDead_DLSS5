@@ -74,10 +74,19 @@ VERSÕES E O QUE FALTA BAIXAR
        que funcionou de verdade (Silent Hill 2 EE, 09/09/2026): escolha
        este para x2+ em 32-bit. O OptiScaler construía as passadas no
        log mas não mudava a imagem;
-     - Deep Fried Chicken: 1 a 30 passadas; os três arquivos
-       (deep-fried-chicken.addon64, deep-fried-chicken-nvngx.dll,
-       deep-fried-chicken.cfg) só existem no Discord do autor — baixe e
-       deixe em qualquer pasta do kit, o programa acha pelo nome.
+     - Deep Fried Chicken: 1 a 30 passadas, em jogo 32-bit (no host64)
+       e, desde a v3.0.0, também em jogo 64-bit (ao lado do exe; com o
+       Feeder quando o jogo não tem DLSS próprio). Os arquivos só existem
+       no Discord do autor e a licença dele proíbe redistribuir: o pacote
+       NÃO os traz, e você precisa colocá-los de novo no kit a cada
+       pacote novo. Como: extraia o 7z (senha na mensagem do autor) e
+       copie a pasta "64-bit" inteira para dentro de "DLSS 5 Files" (por
+       exemplo "DLSS 5 Files\Deep-Fried-Chicken\"). Ela tem
+       deep-fried-chicken.addon64, deep-fried-chicken-nvngx.dll,
+       deep-fried-chicken.cfg e deep-fried-chicken-present-support.dll;
+       o programa acha pelo nome e serve os dois tipos de jogo. Escolha
+       o motor "Deep Fried Chicken" na detecção. Um cfg que já existe no
+       jogo é mantido (só as passadas mudam).
    Só UM consumidor fica em host64\: ao trocar de motor o programa tira o
    outro (com backup). Ainda não validado em jogo por este projeto: se
    cair, teste 1 passada, depois volte ao Krish.

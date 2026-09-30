@@ -343,13 +343,13 @@ O addon do ShortFuse é 64-bit e vive no processo do jogo, logo não existe em c
 reconhece **três consumidores** ali (README: "OptiScaler is 64-bit only, so a 32-bit game runs
 it inside host64\"; "exactly one may be present, or one of them goes inert while every check
 still looks fine"). O perfil guarda `Engine` + `PassCount`; `MotorEfetivo` ignora ShortFuse em
-x86 e OptiScaler/DFC em x64 (cai no Krish).
+x86 e OptiScaler em x64 (cai no Krish); o DFC vale nos dois (em x64 desde a v3.0.0).
 
 | Motor (`NeuralEngine`) | Arquivos em `host64\` | Passadas | Config gerada |
 |---|---|---|---|
 | `RenodxDlss5Feeder` (Krish) | `renodx-dlss5.addon64` | 1 | — |
 | `OptiScalerNr` (OptiScaler v10.0.0-pre1 de 04/09/2026, do 7z do Discord: o build com `Passes`; o fork Dagherbou v0.2.0-patch1 não tem a chave e faz uma passada — `OptiScalerNr.SuportaPassadas` lê o ini do kit e o plano bloqueia 2+ passadas com ele) | `winmm.dll` (cópia de `OptiScaler.dll`: proxy que o host já importa), `nvngx.dll_dlssnr.dll` (shim que o OptiScaler carrega para a passada neural), `OptiScaler\D3D12_OptiScaler\D3D12Core.dll` (Agility SDK próprio), `OptiScaler.ini` | 1–5 | a partir do ini do kit: `[Upscalers] Dx12Upscaler=dlss` (o host é D3D12), `[DlssNr] Enabled=true`, `ScanExposure=false`, `Passes=N`, `[Log] LogToFile=true`. Menu do OptiScaler na tecla Insert (janela do host) |
-| `DeepFriedChicken` 1.4.8 | `deep-fried-chicken.addon64`, `deep-fried-chicken-nvngx.dll`, `deep-fried-chicken.cfg` | 1–30 | a partir do cfg do kit: `enabled=1`, `arm=1`, `layers=N` |
+| `DeepFriedChicken` (1.4.8; v3.0.0 desde 30/09/2026) | `deep-fried-chicken.addon64`, `deep-fried-chicken-nvngx.dll`, `deep-fried-chicken.cfg` | 1–30 | a partir do cfg **do jogo** se já existe (o usuário ajusta pelo menu do Chicken), senão do kit: `enabled=1`, `arm=1`, `layers=N` e, na v2+, `passes=N.0` |
 | `RenodxDlssShortFuse` em x86 (`UsesShortFuseNoHost64`) — **validado** (SH2 EE, 09/09/2026: o único motor com x2+ visível; o OptiScaler construía passadas sem diferença na tela) | `renodx-dlss.addon64` + `ReShade.ini` do host mesclado (`ShortFuseNoHost64.GerarIni`: `[ADDON] LoadFromDllMain`, `[RENODX-DLSS] DirectNeuralRenderingPassCount=N`) | 1–10 | o addon intercepta o `NVSDK_NGX_D3D12_EvaluateFeature` do host; o Feeder não o reconhece (host: "renodx-dlss5*.addon64 not found", segue servindo DLAA); verificação item 25 lê `host64\ReShade.log` com `ShortFuseLog` |
 
 Plano (32-bit): o bloco `host64\` copia o consumidor escolhido e agenda `DeleteForbiddenFile`
@@ -359,6 +359,22 @@ nome, que o Feeder também carregaria. O `KitResolver` acha `OptiScaler.dll` pel
 apaga o `winmm.dll` que contém o texto `OptiScaler.ini`) e os três do DFC pelo nome exato. Kit
 sem o OptiScaler → bloqueio "Falta no kit: OptiScaler.dll…"; sem o DFC → bloqueio apontando o
 Discord. Em 64-bit nenhum dos dois é oferecido (lá o x2+ é o ShortFuse).
+
+### Deep Fried Chicken em jogo 64-bit (v3.0.0, 30/09/2026)
+
+`GameProfile.UsesDeepFriedChicken64` (motor DFC + x64). Rota A, ao lado do exe: `deep-fried-chicken.addon64`,
+`-nvngx.dll`, `-present-support.dll` (v3.0.0: transporte Vulkan/OpenGL e fallback de Present; opcional no
+kit, com aviso) e o `.cfg` gerado. Sem DLSS próprio (ou "preferir o Feeder") vai com o `dlss5-feed.addon64`
+— o Chicken consome o contrato DLAA sintético do Feeder 1.17 (`DFC.Feeder.*`, ABI 1); no caminho direto
+(D3D12 + DLSS nativo) vai sozinho e se pendura no DLSS do jogo. Nunca junto do `renodx-dlss5.addon64` nem
+do `renodx-dlss.addon64` (saem com backup). Nos outros motores de 64-bit o plano tira da raiz só o Chicken
+**idêntico ao do kit** (`TransplanteDlss.EhDoKit`); uma cópia posta à mão fica, com aviso. `KitResolver`
+prefere o addon cuja pasta tem o Present-support (a v3 traz o mesmo addon em `32-bit\host64\`) e pega
+nvngx/cfg da mesma pasta; a pasta `32-bit\reshade-shaders` do DFC não tem `DLSS5_Feed.fx` e não vira a
+pasta de shaders do kit. Verificação: item 14 (o ReShade.log registra "Deep Fried Chicken") e item 25
+(arquivos, `arm`, passadas). Licença do DFC: uso pessoal, **proibido redistribuir/empacotar** — os
+arquivos nunca entram no repositório nem no pacote da Release; o usuário os põe na cópia local do kit.
+
 
 Verificação: item 25 lê `host64\OptiScaler.log` (`min GPU architecture 0x0` = o OptiScaler
 respondeu à sondagem do DLSS, `nvngx.dll_dlssnr.dll` carregado após o primeiro evaluate =

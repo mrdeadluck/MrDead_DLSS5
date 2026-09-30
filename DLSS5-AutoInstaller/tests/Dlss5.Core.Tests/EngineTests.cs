@@ -1302,6 +1302,57 @@ public class CarregadorDoSh3NoMotorTests
     }
 }
 
+public class Chicken64NoMotorTests
+{
+    [Fact]
+    public void Chicken64InstalaMantemOCfgDoUsuarioEDesinstalaLimpo()
+    {
+        using var c = new Cenario();
+        string K(string nome, string conteudo)
+        {
+            var dir = Path.Combine(c.Kit, "Deep-Fried-Chicken-3.0.0");
+            Directory.CreateDirectory(dir);
+            var p = Path.Combine(dir, nome);
+            File.WriteAllText(p, conteudo);
+            return p;
+        }
+        c.Inventario.DfcAddon64 = K(DeepFriedChicken.Addon, "chicken 3.0");
+        c.Inventario.DfcNvngx = K(DeepFriedChicken.Nvngx, "nvngx chicken");
+        c.Inventario.DfcCfg = K(DeepFriedChicken.Cfg, "arm=1\r\nenabled=1\r\npasses=1.0\r\nlayers=1\r\nmenu_accent_rgb=1\r\n");
+        c.Inventario.DfcPresentSupport = K(DeepFriedChicken.PresentSupport, "present");
+
+        var perfil = c.Perfil(PeArchitecture.X64, GraphicsApi.D3D11);
+        perfil.Engine = NeuralEngine.DeepFriedChicken;
+        perfil.PassCount = 2;
+        var o = c.Opcoes();
+        o.MvProvider = MvProvider.Launchpad; // o kit do cenário só tem o Launchpad
+        var engine = new InstallerEngine(_ => { });
+        var r = engine.Execute(InstallPlanBuilder.Build(perfil, c.Inventario, o), c.Inventario);
+        Assert.True(r.Sucesso, r.Erro);
+        Assert.Equal("chicken 3.0", File.ReadAllText(c.NoJogo(DeepFriedChicken.Addon)));
+        Assert.Equal("present", File.ReadAllText(c.NoJogo(DeepFriedChicken.PresentSupport)));
+        var cfg = File.ReadAllText(c.NoJogo(DeepFriedChicken.Cfg));
+        Assert.Equal(2, DeepFriedChicken.LerPassadas(cfg));
+        Assert.Equal("2.0", DeepFriedChicken.LerChave(cfg, "passes"));
+        Assert.False(File.Exists(c.NoJogo("renodx-dlss5.addon64")));
+
+        // O usuário mexe no cfg pelo menu do Chicken; a reinstalação só troca as passadas.
+        File.WriteAllText(c.NoJogo(DeepFriedChicken.Cfg), cfg.Replace("menu_accent_rgb=1", "menu_accent_rgb=777"));
+        perfil.PassCount = 3;
+        r = engine.Execute(InstallPlanBuilder.Build(perfil, c.Inventario, o), c.Inventario);
+        Assert.True(r.Sucesso, r.Erro);
+        cfg = File.ReadAllText(c.NoJogo(DeepFriedChicken.Cfg));
+        Assert.Equal("777", DeepFriedChicken.LerChave(cfg, "menu_accent_rgb"));
+        Assert.Equal(3, DeepFriedChicken.LerPassadas(cfg));
+
+        var rev = engine.Revert(InstallManifest.Load(c.Jogo)!, removeRegistryOverride: false);
+        Assert.True(rev.Sucesso, string.Join("; ", rev.Falhas.Concat(rev.Sobras)));
+        Assert.False(File.Exists(c.NoJogo(DeepFriedChicken.Addon)));
+        Assert.False(File.Exists(c.NoJogo(DeepFriedChicken.PresentSupport)));
+        Assert.False(File.Exists(c.NoJogo(DeepFriedChicken.Cfg)));
+    }
+}
+
 public class HostWindowNoMotorTests
 {
     [Fact]

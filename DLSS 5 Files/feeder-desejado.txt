@@ -53,4 +53,5 @@
 # O conjunto 1.18.0-beta.1 do modo helper (OpenGL 64-bit + ShortFuse) continua separado, em
 # "DLSS5-Feeder-1.18.0-beta.1 (modo helper 64-bit)/". O 0.15.1 sai no DLSS5-Feeder-anterior-kit.zip da Release.
 # 30/09/2026: pacote refeito com host_window=3 no dlss5-feed.cfg dos jogos 32-bit com "forçar janela" (Batman: Arkham Asylum).
+# 30/09/2026 (2): pacote refeito com o motor Deep Fried Chicken também em jogo 64-bit (arquivos do DFC ficam fora do pacote: licença).
 versao=v1.17.0

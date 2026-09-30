@@ -297,6 +297,42 @@ public static class InstallPlanBuilder
                     $"Remover {Rel(profile, caminho)} ({porque}; vai para backup)", null, caminho));
             }
 
+            // Deep Fried Chicken na raiz é outro consumidor de NR: sai quando o motor escolhido é outro —
+            // mas só a cópia idêntica à do kit (posta por este instalador). Outra versão, posta à mão,
+            // fica, com aviso: a licença dele não deixa o kit repor o arquivo depois.
+            void RemoverChickenDaRaiz(string porque)
+            {
+                bool avisou = false;
+                foreach (var (nome, doKit) in new[] { (DeepFriedChicken.Addon, kit.DfcAddon64), (DeepFriedChicken.Nvngx, kit.DfcNvngx),
+                                                      (DeepFriedChicken.PresentSupport, kit.DfcPresentSupport) })
+                {
+                    var caminho = Path.Combine(exe, nome);
+                    if (!File.Exists(caminho)) continue;
+                    if (doKit is not null && TransplanteDlss.EhDoKit(caminho, doKit))
+                        RemoverRival(nome, porque);
+                    else if (!avisou)
+                    {
+                        avisou = true;
+                        plan.Warnings.Add(
+                            $"Há um Deep Fried Chicken na pasta do jogo ({nome}) que não é o do kit — posto à mão, então fica. " +
+                            "Com ele e o motor escolhido os dois disputam o NGX: se o jogo cair ou o Neural Rendering dobrar, " +
+                            "tire os arquivos deep-fried-chicken* da pasta do jogo ou escolha o motor Deep Fried Chicken.");
+                    }
+                }
+            }
+
+            // Feeder 1.17 (#130): em D3D12, se o jogo carrega um DLSS dele fora da pasta do addon, o
+            // Feeder não abre a sessão. Aqui o usuário escolheu o Feeder mesmo com o DLSS do jogo
+            // ("preferir o Feeder"): native_dlss_ok=1 mantém o que o 0.15.1 fazia.
+            void CopiarFeeder64()
+            {
+                Copy(kit.FeedAddon64, exe, "dlss5-feed.addon64");
+                if (profile.HasNativeDlss && profile.Api == GraphicsApi.D3D12)
+                    plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
+                        $"Gravar {FeedCfg.ChaveDlssNativo}=1 em {FeedCfg.Arquivo} (o jogo tem DLSS próprio e o Feeder foi escolhido; o resto do arquivo fica)",
+                        null, Path.Combine(exe, FeedCfg.Arquivo)));
+            }
+
             if (profile.ShortFuseRecusadoPelaApi)
                 plan.Warnings.Add(
                     $"Motor ShortFuse pedido, mas o {ShortFuseDlss.Addon} só trabalha em Direct3D 9, 11 e 12, e este jogo " +
@@ -321,6 +357,7 @@ public static class InstallPlanBuilder
                 RemoverRival("dlss5-feed.addon64", "no modo helper quem roda no jogo é o dlss5-feed-helper.addon64");
                 RemoverRival("renodx-dlss5.addon64", "no modo helper o consumidor neural mora no host64");
                 RemoverRival(ShortFuseDlss.Addon, "no modo helper o ShortFuse mora no host64 — no jogo OpenGL ele o derruba");
+                RemoverChickenDaRaiz("no modo helper o consumidor neural é o ShortFuse no host64");
                 // O .fx tem que ser o do mesmo zip do addon: vai por cima do que a pasta de shaders trouxe.
                 Copy(kit.FeedHelperFx, Path.Combine(shadersTarget, "Shaders"), "DLSS5_Feed.fx");
                 Copy(kit.FeedHelperHost64Exe, host64, "dlss5-feed-host64.exe");
@@ -344,23 +381,36 @@ public static class InstallPlanBuilder
                 Copy(kit.RenodxDlssShortFuse, exe, ShortFuseDlss.Addon);
                 RemoverRival("renodx-dlss5.addon64", "o RenoDX DLSS do ShortFuse não convive com o addon do Krish");
                 RemoverRival("dlss5-feed.addon64", "o RenoDX DLSS do ShortFuse não convive com o Feeder");
+                RemoverChickenDaRaiz("o RenoDX DLSS do ShortFuse não convive com o Deep Fried Chicken");
                 plan.Warnings.Add(ShortFuseDlss.AvisoDoPlano(profile.PassCount));
+            }
+            else if (profile.UsesDeepFriedChicken64)
+            {
+                // Deep Fried Chicken v3.0.0+ ao lado do exe. Sem DLSS próprio no jogo ele consome o
+                // contrato DLAA sintético do Feeder; no caminho direto (D3D12 + DLSS nativo) ele se
+                // pendura no DLSS do próprio jogo, sem Feeder. Nunca junto do addon do Krish ou do ShortFuse.
+                if (profile.NeedsFeeder)
+                    CopiarFeeder64();
+                else
+                    RemoverRival("dlss5-feed.addon64", "o Deep Fried Chicken usa o DLSS do próprio jogo; o Feeder abriria um segundo NGX");
+                Copy(kit.DfcAddon64, exe, DeepFriedChicken.Addon);
+                Copy(kit.DfcNvngx, exe, DeepFriedChicken.Nvngx);
+                if (kit.DfcPresentSupport is not null)
+                    Copy(kit.DfcPresentSupport, exe, DeepFriedChicken.PresentSupport);
+                plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
+                    $"Gerar {DeepFriedChicken.Cfg} (passadas={profile.PassCount}, enabled=1, arm=1; um cfg que já existe no jogo é mantido e só as passadas mudam)",
+                    kit.DfcCfg, Path.Combine(exe, DeepFriedChicken.Cfg)));
+                RemoverRival("renodx-dlss5.addon64", "o Deep Fried Chicken não convive com o addon do Krish (ele fica inerte se acha o RenoDX)");
+                RemoverRival(ShortFuseDlss.Addon, "o Deep Fried Chicken não convive com o RenoDX DLSS do ShortFuse");
+                plan.Warnings.Add(DeepFriedChicken.AvisoDoPlano64(profile.PassCount, profile.NeedsFeeder, kit.DfcPresentSupport is not null));
             }
             else
             {
                 if (profile.NeedsFeeder)
-                {
-                    Copy(kit.FeedAddon64, exe, "dlss5-feed.addon64");
-                    // Feeder 1.17 (#130): em D3D12, se o jogo carrega um DLSS dele fora da pasta do
-                    // addon, o Feeder não abre a sessão. Aqui o usuário escolheu o Feeder mesmo com o
-                    // DLSS do jogo ("preferir o Feeder"): native_dlss_ok=1 mantém o que o 0.15.1 fazia.
-                    if (profile.HasNativeDlss && profile.Api == GraphicsApi.D3D12)
-                        plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
-                            $"Gravar {FeedCfg.ChaveDlssNativo}=1 em {FeedCfg.Arquivo} (o jogo tem DLSS próprio e o Feeder foi escolhido; o resto do arquivo fica)",
-                            null, Path.Combine(exe, FeedCfg.Arquivo)));
-                }
+                    CopiarFeeder64();
                 Copy(kit.RenodxAddon64, exe, "renodx-dlss5.addon64");
                 RemoverRival(ShortFuseDlss.Addon, "o addon do Krish e o Feeder não convivem com o RenoDX DLSS do ShortFuse");
+                RemoverChickenDaRaiz("o motor escolhido é o do Krish; o Deep Fried Chicken seria um segundo consumidor de NR");
             }
             Copy(kit.NvngxDlssnr, exe, "nvngx_dlssnr.dll");
             if (profile.HasNativeDlss)
@@ -752,7 +802,7 @@ public static class InstallPlanBuilder
                 "nvngx_dlss.dll do jogo: Desinstalar e verificação de integridade da Steam.");
         }
 
-        if (profile.UsesRenodxDirectPath)
+        if (profile.UsesRenodxDirectPath && !profile.UsesDeepFriedChicken64)
         {
             plan.Warnings.Add(
                 "Caminho direto (D3D12 + DLSS nativo, o padrão neste caso): o RenoDX processa a chamada " +

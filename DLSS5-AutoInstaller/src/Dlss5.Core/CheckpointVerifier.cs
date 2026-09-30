@@ -758,7 +758,27 @@ public static class CheckpointVerifier
 
         r.AddRange(VerifyReShadeLog(exe, profile.GameFolder, reinicioPendente, profile.ReShadeLogPath,
             profile.ReShadeHookName, profile.UsarReFramework, profile.RealExePath, profile.PastaDoReShade, profile.Api,
-            feedStatus, profile.UsesShortFuse, profile.PassCount));
+            feedStatus, profile.UsesShortFuse, profile.PassCount, profile.UsesDeepFriedChicken64));
+
+        // 25 — Deep Fried Chicken 64-bit: arquivos e passadas ao lado do exe.
+        if (profile.UsesDeepFriedChicken64)
+        {
+            var addon = Path.Combine(exe, DeepFriedChicken.Addon);
+            var cfg = Path.Combine(exe, DeepFriedChicken.Cfg);
+            string cfgTexto = "";
+            try { if (File.Exists(cfg)) cfgTexto = ReadShared(cfg); } catch { }
+            var passadas = DeepFriedChicken.LerPassadas(cfgTexto);
+            bool armado = DeepFriedChicken.Armado(cfgTexto);
+            bool tudo = File.Exists(addon) && File.Exists(Path.Combine(exe, DeepFriedChicken.Nvngx)) && armado && passadas == profile.PassCount;
+            r.Add(new CheckResult(25, "Deep Fried Chicken ao lado do jogo",
+                tudo ? CheckStatus.Pass : CheckStatus.Fail,
+                !File.Exists(addon) ? $"{DeepFriedChicken.Addon} não está na pasta do exe — o Windows Defender costuma apagá-lo logo depois da cópia."
+                : !armado ? $"{DeepFriedChicken.Cfg} está com arm=0: o Chicken não instala gancho nenhum."
+                : passadas != profile.PassCount ? $"{DeepFriedChicken.Cfg} pede layers={passadas?.ToString() ?? "(sem layers)"}; a detecção pede {profile.PassCount}."
+                : $"Addon e ponte NGX na pasta do exe, arm=1, {profile.PassCount} passada(s).",
+                tudo ? null : File.Exists(addon) ? "Instale de novo (Atualizar) com o motor Deep Fried Chicken escolhido."
+                    : "Segurança do Windows → Histórico de proteção → restaurar, e adicione a pasta do jogo às exclusões; depois Instalar de novo."));
+        }
 
         // 14/15/16 — dependem do jogo rodando
         r.AddRange(VerifyFeedLogs(exe, route, profile.NeedsFeeder, profile.MotorEfetivo, profile.PassCount,
@@ -804,7 +824,7 @@ public static class CheckpointVerifier
         string exeFolder, string? gameFolder = null, bool reinicioPendente = false,
         string? logPath = null, string nomeDoReShade = "dxgi.dll", bool hospedado = false,
         string? exePath = null, string? pastaDoReShade = null, GraphicsApi api = GraphicsApi.Unknown,
-        FeedStatus? feed = null, bool shortFuse = false, int passCount = 0)
+        FeedStatus? feed = null, bool shortFuse = false, int passCount = 0, bool chicken64 = false)
     {
         // Hospedado no REFramework, o ReShade grava o log ao lado da própria DLL.
         var log = logPath ?? Path.Combine(exeFolder, "ReShade.log");
@@ -889,8 +909,22 @@ public static class CheckpointVerifier
 
         // 14 — o DLSS 5 chegou a rodar? É a única pergunta que interessa, e até agora o
         // programa não sabia responder: ele conferia arquivo, não resultado.
-        var renodx = shortFuse ? null : RenodxLog.Ler(text);
-        if (shortFuse)
+        var renodx = shortFuse || chicken64 ? null : RenodxLog.Ler(text);
+        if (chicken64)
+        {
+            // Motor Deep Fried Chicken (64-bit): o addon do Krish não está na pasta; o que prova é o
+            // ReShade ter registrado o Chicken. Se o NR roda, só o Diagnostics do próprio Chicken diz.
+            bool registrou = text.Contains("Registered add-on \"Deep Fried Chicken", StringComparison.OrdinalIgnoreCase);
+            yield return new CheckResult(14, "Deep Fried Chicken carregado pelo ReShade",
+                registrou ? CheckStatus.Pass : CheckStatus.Warning,
+                registrou
+                    ? "O ReShade.log registra o add-on Deep Fried Chicken. Confirme no jogo: Home → aba Deep Fried Chicken → Diagnostics, com os contadores de quadros subindo (carregar o addon não prova o Neural Rendering)."
+                    : "O ReShade.log não registra o add-on Deep Fried Chicken (ainda).",
+                registrou ? null
+                    : "Abra o jogo e verifique de novo. Se continuar faltando: o Windows Defender costuma apagar o " +
+                      "deep-fried-chicken.addon64 — restaure em Segurança do Windows → Histórico de proteção, adicione a pasta às exclusões e Instale de novo.");
+        }
+        else if (shortFuse)
         {
             // Motor ShortFuse: o log é outro ("RenoDX DLSS ..."), e o addon do Krish não está na pasta.
             yield return ShortFuseLog.Ler(text).Checkpoint14(passCount, reinicioPendente);

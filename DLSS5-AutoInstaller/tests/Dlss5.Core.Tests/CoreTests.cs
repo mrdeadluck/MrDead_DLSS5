@@ -1066,6 +1066,97 @@ public class PlanBuilderTests
         Assert.DoesNotContain(p64.Actions, a => a.TargetPath is not null && Path.GetFileName(a.TargetPath) == FeedCfg.Arquivo);
     }
 
+    private static KitInventory KitComChicken()
+    {
+        var kit = FullKit();
+        kit.DfcAddon64 = @"C:\kit\dfc\" + DeepFriedChicken.Addon;
+        kit.DfcNvngx = @"C:\kit\dfc\" + DeepFriedChicken.Nvngx;
+        kit.DfcCfg = @"C:\kit\dfc\" + DeepFriedChicken.Cfg;
+        kit.DfcPresentSupport = @"C:\kit\dfc\" + DeepFriedChicken.PresentSupport;
+        return kit;
+    }
+
+    [Fact]
+    public void Chicken64_SemDlssProprio_VaiAoLadoDoExeComOFeederESemOKrish()
+    {
+        Assert.True(Motores.Aplicavel(NeuralEngine.DeepFriedChicken, PeArchitecture.X64));
+        var p = Profile(PeArchitecture.X64, GraphicsApi.D3D11);
+        p.Engine = NeuralEngine.DeepFriedChicken;
+        p.PassCount = 3;
+        Assert.True(p.UsesDeepFriedChicken64);
+        Assert.False(p.UsesDeepFriedChicken);
+        Assert.Equal(NeuralEngine.DeepFriedChicken, p.MotorEfetivo);
+
+        var plan = InstallPlanBuilder.Build(p, KitComChicken(), new InstallOptions());
+        Assert.True(plan.CanRun, string.Join("; ", plan.Blockers));
+        Assert.True(Targets(plan, @"game\" + DeepFriedChicken.Addon));
+        Assert.True(Targets(plan, @"game\" + DeepFriedChicken.Nvngx));
+        Assert.True(Targets(plan, @"game\" + DeepFriedChicken.PresentSupport));
+        Assert.True(Targets(plan, @"game\" + DeepFriedChicken.Cfg));
+        Assert.True(Targets(plan, @"game\dlss5-feed.addon64"));
+        Assert.True(Targets(plan, @"game\nvngx_dlssnr.dll"));
+        Assert.False(Targets(plan, @"game\renodx-dlss5.addon64"));
+        Assert.False(Targets(plan, @"game\host64\" + DeepFriedChicken.Addon));
+        Assert.Contains(plan.Warnings, w => w.Contains("Motor Deep Fried Chicken ao lado do jogo", StringComparison.Ordinal));
+
+        // Kit sem os arquivos do Discord: recusa em vez de instalar o Krish no lugar.
+        var sem = InstallPlanBuilder.Build(p, FullKit(), new InstallOptions());
+        Assert.False(sem.CanRun);
+        Assert.Contains(sem.Blockers, b => b.Contains(DeepFriedChicken.Addon, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Chicken64_ComDlssProprioEmD3D12_SemFeeder()
+    {
+        var p = Profile(PeArchitecture.X64, GraphicsApi.D3D12);
+        p.Engine = NeuralEngine.DeepFriedChicken;
+        p.HasNativeDlss = true;
+        Assert.False(p.NeedsFeeder);
+        var plan = InstallPlanBuilder.Build(p, KitComChicken(), new InstallOptions());
+        Assert.True(plan.CanRun, string.Join("; ", plan.Blockers));
+        Assert.True(Targets(plan, @"game\" + DeepFriedChicken.Addon));
+        Assert.False(Targets(plan, @"game\dlss5-feed.addon64"));
+        Assert.False(Targets(plan, @"game\renodx-dlss5.addon64"));
+        Assert.DoesNotContain(plan.Warnings, w => w.StartsWith("Caminho direto (D3D12", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ChickenGerarCfg_GravaPassesNaV2ELayersSempre()
+    {
+        var v3 = DeepFriedChicken.GerarCfg("arm=1\nenabled=1\npasses=1.0\nlayers=1\n", 4);
+        Assert.Equal("4.0", DeepFriedChicken.LerChave(v3, "passes"));
+        Assert.Equal(4, DeepFriedChicken.LerPassadas(v3));
+        var antigo = DeepFriedChicken.GerarCfg("arm=1\nlayers=1\n", 2);
+        Assert.Null(DeepFriedChicken.LerChave(antigo, "passes"));
+        Assert.Equal(2, DeepFriedChicken.LerPassadas(antigo));
+    }
+
+    [Fact]
+    public void MotorKrish_TiraOChickenDoKitDaRaiz_MasNaoOPostoAMao()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dfc_" + Guid.NewGuid().ToString("N"));
+        var kitDir = Path.Combine(dir, "kit");
+        var jogo = Path.Combine(dir, "jogo");
+        Directory.CreateDirectory(kitDir); Directory.CreateDirectory(jogo);
+        try
+        {
+            var kit = FullKit();
+            kit.DfcAddon64 = Path.Combine(kitDir, DeepFriedChicken.Addon);
+            File.WriteAllText(kit.DfcAddon64, "chicken do kit");
+            var p = new GameProfile { GameFolder = jogo, RealExePath = Path.Combine(jogo, "g.exe"), Architecture = PeArchitecture.X64, Api = GraphicsApi.D3D11 };
+
+            File.WriteAllText(Path.Combine(jogo, DeepFriedChicken.Addon), "chicken do kit");
+            var plan = InstallPlanBuilder.Build(p, kit, new InstallOptions());
+            Assert.Contains(plan.Actions, a => a.Kind == PlanActionKind.DeleteForbiddenFile && Path.GetFileName(a.TargetPath!) == DeepFriedChicken.Addon);
+
+            File.WriteAllText(Path.Combine(jogo, DeepFriedChicken.Addon), "chicken posto a mao");
+            plan = InstallPlanBuilder.Build(p, kit, new InstallOptions());
+            Assert.DoesNotContain(plan.Actions, a => a.Kind == PlanActionKind.DeleteForbiddenFile && Path.GetFileName(a.TargetPath!) == DeepFriedChicken.Addon);
+            Assert.Contains(plan.Warnings, w => w.Contains("não é o do kit", StringComparison.Ordinal));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
     [Fact]
     public void ShortFuseFora_DoOpenGL64_NaoMuda()
     {
@@ -1536,6 +1627,39 @@ public class PeFileTests
 
 public class KitResolverTests
 {
+    [Fact]
+    public void Resolve_ChickenV3CopiadoInteiro_PegaOConjunto64ComPresentSupport()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "dlss5kit_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            // A v3.0.0 extraída como veio: "32-bit\host64\" (sem Present-support, com um .fx que não é o do
+            // Feeder) e "64-bit\" (com). O kit tem que ficar com o conjunto de 64-bit, e o DFC_Universal_Feed.fx
+            // não pode virar a pasta de shaders do kit.
+            var v3 = Path.Combine(root, "Deep-Fried-Chicken-v3.0.0");
+            var x86Host = Path.Combine(v3, "32-bit", "host64");
+            var x64 = Path.Combine(v3, "64-bit");
+            var dfcShaders = Path.Combine(v3, "32-bit", "reshade-shaders", "Shaders");
+            Directory.CreateDirectory(x86Host); Directory.CreateDirectory(x64); Directory.CreateDirectory(dfcShaders);
+            foreach (var d in new[] { x86Host, x64 })
+                foreach (var f in new[] { DeepFriedChicken.Addon, DeepFriedChicken.Nvngx, DeepFriedChicken.Cfg })
+                    File.WriteAllText(Path.Combine(d, f), "x");
+            File.WriteAllText(Path.Combine(x64, DeepFriedChicken.PresentSupport), "x");
+            File.WriteAllText(Path.Combine(dfcShaders, "DFC_Universal_Feed.fx"), "x");
+            File.WriteAllText(Path.Combine(dfcShaders, "ReShade.fxh"), "x");
+
+            var inv = KitResolver.Resolve(root);
+
+            Assert.True(inv.HasDeepFriedChicken);
+            Assert.Equal(Path.Combine(x64, DeepFriedChicken.Addon), inv.DfcAddon64);
+            Assert.Equal(Path.Combine(x64, DeepFriedChicken.Nvngx), inv.DfcNvngx);
+            Assert.Equal(Path.Combine(x64, DeepFriedChicken.Cfg), inv.DfcCfg);
+            Assert.Equal(Path.Combine(x64, DeepFriedChicken.PresentSupport), inv.DfcPresentSupport);
+            Assert.Null(inv.ShadersDir);
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
     [Fact]
     public void Resolve_FindsPiecesInMessyLayout()
     {
