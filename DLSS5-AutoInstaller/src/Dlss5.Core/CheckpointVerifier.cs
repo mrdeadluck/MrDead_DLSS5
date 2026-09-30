@@ -1190,6 +1190,19 @@ public static class CheckpointVerifier
                 File.Exists(hostLog) ? "host64\\dlss5-feed-host.log presente." : "Log do host ainda não existe.",
                 null);
 
+            // 16c — Feeder 1.17: o addon32 subiu o host escondido porque o swapchain "estava em tela cheia".
+            // Com o forçar janela / dgVoodoo isso é pedido, não estado: sem host_window=3 o host não
+            // apresenta, o ShortFuse no host64 não avalia e o painel derrubou o Batman: Arkham Asylum.
+            if (text.Contains("starting the host without a window (the game's swapchain is exclusive fullscreen)", StringComparison.OrdinalIgnoreCase))
+            {
+                yield return new CheckResult(16, "host64 escondido pela tela cheia (Feeder 1.17)", CheckStatus.Fail,
+                    "O dlss5-feed.log diz \"starting the host without a window (the game's swapchain is exclusive fullscreen)\": " +
+                    "o Feeder subiu o host64 sem janela. Com o forçar janela ou o dgVoodoo o jogo só PEDE tela cheia; " +
+                    "o host escondido não apresenta, o DLSS 5 não roda e abrir o painel pode fechar o jogo.",
+                    "Marque \"Forçar janela\" e clique em Instalar de novo: o programa grava host_window=3 no dlss5-feed.cfg " +
+                    "(o host sobe atrás do jogo, como no Feeder 0.15.1).");
+            }
+
             // 26 — a falha que o projeto do Feeder mediu: addon do Krish 4.6/4.7 com driver 616.64+
             // faz cada avaliação faltar dentro do NGX do driver. O host diz exatamente isso.
             string hostLogTexto = "";

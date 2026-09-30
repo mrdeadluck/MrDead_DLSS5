@@ -441,22 +441,19 @@ public static class InstallPlanBuilder
                 plan.Actions.Add(new PlanAction(PlanActionKind.DeleteForbiddenFile,
                     $"Remover {Rel(profile, addonJanela)} (forçar janela desmarcado; vai para backup)", null, addonJanela));
             }
-            // Jogo 32-bit: o Feeder 0.15.1 (addon32 + host + .fx do mesmo zip), não o do kit — o 1.17
-            // fechou o Batman: Arkham Asylum (ver FeederX86). Sem o conjunto no kit, os da raiz.
-            if (kit.FeedX86Addon32 is not null && kit.FeedX86Host64Exe is not null && kit.FeedX86Fx is not null)
-            {
-                Copy(kit.FeedX86Addon32, exe, "dlss5-feed.addon32");
-                Copy(kit.FeedX86Host64Exe, host64, "dlss5-feed-host64.exe");
-                Copy(kit.FeedX86Fx, Path.Combine(shadersTarget, "Shaders"), "DLSS5_Feed.fx");
-            }
-            else
-            {
-                Copy(kit.FeedAddon32, exe, "dlss5-feed.addon32");
-                Copy(kit.FeedHost64Exe, host64, "dlss5-feed-host64.exe");
-                plan.Warnings.Add(
-                    $"O kit não tem o Feeder {FeederX86.Versao} dos jogos 32-bit (pasta \"DLSS5-Feeder-{FeederX86.Versao} (jogos 32-bit)\"): " +
-                    $"vai o Feeder {FeederKit.VersaoDoKit} da raiz, que fechou o Batman: Arkham Asylum. Baixe o pacote novo.");
-            }
+            // Feeder 1.17 + forçar janela: host_window=3 no dlss5-feed.cfg, senão o addon32 acredita no
+            // pedido de tela cheia (bloqueado pelo swapchain_override) e sobe o host escondido (ver FeedCfg).
+            var cfgFeed = Path.Combine(exe, FeedCfg.Arquivo);
+            if (options.ForcarJanela)
+                plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
+                    $"Gravar {FeedCfg.ChaveHostWindow}={FeedCfg.HostWindowJanelaFalsa} em {FeedCfg.Arquivo} (forçar janela: o host64 sobe atrás do jogo, não escondido; o resto do arquivo fica)",
+                    null, cfgFeed));
+            else if (File.Exists(cfgFeed) && FeedCfg.Ler(LerTexto(cfgFeed), FeedCfg.ChaveHostWindow) == FeedCfg.HostWindowJanelaFalsa)
+                plan.Actions.Add(new PlanAction(PlanActionKind.WriteGeneratedFile,
+                    $"Voltar {FeedCfg.ChaveHostWindow}=0 em {FeedCfg.Arquivo} (forçar janela desmarcado: em tela cheia exclusiva de verdade o host sobe escondido)",
+                    null, cfgFeed));
+            Copy(kit.FeedAddon32, exe, "dlss5-feed.addon32");
+            Copy(kit.FeedHost64Exe, host64, "dlss5-feed-host64.exe");
             Copy(kit.DxgiX64, host64, "dxgi.dll");
             Copy(kit.NvngxDlssnr, host64, "nvngx_dlssnr.dll");
             CopySemSobrescreverDoJogo(kit.NvngxDlss, host64, "nvngx_dlss.dll");

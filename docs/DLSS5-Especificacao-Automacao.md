@@ -73,8 +73,8 @@ Regra derivada: em 32 bits, D3D11/D3D10/OpenGL vão direto ao host64; D3D9/D3D8 
 
 | Arquivo | Tamanho | Arch | Local |
 |---|---|---|---|
-| `dlss5-feed.addon32` | 176.640 B (0.15.1, de `DLSS5-Feeder-0.15.1 (jogos 32-bit)/`; o 1.17.0 fechou o Batman: Arkham Asylum) | x86 | pasta do exe (única peça do Feeder fora de `host64\`). 0.13.1: D3D10 nativo. |
-| `dlss5-feed-host64.exe` | 146.944 B (0.15.1, mesmo conjunto; o 1.17.0 da raiz tem 169.472 B) | x64 | `host64\` — protocolo v9 (1.17: v11); **precisa ser do mesmo build do addon32**. `--test` = 300 avaliações sem jogo (botão "Testar o host64…") |
+| `dlss5-feed.addon32` | 189.952 B (1.17.0; 0.15.1: 176.640 B) | x86 | pasta do exe (única peça do Feeder fora de `host64\`). 0.13.1: D3D10 nativo. |
+| `dlss5-feed-host64.exe` | 169.472 B (1.17.0; 0.15.1: 146.944 B) | x64 | `host64\` — protocolo v11 (0.15.1: v9); **precisa ser do mesmo build do addon32**. `--test` = 300 avaliações sem jogo (botão "Testar o host64…") |
 | `dxgi.dll` (ReShade x86) | 4.398.080 B | x86 | pasta do exe |
 | `dxgi.dll` (ReShade x64) | 5.592.064 B | x64 | `host64\` |
 | `renodx-dlss5.addon64` | | x64 | `host64\` (**não** na raiz) — consumidor neural padrão, 1 passada. **Ou, no lugar dele** (nunca dois): `winmm.dll` (= `OptiScaler.dll` v10.0.0-pre1 com DLSS-NR) + `nvngx.dll_dlssnr.dll` + `OptiScaler\D3D12_OptiScaler\D3D12Core.dll` + `OptiScaler.ini` gerado (1–5 passadas), ou `deep-fried-chicken.addon64` + `-nvngx.dll` + `.cfg` gerado (1–30). Ver 6.5. |
@@ -773,7 +773,7 @@ pré-processador **por efeito** — na seção `[DLSS5_Feed.fx]` do `ReShadePres
 | `warmup_rebuild` | 180 | recria feature uma vez (contorna STANDBY); pulado nos addons "v45+" |
 | `gpu_timeout_ms` | 2000 | quanto um frame espera a GPU; três seguidos estourados param o feed |
 | `mv_scale_x/y` | 1.0 | multiplicador extra |
-| `host_window` | 0 | jogos 32-bit: 0 esconde a janela do auxiliar (o painel é projetado no jogo); 1 dá janela própria |
+| `host_window` | 0 | jogos 32-bit: 0 esconde a janela do auxiliar (o painel é projetado no jogo); 1 dá janela própria; 2 sem janela nenhuma; **3** (1.17, #118) host atrás do jogo mesmo quando o swapchain diz tela cheia. No 1.17, com 0 e o jogo "em tela cheia exclusiva", o addon32 sobe o host escondido (`--hide`) — o forçar janela e o dgVoodoo fazem o jogo *pedir* tela cheia sem estar nela; o host escondido não apresenta, o ShortFuse no host64 não avalia e o painel fechou o Batman: Arkham Asylum (30/09/2026). O instalador grava **3** quando "Forçar janela" está marcado (e volta a 0 se desmarcar); a verificação acusa o log "starting the host without a window" (item 16c). |
 | `async_home` | 1 | 32-bit: handoff em pipeline (tira o teto de ~35 fps); 0 = mesmo frame |
 | `enabled` | 1 | 0.13.0+: 0 desliga tudo de verdade (antes só parava o trabalho neural) |
 | `native_dlss_ok` | 0 | 1.17.0 (#130): em D3D12, 0 = não abre a sessão se o jogo carrega DLSS próprio fora da pasta do addon; o instalador grava 1 quando o Feeder é escolhido num jogo com DLSS próprio |

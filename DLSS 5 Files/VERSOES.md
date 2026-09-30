@@ -194,14 +194,14 @@ em `[RenoDX.DLSS5]`) não chega ao host64 em jogo 32-bit. Em jogo 64-bit com DLS
 é vazio e o F6 continua sendo o do Krish — uma tecla só nas duas rotas. Para trocar depois: painel
 do ReShade, botão direito em "DLSS 5 Feed", campo da tecla.
 
-## Jogos 32-bit ficam no Feeder 0.15.1 (30/09/2026)
+## Feeder 1.17 em jogo 32-bit com "forçar janela": host_window=3 (30/09/2026)
 
-Com o 1.17.0 o **Batman: Arkham Asylum** (D3D9 → dgVoodoo, "forçar janela") passou a fechar sozinho;
-reinstalado com o kit anterior, rodou perfeito. O 1.17 mudou o arranque do host64 em jogo 32-bit (sobe o
-host sem janela quando o swapchain está em tela cheia exclusiva, #109 — e o "forçar janela" faz o jogo
-se achar em tela cheia). Até haver log que prove o conserto, as rotas B e C levam o conjunto 0.15.1 de
-`DLSS5-Feeder-0.15.1 (jogos 32-bit)/` (addon32, host64 e .fx renomeados; o instalador grava com os nomes
-certos). Os jogos 64-bit seguem no 1.17.0; o modo helper do OpenGL 64-bit segue no 1.18.0-beta.1.
+Batman: Arkham Asylum fechava com o 1.17. O `dlss5-feed.log` mostrou: *"starting the host without a
+window (the game's swapchain is exclusive fullscreen)"* — o "forçar janela" faz o jogo pedir tela cheia
+(o `swapchain_override` bloqueia), e o 1.17 (#109) passou a subir o host64 escondido nesse caso. Sem
+janela o host não apresenta, o ShortFuse no host64 não avaliou nenhum quadro e o painel derrubou o jogo.
+O próprio Feeder indica a saída (#118): `host_window=3` no `dlss5-feed.cfg` — o host sobe atrás do
+jogo, como no 0.15.1. O instalador grava isso sempre que "Forçar janela" está marcado.
 
 ## O que mudou no Feeder de 0.15.1 para 1.17.0 (29/09/2026)
 

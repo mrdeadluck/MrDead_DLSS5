@@ -365,7 +365,17 @@ public sealed partial class InstallerEngine
             return DeepFriedChicken.GerarCfg(LerSePuder(realDllPath), plan.Profile.PassCount);
         // dlss5-feed.cfg: só a chave native_dlss_ok muda; work_resolution e o resto ficam.
         if (nomeAlvo.Equals(FeedCfg.Arquivo, StringComparison.OrdinalIgnoreCase))
-            return FeedCfg.Gravar(LerSePuder(target), 1, FeedCfg.ChaveDlssNativo);
+        {
+            var cfg = LerSePuder(target);
+            if (plan.Profile.Route == InstallRoute.A)
+                return FeedCfg.Gravar(cfg, 1, FeedCfg.ChaveDlssNativo);
+            if (!plan.Options.ForcarJanela)
+                return FeedCfg.Gravar(cfg, 0, FeedCfg.ChaveHostWindow);
+            // host_window=1 (janela própria) ou 2 (sem janela) foi escolha do usuário: fica.
+            return FeedCfg.Ler(cfg, FeedCfg.ChaveHostWindow) is 1 or 2
+                ? cfg!
+                : FeedCfg.Gravar(cfg, FeedCfg.HostWindowJanelaFalsa, FeedCfg.ChaveHostWindow);
+        }
         // host64\ReShade.ini do ShortFuse-no-host: mescla no ini que o host já gravou (ou cria).
         if (nomeAlvo.Equals(ShortFuseNoHost64.Ini, StringComparison.OrdinalIgnoreCase)
             && string.Equals(Path.GetFileName(Path.GetDirectoryName(target) ?? ""), "host64", StringComparison.OrdinalIgnoreCase))
