@@ -55,4 +55,5 @@
 # 30/09/2026: pacote refeito com host_window=3 no dlss5-feed.cfg dos jogos 32-bit com "forçar janela" (Batman: Arkham Asylum).
 # 30/09/2026 (2): pacote refeito com o motor Deep Fried Chicken também em jogo 64-bit (arquivos do DFC ficam fora do pacote: licença).
 # 30/09/2026 (3): pacote refeito com o F6 também no liga/desliga do próprio Deep Fried Chicken.
+# 30/09/2026 (4): pacote refeito com o aviso na detecção quando o ShortFuse cai para 1 passada por causa da API (Vulkan/OpenGL).
 versao=v1.17.0

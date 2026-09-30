@@ -551,9 +551,13 @@ public sealed partial class MainForm
             NeuralEngine.DeepFriedChicken => _profile.Architecture == PeArchitecture.X86
                 ? $"Deep Fried Chicken entra em host64\\ no lugar do renodx-dlss5; {_profile.PassCount} passada(s); o plano cobra os arquivos se faltarem no kit"
                 : $"Deep Fried Chicken ao lado do exe no lugar do renodx-dlss5 (com o Feeder se o jogo não tem DLSS próprio); {_profile.PassCount} passada(s); arquivos do Discord no kit",
-            _ => _profile.Architecture == PeArchitecture.X86
-                ? "uma passada. Para x2+ em 32-bit escolha OptiScaler DLSS-NR ou Deep Fried Chicken (vão para o host64)"
-                : string.Empty,
+            _ => _profile.ShortFuseRecusadoPelaApi
+                ? $"o ShortFuse só trabalha em Direct3D 9, 11 e 12, e este jogo está em {_profile.Api}: vai o Krish + Feeder, UMA passada " +
+                  "(carregado no jogo, o ShortFuse o derruba). Para x2+: mude o renderizador do jogo/emulador para Direct3D 11 ou 12 " +
+                  "(no DuckStation/PCSX2: Configurações → Gráficos → Renderizador) e a API gráfica aqui; ou tente o Deep Fried Chicken, que atende Vulkan"
+                : _profile.Architecture == PeArchitecture.X86
+                    ? "uma passada. Para x2+ em 32-bit escolha OptiScaler DLSS-NR ou Deep Fried Chicken (vão para o host64)"
+                    : string.Empty,
         };
     }
 
