@@ -27,6 +27,9 @@ public sealed class InstallOptions
     /// então uma tecla só vale nas duas rotas. O ShortFuse não tem tecla própria, e o F6 do Krish
     /// não chega ao host64 em jogo 32-bit — por isso a alternância precisa ser do ReShade do jogo.
     /// Só faz sentido onde o Feeder está instalado (com DLSS nativo o preset é vazio).
+    /// Motor Deep Fried Chicken: a mesma tecla vai também no liga/desliga mestre dele
+    /// (toggle_hotkey_vk do deep-fried-chicken.cfg), porque o Chicken tem rota de Present e seguiria
+    /// processando o quadro final com o Feed desligado. ShortFuse em 64-bit: sem tecla possível.
     /// </summary>
     public int TeclaLigaDesliga { get; set; } = ReShadeConfigWriter.KeyF6;
 

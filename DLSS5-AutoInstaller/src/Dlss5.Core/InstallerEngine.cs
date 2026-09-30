@@ -362,7 +362,7 @@ public sealed partial class InstallerEngine
         if (nomeAlvo.Equals(OptiScalerNr.Ini, StringComparison.OrdinalIgnoreCase))
             return OptiScalerNr.GerarIni(LerSePuder(realDllPath), plan.Profile.PassCount);
         if (nomeAlvo.Equals(DeepFriedChicken.Cfg, StringComparison.OrdinalIgnoreCase))
-            return DeepFriedChicken.GerarCfg(LerSePuder(target) ?? LerSePuder(realDllPath), plan.Profile.PassCount);
+            return DeepFriedChicken.GerarCfg(LerSePuder(target) ?? LerSePuder(realDllPath), plan.Profile.PassCount, plan.Options.TeclaLigaDesliga);
         // dlss5-feed.cfg: só a chave native_dlss_ok muda; work_resolution e o resto ficam.
         if (nomeAlvo.Equals(FeedCfg.Arquivo, StringComparison.OrdinalIgnoreCase))
         {

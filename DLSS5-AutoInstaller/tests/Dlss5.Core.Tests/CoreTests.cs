@@ -1132,6 +1132,19 @@ public class PlanBuilderTests
     }
 
     [Fact]
+    public void ChickenGerarCfg_GravaATeclaSoSeOChickenEstaSemTecla()
+    {
+        var semTecla = DeepFriedChicken.GerarCfg("arm=1\ntoggle_hotkey_vk=0\ntoggle_hotkey_modifiers=0\nlayers=1\n", 1, ReShadeConfigWriter.KeyF6);
+        Assert.Equal("117", DeepFriedChicken.LerChave(semTecla, DeepFriedChicken.ChaveTecla));
+        Assert.Equal("0", DeepFriedChicken.LerChave(semTecla, DeepFriedChicken.ChaveModificadores));
+        var doUsuario = DeepFriedChicken.GerarCfg("arm=1\ntoggle_hotkey_vk=120\ntoggle_hotkey_modifiers=2\nlayers=1\n", 1, ReShadeConfigWriter.KeyF6);
+        Assert.Equal("120", DeepFriedChicken.LerChave(doUsuario, DeepFriedChicken.ChaveTecla));
+        Assert.Equal("2", DeepFriedChicken.LerChave(doUsuario, DeepFriedChicken.ChaveModificadores));
+        var nenhuma = DeepFriedChicken.GerarCfg("arm=1\ntoggle_hotkey_vk=0\nlayers=1\n", 1, 0);
+        Assert.Equal("0", DeepFriedChicken.LerChave(nenhuma, DeepFriedChicken.ChaveTecla));
+    }
+
+    [Fact]
     public void MotorKrish_TiraOChickenDoKitDaRaiz_MasNaoOPostoAMao()
     {
         var dir = Path.Combine(Path.GetTempPath(), "dfc_" + Guid.NewGuid().ToString("N"));

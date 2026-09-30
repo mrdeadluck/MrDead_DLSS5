@@ -202,6 +202,11 @@ além de `layers=N`. **Os arquivos do DFC não estão no kit nem no pacote**: a 
 redistribuir/empacotar. Cada usuário copia a pasta `64-bit` do 7z (Discord do autor) para dentro de
 `DLSS 5 Files`. O "Dancing Turkey" Beta 52 (SR em janela separada, só D3D11, teste) não foi integrado.
 
+**Tecla de liga/desliga (F6) com o Deep Fried Chicken:** o instalador grava a mesma tecla em
+`toggle_hotkey_vk` do `deep-fried-chicken.cfg` (só se o Chicken estiver sem tecla). Desligar só o Feed não
+bastava: o Chicken tem rota de Present e seguia processando o quadro final. O ShortFuse em 64-bit continua
+sem tecla possível — o addon não lê o teclado e o código dele não está no repositório público do RenoDX.
+
 ## Feeder 1.17 em jogo 32-bit com "forçar janela": host_window=3 (30/09/2026)
 
 Batman: Arkham Asylum fechava com o 1.17. O `dlss5-feed.log` mostrou: *"starting the host without a

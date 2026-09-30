@@ -1334,6 +1334,7 @@ public class Chicken64NoMotorTests
         var cfg = File.ReadAllText(c.NoJogo(DeepFriedChicken.Cfg));
         Assert.Equal(2, DeepFriedChicken.LerPassadas(cfg));
         Assert.Equal("2.0", DeepFriedChicken.LerChave(cfg, "passes"));
+        Assert.Equal(o.TeclaLigaDesliga.ToString(), DeepFriedChicken.LerChave(cfg, DeepFriedChicken.ChaveTecla));
         Assert.False(File.Exists(c.NoJogo("renodx-dlss5.addon64")));
 
         // O usuário mexe no cfg pelo menu do Chicken; a reinstalação só troca as passadas.

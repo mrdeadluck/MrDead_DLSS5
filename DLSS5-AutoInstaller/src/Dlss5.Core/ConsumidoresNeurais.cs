@@ -326,16 +326,27 @@ public static class DeepFriedChicken
     /// <summary>v3.0.0, só 64-bit: o transporte Vulkan/OpenGL e o fallback de Present. Fica ao lado do addon.</summary>
     public const string PresentSupport = "deep-fried-chicken-present-support.dll";
     public const int PassesMax = 30;
+    /// <summary>Tecla (virtual-key) do liga/desliga mestre do Chicken; 0 = nenhuma.</summary>
+    public const string ChaveTecla = "toggle_hotkey_vk";
+    public const string ChaveModificadores = "toggle_hotkey_modifiers";
     public const string Discord = "https://discord.gg/g2v2XGqvR";
 
     /// <summary>O cfg do kit com as passadas pedidas; enabled=1 e arm=1 garantidos.</summary>
-    public static string GerarCfg(string? original, int passes)
+    public static string GerarCfg(string? original, int passes, int teclaLigaDesliga = 0)
     {
         var texto = original ?? "";
         var n = Math.Clamp(passes, Motores.PassesMin, PassesMax);
         texto = DefinirChave(texto, "layers", n.ToString());
         // v2+: passes é o contador contínuo (1.0–30.0); só existe no cfg das versões novas.
         if (LerChave(texto, "passes") is not null) texto = DefinirChave(texto, "passes", n.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture));
+        // A tecla de liga/desliga do próprio Chicken (a v3 vem "sem tecla"). Desligar só o Feed não
+        // basta: o Chicken tem rota de Present e segue processando o quadro final. Tecla que o
+        // usuário já escolheu no menu do Chicken fica.
+        if (teclaLigaDesliga > 0 && (int.TryParse(LerChave(texto, ChaveTecla), out var atual) ? atual : 0) == 0)
+        {
+            texto = DefinirChave(texto, ChaveTecla, teclaLigaDesliga.ToString());
+            texto = DefinirChave(texto, ChaveModificadores, "0");
+        }
         if (LerChave(texto, "enabled") is null) texto = DefinirChave(texto, "enabled", "1");
         if (LerChave(texto, "arm") is null) texto = DefinirChave(texto, "arm", "1");
         return texto;
