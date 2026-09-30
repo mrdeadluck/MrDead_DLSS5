@@ -202,6 +202,7 @@ window (the game's swapchain is exclusive fullscreen)"* — o "forçar janela" f
 janela o host não apresenta, o ShortFuse no host64 não avaliou nenhum quadro e o painel derrubou o jogo.
 O próprio Feeder indica a saída (#118): `host_window=3` no `dlss5-feed.cfg` — o host sobe atrás do
 jogo, como no 0.15.1. O instalador grava isso sempre que "Forçar janela" está marcado.
+**Validado em 30/09/2026:** Batman: Arkham Asylum e outros jogos testados pelo usuário rodando com o 1.17.0.
 
 ## O que mudou no Feeder de 0.15.1 para 1.17.0 (29/09/2026)
 
