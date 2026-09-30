@@ -34,6 +34,10 @@ public sealed class KitInventory
     public string? FeedHelper64 { get; set; }
     public string? FeedHelperHost64Exe { get; set; }
     public string? FeedHelperFx { get; set; }
+    /// <summary>Feeder dos jogos 32-bit (0.15.1): addon32, host e .fx do mesmo zip. Ver <see cref="FeederX86"/>.</summary>
+    public string? FeedX86Addon32 { get; set; }
+    public string? FeedX86Host64Exe { get; set; }
+    public string? FeedX86Fx { get; set; }
 
     /// <summary>dxgi.dll do ReShade já extraído, por arquitetura.</summary>
     public string? DxgiX64 { get; set; }
@@ -257,6 +261,16 @@ public static class KitResolver
             var fx = Path.Combine(pasta, FeederHelper64.FxNoKit);
             if (File.Exists(host) && Ok(host)) inv.FeedHelperHost64Exe = host;
             if (File.Exists(fx) && Ok(fx)) inv.FeedHelperFx = fx;
+        }
+
+        inv.FeedX86Addon32 = First(FeederX86.Addon32NoKit);
+        if (inv.FeedX86Addon32 is not null)
+        {
+            var pasta = Path.GetDirectoryName(inv.FeedX86Addon32)!;
+            var host = Path.Combine(pasta, FeederX86.HostNoKit);
+            var fx = Path.Combine(pasta, FeederX86.FxNoKit);
+            if (File.Exists(host) && Ok(host)) inv.FeedX86Host64Exe = host;
+            if (File.Exists(fx) && Ok(fx)) inv.FeedX86Fx = fx;
         }
 
         // REFramework: só o x64 serve, e ele nunca pode ser confundido com um dinput8.dll

@@ -194,6 +194,15 @@ em `[RenoDX.DLSS5]`) não chega ao host64 em jogo 32-bit. Em jogo 64-bit com DLS
 é vazio e o F6 continua sendo o do Krish — uma tecla só nas duas rotas. Para trocar depois: painel
 do ReShade, botão direito em "DLSS 5 Feed", campo da tecla.
 
+## Jogos 32-bit ficam no Feeder 0.15.1 (30/09/2026)
+
+Com o 1.17.0 o **Batman: Arkham Asylum** (D3D9 → dgVoodoo, "forçar janela") passou a fechar sozinho;
+reinstalado com o kit anterior, rodou perfeito. O 1.17 mudou o arranque do host64 em jogo 32-bit (sobe o
+host sem janela quando o swapchain está em tela cheia exclusiva, #109 — e o "forçar janela" faz o jogo
+se achar em tela cheia). Até haver log que prove o conserto, as rotas B e C levam o conjunto 0.15.1 de
+`DLSS5-Feeder-0.15.1 (jogos 32-bit)/` (addon32, host64 e .fx renomeados; o instalador grava com os nomes
+certos). Os jogos 64-bit seguem no 1.17.0; o modo helper do OpenGL 64-bit segue no 1.18.0-beta.1.
+
 ## O que mudou no Feeder de 0.15.1 para 1.17.0 (29/09/2026)
 
 - **Protocolo IPC v11** (0.15.1 era v9): addon32 e host64 precisam vir do mesmo zip — o kit e o

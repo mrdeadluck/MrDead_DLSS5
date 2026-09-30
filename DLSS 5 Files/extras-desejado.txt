@@ -38,11 +38,17 @@ versoes-anteriores/DLSS5-Feeder-0.13.1-beta.1/layer-x86/VkLayer_feed_vk32.dll | 
 # --- Modo helper 64-bit do Feeder 1.18.0-beta.1 (29/09/2026): SÓ para jogo OpenGL 64-bit com o motor
 #     ShortFuse (o addon do ShortFuse não atende OpenGL e derrubava o Amnesia: The Bunker). O jogo leva o
 #     dlss5-feed-helper.addon64; o host e o .fx do MESMO zip vão para o jogo com o nome certo (o instalador
-#     renomeia). Aqui ficam renomeados para não disputar o nome com os do Feeder 0.15.1, que segue sendo o de
-#     todos os outros jogos. ---
+#     renomeia). Aqui ficam renomeados para não disputar o nome com os do Feeder principal do kit. ---
 DLSS5-Feeder-1.18.0-beta.1 (modo helper 64-bit)/dlss5-feed-helper.addon64 | https://github.com/jlrouzies-fr/DLSS5-Feeder/releases/download/v1.18.0-beta.1/DLSS5-Feeder-1.18.0-beta.1.zip | d61c57c7ee47246f591cb44c01c1ba2396512b7d57a0e86b9d80ad962a6ceea4 | dlss5-feed-helper.addon64
 DLSS5-Feeder-1.18.0-beta.1 (modo helper 64-bit)/dlss5-feed-host64_1.18.0-beta.1.exe | https://github.com/jlrouzies-fr/DLSS5-Feeder/releases/download/v1.18.0-beta.1/DLSS5-Feeder-1.18.0-beta.1.zip | 7482601143ecf8e9c92979bcb6ce9c2f2932116471fe317120dd122acf0656f0 | host64/dlss5-feed-host64.exe
 DLSS5-Feeder-1.18.0-beta.1 (modo helper 64-bit)/DLSS5_Feed_1.18.0-beta.1.fx | https://github.com/jlrouzies-fr/DLSS5-Feeder/releases/download/v1.18.0-beta.1/DLSS5-Feeder-1.18.0-beta.1.zip | c4ba1610df8e1593faa7c203d6d0517058d3a8ecf2dfda18ca67849844391456 | reshade-shaders/Shaders/DLSS5_Feed.fx
+# --- Feeder 0.15.1 dos jogos 32-bit (30/09/2026): com o 1.17.0 o Batman: Arkham Asylum (D3D9 → dgVoodoo,
+#     "forçar janela") fechava sozinho; com o 0.15.1 roda. Os jogos 32-bit (rotas B e C) levam este addon32,
+#     este host64 e este .fx (os três do mesmo zip, protocolo IPC v9); o instalador grava com os nomes certos.
+#     Os 64-bit seguem com o Feeder principal do kit (feeder-desejado.txt). ---
+DLSS5-Feeder-0.15.1 (jogos 32-bit)/dlss5-feed_0.15.1.addon32 | https://github.com/jlrouzies-fr/DLSS5-Feeder/releases/download/v0.15.1/DLSS5-Feeder-0.15.1.zip | fb69357075cba536b42f2e693992fde0c1775058b1fd9f10fbdf1e7eba3443e7 | dlss5-feed.addon32
+DLSS5-Feeder-0.15.1 (jogos 32-bit)/dlss5-feed-host64_0.15.1.exe | https://github.com/jlrouzies-fr/DLSS5-Feeder/releases/download/v0.15.1/DLSS5-Feeder-0.15.1.zip | 034e6cdf382e6ea9164afd63c5b8a8aa0312894cb342593bc933e9fa435f8d02 | host64/dlss5-feed-host64.exe
+DLSS5-Feeder-0.15.1 (jogos 32-bit)/DLSS5_Feed_0.15.1.fx | https://github.com/jlrouzies-fr/DLSS5-Feeder/releases/download/v0.15.1/DLSS5-Feeder-0.15.1.zip | cdac08a721b14b97187dd86c5b5bead157c9063d7ee859a0f131a8ee791695f1 | reshade-shaders/Shaders/DLSS5_Feed.fx
 # --- DLSS5 ReShade AIO (kibblerz): NR + DLSS Super Resolution + Frame Generation, open source ---
 DLSS5-Reshade-AIO-v2.0.3 (alternativa kibblerz)/standalone-dlssnr.addon64 | https://github.com/kibblerz/DLSS5-Reshade-AIO/releases/download/v2.0.3/standalone-dlssnr.addon64 | 8bb82ac27b41963c1bc46865488ec6b71ab6eed15d596f0d48f8ed53c7288819 |
 DLSS5-Reshade-AIO-v2.0.3 (alternativa kibblerz)/nvngx.dll | https://github.com/kibblerz/DLSS5-Reshade-AIO/releases/download/v2.0.3/nvngx.dll | 9d3ab47559381eb78ef853d1d360932853839a80e0fdcdbefce2b7210bee133a |

@@ -1048,6 +1048,39 @@ public class PlanBuilderTests
     }
 
     [Fact]
+    public void Jogo32bit_UsaOFeederX86_E64bitOFeederDoKit()
+    {
+        // 30/09: o Feeder 1.17 fechou o Batman: Arkham Asylum (32-bit, forçar janela); com o 0.15.1 roda.
+        var kit = FullKit();
+        kit.FeedX86Addon32 = @"C:\kit\x86\" + FeederX86.Addon32NoKit;
+        kit.FeedX86Host64Exe = @"C:\kit\x86\" + FeederX86.HostNoKit;
+        kit.FeedX86Fx = @"C:\kit\x86\" + FeederX86.FxNoKit;
+
+        foreach (var api in new[] { GraphicsApi.D3D9, GraphicsApi.D3D11 })
+        {
+            var plan = InstallPlanBuilder.Build(Profile(PeArchitecture.X86, api), kit, new InstallOptions());
+            Assert.True(plan.CanRun, string.Join("; ", plan.Blockers));
+            var a32 = Assert.Single(plan.Actions, a => Norm(a.TargetPath).EndsWith(@"game\dlss5-feed.addon32", StringComparison.OrdinalIgnoreCase));
+            Assert.EndsWith(FeederX86.Addon32NoKit, a32.SourcePath!, StringComparison.OrdinalIgnoreCase);
+            var host = Assert.Single(plan.Actions, a => Norm(a.TargetPath).EndsWith(@"host64\dlss5-feed-host64.exe", StringComparison.OrdinalIgnoreCase));
+            Assert.EndsWith(FeederX86.HostNoKit, host.SourcePath!, StringComparison.OrdinalIgnoreCase);
+            var fx = Assert.Single(plan.Actions, a => a.Kind == PlanActionKind.CopyFile && Norm(a.TargetPath).EndsWith(@"Shaders\DLSS5_Feed.fx", StringComparison.OrdinalIgnoreCase));
+            Assert.EndsWith(FeederX86.FxNoKit, fx.SourcePath!, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain(plan.Warnings, w => w.Contains("jogos 32-bit", StringComparison.Ordinal));
+        }
+
+        // 64-bit: o addon64 do kit, nada do conjunto 32-bit.
+        var p64 = InstallPlanBuilder.Build(Profile(PeArchitecture.X64, GraphicsApi.D3D12), kit, new InstallOptions());
+        Assert.DoesNotContain(p64.Actions, a => a.SourcePath is not null && a.SourcePath.Contains(@"\x86\", StringComparison.Ordinal));
+
+        // Kit sem o conjunto: os da raiz, com aviso.
+        var sem = InstallPlanBuilder.Build(Profile(PeArchitecture.X86, GraphicsApi.D3D11), FullKit(), new InstallOptions());
+        Assert.True(sem.CanRun);
+        Assert.True(Targets(sem, @"game\dlss5-feed.addon32"));
+        Assert.Contains(sem.Warnings, w => w.Contains("jogos 32-bit", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void ShortFuseFora_DoOpenGL64_NaoMuda()
     {
         // O modo helper é só para OpenGL 64-bit: D3D11/D3D12 seguem com o ShortFuse no jogo, e em

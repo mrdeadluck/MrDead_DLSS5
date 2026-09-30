@@ -1302,6 +1302,44 @@ public class CarregadorDoSh3NoMotorTests
     }
 }
 
+public class FeederX86NoMotorTests
+{
+    [Fact]
+    public void Jogo32bitRecebeOFeeder0151ComNomesCertosEDesinstalaLimpo()
+    {
+        using var c = new Cenario();
+        string K(string nome, string conteudo)
+        {
+            var dir = Path.Combine(c.Kit, "DLSS5-Feeder-0.15.1 (jogos 32-bit)");
+            Directory.CreateDirectory(dir);
+            var p = Path.Combine(dir, nome);
+            File.WriteAllText(p, conteudo);
+            return p;
+        }
+        c.Inventario.FeedX86Addon32 = K(FeederX86.Addon32NoKit, "addon32 0.15.1");
+        c.Inventario.FeedX86Host64Exe = K(FeederX86.HostNoKit, "host 0.15.1");
+        c.Inventario.FeedX86Fx = K(FeederX86.FxNoKit, "fx 0.15.1");
+
+        var o = c.Opcoes();
+        o.MvProvider = MvProvider.Launchpad; // o kit do cenário só tem o Launchpad
+        var plano = InstallPlanBuilder.Build(c.Perfil(PeArchitecture.X86, GraphicsApi.D3D11), c.Inventario, o);
+        Assert.True(plano.CanRun, string.Join("; ", plano.Blockers));
+        var engine = new InstallerEngine(_ => { });
+        var r = engine.Execute(plano, c.Inventario);
+        Assert.True(r.Sucesso, r.Erro);
+
+        Assert.Equal("addon32 0.15.1", File.ReadAllText(c.NoJogo("dlss5-feed.addon32")));
+        Assert.Equal("host 0.15.1", File.ReadAllText(Path.Combine(c.Jogo, "host64", "dlss5-feed-host64.exe")));
+        Assert.Equal("fx 0.15.1", File.ReadAllText(Path.Combine(c.Jogo, "reshade-shaders", "Shaders", "DLSS5_Feed.fx")));
+        Assert.False(File.Exists(c.NoJogo(FeederX86.Addon32NoKit)));
+
+        var rev = engine.Revert(InstallManifest.Load(c.Jogo)!, removeRegistryOverride: false);
+        Assert.True(rev.Sucesso, string.Join("; ", rev.Falhas.Concat(rev.Sobras)));
+        Assert.False(File.Exists(c.NoJogo("dlss5-feed.addon32")));
+        Assert.False(Directory.Exists(Path.Combine(c.Jogo, "host64")));
+    }
+}
+
 public class ModoHelper64NoMotorTests
 {
     [Fact]

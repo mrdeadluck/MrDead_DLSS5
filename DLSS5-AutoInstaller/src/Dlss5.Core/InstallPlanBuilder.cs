@@ -441,8 +441,22 @@ public static class InstallPlanBuilder
                 plan.Actions.Add(new PlanAction(PlanActionKind.DeleteForbiddenFile,
                     $"Remover {Rel(profile, addonJanela)} (forçar janela desmarcado; vai para backup)", null, addonJanela));
             }
-            Copy(kit.FeedAddon32, exe, "dlss5-feed.addon32");
-            Copy(kit.FeedHost64Exe, host64, "dlss5-feed-host64.exe");
+            // Jogo 32-bit: o Feeder 0.15.1 (addon32 + host + .fx do mesmo zip), não o do kit — o 1.17
+            // fechou o Batman: Arkham Asylum (ver FeederX86). Sem o conjunto no kit, os da raiz.
+            if (kit.FeedX86Addon32 is not null && kit.FeedX86Host64Exe is not null && kit.FeedX86Fx is not null)
+            {
+                Copy(kit.FeedX86Addon32, exe, "dlss5-feed.addon32");
+                Copy(kit.FeedX86Host64Exe, host64, "dlss5-feed-host64.exe");
+                Copy(kit.FeedX86Fx, Path.Combine(shadersTarget, "Shaders"), "DLSS5_Feed.fx");
+            }
+            else
+            {
+                Copy(kit.FeedAddon32, exe, "dlss5-feed.addon32");
+                Copy(kit.FeedHost64Exe, host64, "dlss5-feed-host64.exe");
+                plan.Warnings.Add(
+                    $"O kit não tem o Feeder {FeederX86.Versao} dos jogos 32-bit (pasta \"DLSS5-Feeder-{FeederX86.Versao} (jogos 32-bit)\"): " +
+                    $"vai o Feeder {FeederKit.VersaoDoKit} da raiz, que fechou o Batman: Arkham Asylum. Baixe o pacote novo.");
+            }
             Copy(kit.DxgiX64, host64, "dxgi.dll");
             Copy(kit.NvngxDlssnr, host64, "nvngx_dlssnr.dll");
             CopySemSobrescreverDoJogo(kit.NvngxDlss, host64, "nvngx_dlss.dll");

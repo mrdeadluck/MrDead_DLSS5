@@ -104,7 +104,7 @@ O QUE ESPERAR — leia antes, evita decepção
    - Consome bastante VRAM. Se travar, teste primeiro em 1080p e em modo
      janela.
    - Trocar resolução, tela cheia ou qualidade DENTRO do jogo recria a
-     tela e o Feeder reconstrói tudo. O Feeder deste kit (1.17.0) foi
+     tela e o Feeder reconstrói tudo. O Feeder deste kit (1.17.0; 0.15.1 nos jogos 32-bit) foi
      feito para sobreviver a isso; o antigo (0.5.0) derrubava o jogo.
      Se um jogo instalado com o kit antigo cair nessa hora, aponte o
      kit novo e clique em Instalar de novo — o programa troca só o que

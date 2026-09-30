@@ -73,8 +73,8 @@ Regra derivada: em 32 bits, D3D11/D3D10/OpenGL vão direto ao host64; D3D9/D3D8 
 
 | Arquivo | Tamanho | Arch | Local |
 |---|---|---|---|
-| `dlss5-feed.addon32` | 189.952 B (1.17.0; 0.15.1: 176.640 B) | x86 | pasta do exe (única peça do Feeder fora de `host64\`). 0.13.1: D3D10 nativo. |
-| `dlss5-feed-host64.exe` | 169.472 B (1.17.0; 0.15.1: 146.944 B) | x64 | `host64\` — protocolo v11 (0.15.1: v9); **precisa ser do mesmo build do addon32**. `--test` = 300 avaliações sem jogo (botão "Testar o host64…") |
+| `dlss5-feed.addon32` | 176.640 B (0.15.1, de `DLSS5-Feeder-0.15.1 (jogos 32-bit)/`; o 1.17.0 fechou o Batman: Arkham Asylum) | x86 | pasta do exe (única peça do Feeder fora de `host64\`). 0.13.1: D3D10 nativo. |
+| `dlss5-feed-host64.exe` | 146.944 B (0.15.1, mesmo conjunto; o 1.17.0 da raiz tem 169.472 B) | x64 | `host64\` — protocolo v9 (1.17: v11); **precisa ser do mesmo build do addon32**. `--test` = 300 avaliações sem jogo (botão "Testar o host64…") |
 | `dxgi.dll` (ReShade x86) | 4.398.080 B | x86 | pasta do exe |
 | `dxgi.dll` (ReShade x64) | 5.592.064 B | x64 | `host64\` |
 | `renodx-dlss5.addon64` | | x64 | `host64\` (**não** na raiz) — consumidor neural padrão, 1 passada. **Ou, no lugar dele** (nunca dois): `winmm.dll` (= `OptiScaler.dll` v10.0.0-pre1 com DLSS-NR) + `nvngx.dll_dlssnr.dll` + `OptiScaler\D3D12_OptiScaler\D3D12Core.dll` + `OptiScaler.ini` gerado (1–5 passadas), ou `deep-fried-chicken.addon64` + `-nvngx.dll` + `.cfg` gerado (1–30). Ver 6.5. |
