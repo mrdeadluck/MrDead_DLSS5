@@ -138,7 +138,27 @@ public static class ManualSteps
                     $"No jogo, aperte {options.TeclaLigaDesligaLabel}: o DLSS 5 (DLAA + Neural Rendering) desliga e o jogo mostra o " +
                     "quadro cru; aperte de novo e volta. É a tecla de alternância da technique \"DLSS 5 Feed\" no preset do " +
                     "ReShade — o addon só trabalha logo depois de ela rodar, então desligá-la desliga tudo. Para trocar a tecla " +
-                    "depois: painel do ReShade, botão direito em \"DLSS 5 Feed\", campo da tecla.", false));
+                    "depois: painel do ReShade, botão direito em \"DLSS 5 Feed\", campo da tecla." +
+                    (profile.UsesDeepFriedChicken64
+                        ? $" O programa gravou a mesma tecla no liga/desliga do próprio Deep Fried Chicken (toggle_hotkey_vk no " +
+                          "deep-fried-chicken.cfg): sem isso o Chicken seguiria processando o quadro final."
+                        : ""), false));
+        }
+        else if (profile.UsesShortFuse)
+        {
+            steps.Add(new ManualStep(n++, "Abrir o jogo e conferir o painel do ReShade",
+                $"No jogo, aperte {options.OverlayKeyLabel} para abrir o ReShade; o RenoDX DLSS (ShortFuse) fica na aba " +
+                "Complementos. Este motor NÃO tem tecla de liga/desliga (o addon não lê o teclado) e aqui não há o " +
+                "DLSS 5 Feed para alternar: para comparar antes/depois, desmarque e marque o Neural Rendering no painel dele.", false));
+        }
+        else if (profile.UsesDeepFriedChicken64)
+        {
+            steps.Add(new ManualStep(n++, "Abrir o jogo e conferir o Deep Fried Chicken",
+                $"No jogo, aperte {options.OverlayKeyLabel} para abrir o ReShade → aba Deep Fried Chicken: ative em Render e " +
+                "confira em Diagnostics os contadores de quadros subindo. Deixe o DLSS do jogo LIGADO (o Chicken se pendura nele)." +
+                (options.TeclaLigaDesliga > 0
+                    ? $" {options.TeclaLigaDesligaLabel} liga e desliga o Chicken para comparar (gravado no deep-fried-chicken.cfg)."
+                    : ""), false));
         }
         else
         {

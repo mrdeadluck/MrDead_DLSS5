@@ -362,10 +362,20 @@ public sealed partial class InstallerEngine
         if (nomeAlvo.Equals(OptiScalerNr.Ini, StringComparison.OrdinalIgnoreCase))
             return OptiScalerNr.GerarIni(LerSePuder(realDllPath), plan.Profile.PassCount);
         if (nomeAlvo.Equals(DeepFriedChicken.Cfg, StringComparison.OrdinalIgnoreCase))
-            return DeepFriedChicken.GerarCfg(LerSePuder(realDllPath), plan.Profile.PassCount);
+            return DeepFriedChicken.GerarCfg(LerSePuder(target) ?? LerSePuder(realDllPath), plan.Profile.PassCount, plan.Options.TeclaLigaDesliga);
         // dlss5-feed.cfg: só a chave native_dlss_ok muda; work_resolution e o resto ficam.
         if (nomeAlvo.Equals(FeedCfg.Arquivo, StringComparison.OrdinalIgnoreCase))
-            return FeedCfg.Gravar(LerSePuder(target), 1, FeedCfg.ChaveDlssNativo);
+        {
+            var cfg = LerSePuder(target);
+            if (plan.Profile.Route == InstallRoute.A)
+                return FeedCfg.Gravar(cfg, 1, FeedCfg.ChaveDlssNativo);
+            if (!plan.Options.ForcarJanela)
+                return FeedCfg.Gravar(cfg, 0, FeedCfg.ChaveHostWindow);
+            // host_window=1 (janela própria) ou 2 (sem janela) foi escolha do usuário: fica.
+            return FeedCfg.Ler(cfg, FeedCfg.ChaveHostWindow) is 1 or 2
+                ? cfg!
+                : FeedCfg.Gravar(cfg, FeedCfg.HostWindowJanelaFalsa, FeedCfg.ChaveHostWindow);
+        }
         // host64\ReShade.ini do ShortFuse-no-host: mescla no ini que o host já gravou (ou cria).
         if (nomeAlvo.Equals(ShortFuseNoHost64.Ini, StringComparison.OrdinalIgnoreCase)
             && string.Equals(Path.GetFileName(Path.GetDirectoryName(target) ?? ""), "host64", StringComparison.OrdinalIgnoreCase))
@@ -661,7 +671,7 @@ public sealed partial class InstallerEngine
         "ReShade64.json", "ReShade32.json", "ReShade64_XR.json", "ReShade32_XR.json",
         "renodx-dlss5.addon64", ShortFuseDlss.Addon, "nvngx_dlssnr.dll",
         OptiScalerNr.Ini, OptiScalerNr.Shim, OptiScalerNr.Log, OptiScalerNr.ReShade64,
-        DeepFriedChicken.Addon, DeepFriedChicken.Nvngx, DeepFriedChicken.Cfg,
+        DeepFriedChicken.Addon, DeepFriedChicken.Nvngx, DeepFriedChicken.Cfg, DeepFriedChicken.PresentSupport,
         "dlss5-feed.addon64", "dlss5-feed.addon32", "dlss5-feed.cfg", "dlss5-feed.log", "dlss5-feed-crash.dmp",
         JanelaForcada.Addon32, JanelaForcada.Addon64, FeederHelper64.Addon,
         "D3D9.dll", "D3D8.dll", "dgVoodoo.conf", "dgVoodooCpl.exe",

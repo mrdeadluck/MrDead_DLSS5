@@ -119,6 +119,14 @@ public static class FeedCfg
     public const string ChaveResolucao = "work_resolution";
     /// <summary>1.17 (#130): 1 = abre a sessão D3D12 mesmo com o DLSS do próprio jogo carregado.</summary>
     public const string ChaveDlssNativo = "native_dlss_ok";
+    /// <summary>
+    /// 1.17 (#109/#118), jogo 32-bit: com host_window=0 e o swapchain "em tela cheia exclusiva" o addon32
+    /// sobe o host64 escondido (--hide). O "forçar janela" (e o dgVoodoo) faz o jogo PEDIR tela cheia
+    /// sem estar nela; o host escondido não apresenta, o ShortFuse no host64 não avalia e o painel
+    /// derrubou o Batman: Arkham Asylum. 3 = o host sobe atrás do jogo (--behind), como no 0.15.1.
+    /// </summary>
+    public const string ChaveHostWindow = "host_window";
+    public const int HostWindowJanelaFalsa = 3;
     public const int ResolucaoPadrao = 100;
 
     /// <summary>Na ordem em que a tela oferece.</summary>

@@ -23,6 +23,8 @@ public sealed class KitInventory
     public string? DfcAddon64 { get; set; }
     public string? DfcNvngx { get; set; }
     public string? DfcCfg { get; set; }
+    /// <summary>Deep Fried Chicken v3.0.0+ (64-bit): o Present-support ao lado do addon. Opcional.</summary>
+    public string? DfcPresentSupport { get; set; }
     public bool HasDeepFriedChicken => DfcAddon64 is not null && DfcNvngx is not null && DfcCfg is not null;
     public string? FeedAddon64 { get; set; }
     public string? FeedAddon32 { get; set; }
@@ -118,9 +120,9 @@ public sealed class KitInventory
         {
             Need(RenodxDlssShortFuse, ShortFuseDlss.Addon + " (RenoDX DLSS do ShortFuse, para dentro do host64)");
         }
-        else if (x86 && consumidor == NeuralEngine.DeepFriedChicken)
+        else if (consumidor == NeuralEngine.DeepFriedChicken)
         {
-            Need(DfcAddon64, DeepFriedChicken.Addon + " (Deep Fried Chicken — baixe no Discord " + DeepFriedChicken.Discord + " e copie os três arquivos para qualquer subpasta do kit)");
+            Need(DfcAddon64, DeepFriedChicken.Addon + " (Deep Fried Chicken — baixe no Discord " + DeepFriedChicken.Discord + " e copie a pasta \"64-bit\" do 7z para qualquer subpasta do kit; a licença não deixa o pacote trazê-lo)");
             Need(DfcNvngx, DeepFriedChicken.Nvngx + " (Deep Fried Chicken)");
             Need(DfcCfg, DeepFriedChicken.Cfg + " (Deep Fried Chicken)");
         }
@@ -241,9 +243,20 @@ public static class KitResolver
             if (File.Exists(agility) && Ok(agility)) inv.OptiScalerNrAgility = agility;
         }
 
-        inv.DfcAddon64 = First(DeepFriedChicken.Addon);
-        inv.DfcNvngx = First(DeepFriedChicken.Nvngx);
-        inv.DfcCfg = First(DeepFriedChicken.Cfg);
+        // Deep Fried Chicken: a v3.0.0 traz o mesmo addon em "64-bit\" (com o Present-support) e em
+        // "32-bit\host64\" (sem). Prefere a pasta que tem o Present-support, e o nvngx/cfg da mesma pasta.
+        var chickens = Named(DeepFriedChicken.Addon).Where(Ok).ToList();
+        inv.DfcAddon64 = chickens.FirstOrDefault(p => File.Exists(Path.Combine(Path.GetDirectoryName(p)!, DeepFriedChicken.PresentSupport)))
+                         ?? chickens.FirstOrDefault();
+        string? DaPastaDoChicken(string nome)
+        {
+            if (inv.DfcAddon64 is null) return null;
+            var p = Path.Combine(Path.GetDirectoryName(inv.DfcAddon64)!, nome);
+            return File.Exists(p) && Ok(p) ? p : null;
+        }
+        inv.DfcNvngx = DaPastaDoChicken(DeepFriedChicken.Nvngx) ?? First(DeepFriedChicken.Nvngx);
+        inv.DfcCfg = DaPastaDoChicken(DeepFriedChicken.Cfg) ?? First(DeepFriedChicken.Cfg);
+        inv.DfcPresentSupport = DaPastaDoChicken(DeepFriedChicken.PresentSupport);
         inv.FeedAddon64 = First("dlss5-feed.addon64");
         inv.FeedAddon32 = First("dlss5-feed.addon32");
         inv.SwapchainOverride32 = First(JanelaForcada.Addon32);

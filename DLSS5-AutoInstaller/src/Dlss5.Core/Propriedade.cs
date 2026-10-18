@@ -32,7 +32,7 @@ public static class Propriedade
         "nvngx_dlssnr.dll", JanelaForcada.Addon32, JanelaForcada.Addon64, FeederHelper64.Addon,
         // Consumidores alternativos do host64: nenhum jogo traz nada disso.
         OptiScalerNr.Ini, OptiScalerNr.Shim, OptiScalerNr.Log,
-        DeepFriedChicken.Addon, DeepFriedChicken.Nvngx, DeepFriedChicken.Cfg,
+        DeepFriedChicken.Addon, DeepFriedChicken.Nvngx, DeepFriedChicken.Cfg, DeepFriedChicken.PresentSupport,
         // O dgVoodoo encadeado atrás do DxWrapper: nenhum jogo traz um arquivo com esse nome.
         "dgVoodoo_D3D9.dll", "dgVoodoo_D3D8.dll",
         "ReShade.ini", "ReShade.log", "ReShadePreset.ini",
@@ -155,7 +155,7 @@ public static class Propriedade
         "nvngx_dlssnr.dll", "dgVoodoo_D3D9.dll", "dgVoodoo_D3D8.dll", InstallManifest.FileName,
         JanelaForcada.Addon32, JanelaForcada.Addon64, FeederHelper64.Addon,
         OptiScalerNr.Ini, OptiScalerNr.Shim, OptiScalerNr.Log,
-        DeepFriedChicken.Addon, DeepFriedChicken.Nvngx, DeepFriedChicken.Cfg,
+        DeepFriedChicken.Addon, DeepFriedChicken.Nvngx, DeepFriedChicken.Cfg, DeepFriedChicken.PresentSupport,
     };
 
     /// <summary>Há peça do kit (não só ReShade) nesta pasta ou na de cima?</summary>

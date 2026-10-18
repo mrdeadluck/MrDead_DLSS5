@@ -194,6 +194,29 @@ em `[RenoDX.DLSS5]`) não chega ao host64 em jogo 32-bit. Em jogo 64-bit com DLS
 é vazio e o F6 continua sendo o do Krish — uma tecla só nas duas rotas. Para trocar depois: painel
 do ReShade, botão direito em "DLSS 5 Feed", campo da tecla.
 
+## Deep Fried Chicken v3.0.0 também em jogo 64-bit (30/09/2026)
+
+O instalador aceita o motor Deep Fried Chicken em jogo 64-bit (ao lado do exe, com o Feeder quando o jogo
+não tem DLSS próprio), reconhece o `deep-fried-chicken-present-support.dll` da v3.0.0 e grava `passes=N.0`
+além de `layers=N`. **Os arquivos do DFC não estão no kit nem no pacote**: a licença do autor proíbe
+redistribuir/empacotar. Cada usuário copia a pasta `64-bit` do 7z (Discord do autor) para dentro de
+`DLSS 5 Files`. O "Dancing Turkey" Beta 52 (SR em janela separada, só D3D11, teste) não foi integrado.
+
+**Tecla de liga/desliga (F6) com o Deep Fried Chicken:** o instalador grava a mesma tecla em
+`toggle_hotkey_vk` do `deep-fried-chicken.cfg` (só se o Chicken estiver sem tecla). Desligar só o Feed não
+bastava: o Chicken tem rota de Present e seguia processando o quadro final. O ShortFuse em 64-bit continua
+sem tecla possível — o addon não lê o teclado e o código dele não está no repositório público do RenoDX.
+
+## Feeder 1.17 em jogo 32-bit com "forçar janela": host_window=3 (30/09/2026)
+
+Batman: Arkham Asylum fechava com o 1.17. O `dlss5-feed.log` mostrou: *"starting the host without a
+window (the game's swapchain is exclusive fullscreen)"* — o "forçar janela" faz o jogo pedir tela cheia
+(o `swapchain_override` bloqueia), e o 1.17 (#109) passou a subir o host64 escondido nesse caso. Sem
+janela o host não apresenta, o ShortFuse no host64 não avaliou nenhum quadro e o painel derrubou o jogo.
+O próprio Feeder indica a saída (#118): `host_window=3` no `dlss5-feed.cfg` — o host sobe atrás do
+jogo, como no 0.15.1. O instalador grava isso sempre que "Forçar janela" está marcado.
+**Validado em 30/09/2026:** Batman: Arkham Asylum e outros jogos testados pelo usuário rodando com o 1.17.0.
+
 ## O que mudou no Feeder de 0.15.1 para 1.17.0 (29/09/2026)
 
 - **Protocolo IPC v11** (0.15.1 era v9): addon32 e host64 precisam vir do mesmo zip — o kit e o
